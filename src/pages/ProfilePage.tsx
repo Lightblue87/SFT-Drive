@@ -161,17 +161,17 @@ export function ProfilePage() {
           <div className="flex flex-col gap-3 rounded-md border border-sft-red/50 p-4 text-sm">
             <p className="font-medium">Was mit deinen Daten passiert:</p>
             <ul className="list-disc space-y-1 pl-5 text-sft-gray">
-              <li>Username, Vor- und Nachname sowie Geburtsdatum werden anonymisiert.</li>
-              <li>Das Kennzeichen wird aus allen deinen Anmeldungen entfernt — auch aus bereits vergangenen Touren.</li>
               <li>
-                Hersteller, Modell und Leistung deines Fahrzeugs bleiben ohne Personenbezug als
-                historischer Eintrag bei vergangenen Touren erhalten.
+                Username, Vor- und Nachname, Geburtsdatum sowie alle deine Touranmeldungen
+                (inkl. Fahrzeugdaten und Kennzeichen, auch aus vergangenen Touren) werden
+                vollständig gelöscht.
               </li>
-              <li>Laufende Touranmeldungen werden storniert, Wartelisten rücken nach.</li>
               <li>
-                Dein Konto wird anschließend endgültig gelöscht — ein Login ist danach nicht mehr
-                möglich.
+                Fremde Touren oder Anmeldungen anderer Nutzer, die du als Admin ggf. erstellt oder
+                bestätigt hast, bleiben bestehen — nur der Verweis auf dich wird entfernt.
               </li>
+              <li>Vor der endgültigen Löschung werden laufende Anmeldungen storniert, Wartelisten rücken nach.</li>
+              <li>Dein Login ist danach nicht mehr möglich.</li>
             </ul>
             <p className="font-medium text-sft-red">Diese Aktion kann nicht rückgängig gemacht werden.</p>
             {deleteError && <p className="text-sft-red">{deleteError}</p>}
