@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,12 @@ export function ProfilePage() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSaved, setPasswordSaved] = useState(false)
+
   useEffect(() => {
     if (!user) return
     supabase
@@ -27,6 +33,29 @@ export function ProfilePage() {
       .single()
       .then(({ data }) => setProfile(data))
   }, [user])
+
+  async function handlePasswordChange(event: FormEvent) {
+    event.preventDefault()
+    setPasswordError(null)
+    setPasswordSaved(false)
+
+    if (newPassword.length < 8) {
+      setPasswordError('Das Passwort muss mindestens 8 Zeichen lang sein.')
+      return
+    }
+
+    setPasswordSaving(true)
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    setPasswordSaving(false)
+
+    if (error) {
+      setPasswordError('Passwort konnte nicht geändert werden.')
+      return
+    }
+
+    setNewPassword('')
+    setPasswordSaved(true)
+  }
 
   async function handleDeleteAccount() {
     setDeleteError(null)
@@ -75,6 +104,47 @@ export function ProfilePage() {
       >
         Abmelden
       </button>
+
+      <div className="mt-6 border-t border-sft-surface2 pt-6">
+        {!showPasswordForm ? (
+          <button onClick={() => setShowPasswordForm(true)} className="text-sm underline">
+            Passwort ändern
+          </button>
+        ) : (
+          <form onSubmit={handlePasswordChange} className="flex flex-col gap-3 text-sm">
+            <label className="flex flex-col gap-1">
+              Neues Passwort
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+              />
+            </label>
+            {passwordError && <p className="text-sft-red">{passwordError}</p>}
+            {passwordSaved && <p className="text-sft-gray">Passwort geändert.</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={passwordSaving}
+                className="rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
+              >
+                {passwordSaving ? 'Wird gespeichert…' : 'Speichern'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPasswordForm(false)}
+                className="rounded-md border border-sft-surface2 px-4 py-2.5 text-sft-gray"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
 
       <div className="mt-8 border-t border-sft-surface2 pt-6">
         {!confirmingDelete ? (
