@@ -20,7 +20,7 @@ export function AdminNav() {
         Tourenverwaltung
       </NavLink>
       <NavLink to="/admin/settings" className={linkClass}>
-        Einstellungen
+        Impressum &amp; Datenschutz
       </NavLink>
       <NavLink to="/admin/users" className={linkClass}>
         Nutzer
