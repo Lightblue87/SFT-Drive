@@ -161,6 +161,13 @@ export function AdminTourRegistrationsPage() {
       return
     }
 
+    // Push ist rein zusätzlich zur bereits erstellten In-App-Mitteilung
+    // (siehe CLAUDE.md §27.16) — ein Fehlschlag hier darf die Kernfunktion
+    // nicht als gescheitert melden, deshalb bewusst kein await auf den Erfolg.
+    void supabase.functions.invoke('send-push', {
+      body: { tour_id: id, title: messageTitle.trim(), body: messageBody.trim() },
+    })
+
     setMessageTitle('')
     setMessageBody('')
     setMessageSent(true)

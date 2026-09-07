@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
+import { usePushSubscription } from '@/features/notifications/usePushSubscription'
 
 interface Profile {
   username: string
@@ -13,6 +14,7 @@ interface Profile {
 export function ProfilePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { permission, subscribing, error: pushError, subscribe } = usePushSubscription()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -100,6 +102,29 @@ export function ProfilePage() {
           Tourenarchiv
         </Link>
       </div>
+
+      {permission !== 'unsupported' && permission !== 'granted' && (
+        <div className="mt-6 rounded-md bg-sft-surface p-4 text-sm">
+          <p className="text-sft-gray">
+            Erhalte eine Benachrichtigung, wenn ein Admin dir etwas zu einer deiner Touren
+            mitteilt (z. B. bei einer Treffpunktänderung).
+          </p>
+          <button
+            onClick={subscribe}
+            disabled={subscribing}
+            className="mt-3 rounded-md bg-sft-red px-4 py-2 font-medium disabled:opacity-60"
+          >
+            {subscribing ? 'Wird aktiviert…' : 'Mitteilungen per Push aktivieren'}
+          </button>
+          {pushError && <p className="mt-2 text-sft-red">{pushError}</p>}
+          {permission === 'denied' && (
+            <p className="mt-2 text-sft-gray">
+              Push wurde in den Browser-/System-Einstellungen abgelehnt. Um es zu aktivieren,
+              muss die Berechtigung dort manuell erlaubt werden.
+            </p>
+          )}
+        </div>
+      )}
 
       <button
         onClick={() => supabase.auth.signOut()}

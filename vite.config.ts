@@ -40,29 +40,18 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        // App-Shell und statische Assets cachen. Dynamische Supabase-/Auth-Antworten
-        // bewusst nicht persistent im Service Worker cachen (siehe CLAUDE.md §16).
-        //
-        // Das Splash-Video (mp4) bewusst NICHT precachen: iOS Safari verlangt für die
-        // Video-Wiedergabe HTTP-Range-Requests (byte-weises Nachladen), ein von Workbox
-        // precachter Eintrag liefert aber immer die komplette Datei als eine Antwort ohne
-        // Range-Unterstützung zurück. Das ließ Safari die Autoplay-Wiedergabe verweigern
-        // und stattdessen nur das Poster-Bild mit Play-Button anzeigen. Ohne Precache-
-        // Eintrag geht die Anfrage direkt ans Netzwerk/den normalen HTTP-Cache des
-        // Browsers, der Range-Requests korrekt unterstützt.
-        //
-        // navigateFallback muss die SPA-Shell (index.html) sein, nicht offline.html:
-        // Workbox verwendet dieses Ziel für JEDE Navigation, deren URL nicht exakt
-        // im Precache liegt (z. B. /tours/irgendein-slug oder der
-        // Supabase-E-Mail-Bestätigungslink mit Query-/Hash-Parametern) — unabhängig
-        // vom tatsächlichen Online-Status. Mit offline.html als Ziel wurde dadurch
-        // bei jedem Deep Link fälschlich "Keine Internetverbindung" angezeigt, obwohl
-        // eine Verbindung bestand. Echter Offline-Zustand wird stattdessen über einen
-        // Banner in der App selbst kommuniziert (navigator.onLine, siehe AppLayout).
+      // injectManifest statt generateSW: für Web Push (§27.10-§27.17) braucht der
+      // Service Worker eigene 'push'/'notificationclick'-Listener, die sich in
+      // generateSW's rein deklarativer Konfiguration nicht unterbringen lassen.
+      // Precaching, SPA-Navigate-Fallback (index.html, /admin+/api ausgenommen)
+      // und der bewusste Ausschluss des Splash-Videos aus dem Precache (iOS-
+      // Safari-Range-Request-Problem, siehe frühere Historie) sind jetzt in
+      // src/sw.ts nachgebaut statt über die workbox-Optionen hier.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,jpg}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/admin/, /^\/api/],
       },
       devOptions: {
         enabled: false,

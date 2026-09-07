@@ -67,8 +67,24 @@ Supabase anon/publishable Key im Frontend verwendet — niemals der `service_rol
 ## Deployment
 
 Vorgesehen: GitHub → Cloudflare Pages (automatisches Deployment, Build-Kommando `npm run build`,
-Output-Verzeichnis `dist`). Umgebungsvariablen (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
-werden in den Cloudflare-Pages-Projekteinstellungen gesetzt.
+Output-Verzeichnis `dist`). Umgebungsvariablen (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+optional `VITE_VAPID_PUBLIC_KEY` für Web Push) werden in den Cloudflare-Pages-Projekteinstellungen
+gesetzt.
+
+## Web Push (optional)
+
+Für Push-Benachrichtigungen (siehe CLAUDE.md §27.10-§27.17) zusätzlich nötig:
+
+1. Ein VAPID-Schlüsselpaar generieren (kostenlos, rein kryptografisch — z. B. via
+   `npx web-push generate-vapid-keys`).
+2. `VITE_VAPID_PUBLIC_KEY` (öffentlicher Schlüssel) in Cloudflare Pages setzen.
+3. Die Supabase Edge Function `supabase/functions/send-push` deployen (Dashboard →
+   Edge Functions → "Deploy a new function" → Name exakt `send-push`).
+4. Als Edge-Function-Secrets (projektweit) hinterlegen: `VAPID_PUBLIC_KEY`,
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (z. B. `mailto:admin@example.de`).
+
+Ohne diese Konfiguration funktioniert die App unverändert — Push ist rein optional,
+das In-App-Notification-Center (`/notifications`) funktioniert davon unabhängig.
 
 ## Kostenmodell
 
