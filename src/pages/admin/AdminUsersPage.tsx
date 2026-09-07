@@ -70,13 +70,13 @@ export function AdminUsersPage() {
         {users.map((user) => (
           <li
             key={user.id}
-            className="flex items-center justify-between rounded-md bg-sft-surface p-3 text-sm"
+            className="flex flex-col gap-2 rounded-md bg-sft-surface p-3 text-sm"
           >
             <div>
-              <div className="font-medium">
+              <div className="flex flex-wrap items-center gap-2 break-all font-medium">
                 {user.username}
                 {user.is_admin && (
-                  <span className="ml-2 rounded bg-sft-red px-1.5 py-0.5 text-[11px]">Admin</span>
+                  <span className="shrink-0 rounded bg-sft-red px-1.5 py-0.5 text-[11px]">Admin</span>
                 )}
               </div>
               <div className="text-sft-gray">
@@ -86,7 +86,7 @@ export function AdminUsersPage() {
             <button
               onClick={() => toggleAdmin(user)}
               disabled={pendingId === user.id}
-              className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs disabled:opacity-60"
+              className="self-start rounded-md border border-sft-surface2 px-3 py-1.5 text-xs disabled:opacity-60"
             >
               {user.is_admin ? 'Admin entfernen' : 'Zum Admin machen'}
             </button>

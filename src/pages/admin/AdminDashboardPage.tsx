@@ -61,19 +61,26 @@ export function AdminDashboardPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Admin Dashboard</h1>
-        <div className="flex gap-2">
-          <Link to="/admin/tours" className="rounded-md bg-sft-red px-3 py-1.5 text-sm">
-            Tourenverwaltung
-          </Link>
-          <Link to="/admin/settings" className="rounded-md border border-sft-surface2 px-3 py-1.5 text-sm">
-            Einstellungen
-          </Link>
-          <Link to="/admin/users" className="rounded-md border border-sft-surface2 px-3 py-1.5 text-sm">
-            Nutzer
-          </Link>
-        </div>
+      <h1 className="text-xl font-semibold">Admin Dashboard</h1>
+      <div className="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        <Link
+          to="/admin/tours"
+          className="shrink-0 whitespace-nowrap rounded-md bg-sft-red px-3 py-1.5 text-sm"
+        >
+          Tourenverwaltung
+        </Link>
+        <Link
+          to="/admin/settings"
+          className="shrink-0 whitespace-nowrap rounded-md border border-sft-surface2 px-3 py-1.5 text-sm"
+        >
+          Einstellungen
+        </Link>
+        <Link
+          to="/admin/users"
+          className="shrink-0 whitespace-nowrap rounded-md border border-sft-surface2 px-3 py-1.5 text-sm"
+        >
+          Nutzer
+        </Link>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
