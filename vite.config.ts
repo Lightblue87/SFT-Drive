@@ -44,8 +44,17 @@ export default defineConfig({
       workbox: {
         // App-Shell und statische Assets cachen. Dynamische Supabase-/Auth-Antworten
         // bewusst nicht persistent im Service Worker cachen (siehe CLAUDE.md §16).
+        //
+        // navigateFallback muss die SPA-Shell (index.html) sein, nicht offline.html:
+        // Workbox verwendet dieses Ziel für JEDE Navigation, deren URL nicht exakt
+        // im Precache liegt (z. B. /tours/irgendein-slug oder der
+        // Supabase-E-Mail-Bestätigungslink mit Query-/Hash-Parametern) — unabhängig
+        // vom tatsächlichen Online-Status. Mit offline.html als Ziel wurde dadurch
+        // bei jedem Deep Link fälschlich "Keine Internetverbindung" angezeigt, obwohl
+        // eine Verbindung bestand. Echter Offline-Zustand wird stattdessen über einen
+        // Banner in der App selbst kommuniziert (navigator.onLine, siehe AppLayout).
         globPatterns: ['**/*.{js,css,html,svg,png,ico,jpg,mp4}'],
-        navigateFallback: '/offline.html',
+        navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/admin/, /^\/api/],
       },
       devOptions: {
