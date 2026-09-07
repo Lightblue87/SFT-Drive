@@ -73,7 +73,14 @@ function toDatetimeLocal(value: string | null): string {
 
 function fromDatetimeLocal(value: string): string | null {
   if (!value) return null
-  return new Date(value).toISOString()
+  // Bewusst nicht `new Date(value)` mit dem rohen "YYYY-MM-DDTHH:mm"-String:
+  // iOS Safari parst dieses sekunden- und zeitzonenlose Format inkonsistent
+  // teils als UTC statt als lokale Zeit. Die Komponenten-Form des
+  // Date-Konstruktors ist dagegen immer eindeutig als Lokalzeit definiert.
+  const [datePart, timePart] = value.split('T')
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hours, minutes] = timePart.split(':').map(Number)
+  return new Date(year, month - 1, day, hours, minutes).toISOString()
 }
 
 function slugify(value: string): string {
