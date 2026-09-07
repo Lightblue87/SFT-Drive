@@ -59,9 +59,21 @@ const EMPTY: FormState = {
   zello_url: '',
 }
 
+// `<input type="datetime-local">` liefert/erwartet Werte ohne Zeitzone
+// ("YYYY-MM-DDTHH:mm"), gemeint als lokale Wanduhrzeit des Admins. `timestamptz`
+// in der Datenbank braucht dagegen einen absoluten UTC-Zeitpunkt. Ohne
+// Umrechnung würde die eingegebene Uhrzeit als UTC statt als Lokalzeit
+// gespeichert (z. B. 2 Stunden Differenz im Sommer).
 function toDatetimeLocal(value: string | null): string {
   if (!value) return ''
-  return value.slice(0, 16)
+  const d = new Date(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function fromDatetimeLocal(value: string): string | null {
+  if (!value) return null
+  return new Date(value).toISOString()
 }
 
 function slugify(value: string): string {
@@ -268,9 +280,9 @@ export function AdminTourFormPage() {
       min_power_ps: form.min_power_ps ? Number(form.min_power_ps) : null,
       max_power_ps: form.max_power_ps ? Number(form.max_power_ps) : null,
       min_driver_age: form.min_driver_age ? Number(form.min_driver_age) : null,
-      registration_open_at: form.registration_open_at || null,
-      registration_close_at: form.registration_close_at || null,
-      passenger_edit_deadline_at: form.passenger_edit_deadline_at || null,
+      registration_open_at: fromDatetimeLocal(form.registration_open_at),
+      registration_close_at: fromDatetimeLocal(form.registration_close_at),
+      passenger_edit_deadline_at: fromDatetimeLocal(form.passenger_edit_deadline_at),
       status: form.status,
       cover_image_url: form.cover_image_url || null,
       published_at: form.status === 'published' ? new Date().toISOString() : null,
