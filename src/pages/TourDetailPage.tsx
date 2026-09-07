@@ -10,6 +10,7 @@ import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
+import { MealOrderForm } from '@/features/tours/MealOrderForm'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -239,6 +240,12 @@ export function TourDetailPage() {
                       {stop.location_name && <div className="text-sft-gray">{stop.location_name}</div>}
                       {stop.address && <div className="text-sft-gray">{stop.address}</div>}
                       {stop.description && <div className="text-sft-gray">{stop.description}</div>}
+                      {stop.type === 'restaurant' && (
+                        <MealOrderForm
+                          restaurantStopId={stop.id}
+                          personCount={1 + activeRegistration.passenger_count}
+                        />
+                      )}
                     </li>
                   ))}
                 </ul>

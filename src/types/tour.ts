@@ -127,6 +127,10 @@ export type RpcResultCode =
   | 'FORBIDDEN'
   | 'USER_NOT_FOUND'
   | 'LAST_ADMIN'
+  | 'ORDERING_NOT_ENABLED'
+  | 'ORDERING_NOT_OPEN'
+  | 'ORDERING_CLOSED'
+  | 'MENU_ITEM_INVALID'
 
 export interface RegistrationResult {
   code: RpcResultCode
@@ -155,6 +159,10 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   FORBIDDEN: 'Dazu bist du nicht berechtigt.',
   USER_NOT_FOUND: 'Dieser Nutzer wurde nicht gefunden.',
   LAST_ADMIN: 'Der letzte verbleibende Admin kann die Rolle nicht ablegen.',
+  ORDERING_NOT_ENABLED: 'Für diesen Stopp ist keine Essensbestellung aktiviert.',
+  ORDERING_NOT_OPEN: 'Die Essensbestellung hat noch nicht begonnen.',
+  ORDERING_CLOSED: 'Die Bestellfrist ist abgelaufen.',
+  MENU_ITEM_INVALID: 'Ein ausgewähltes Gericht ist nicht verfügbar.',
 }
 
 export function rpcErrorMessage(code: string): string {

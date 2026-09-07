@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import { TOUR_STOP_TYPE_LABELS, type TourStop, type TourStopType } from '@/types/tourStop'
@@ -160,13 +160,20 @@ export function AdminTourStopsPage() {
                   </div>
                 )}
               </div>
-              <div className="flex shrink-0 gap-2">
-                <button onClick={() => startEdit(stop)} className="text-xs underline">
-                  Bearbeiten
-                </button>
-                <button onClick={() => remove(stop.id)} className="text-xs text-sft-red underline">
-                  Löschen
-                </button>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                {stop.type === 'restaurant' && (
+                  <Link to={`/admin/tours/${id}/stops/${stop.id}`} className="text-xs underline">
+                    Speisekarte & Bestellung
+                  </Link>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => startEdit(stop)} className="text-xs underline">
+                    Bearbeiten
+                  </button>
+                  <button onClick={() => remove(stop.id)} className="text-xs text-sft-red underline">
+                    Löschen
+                  </button>
+                </div>
               </div>
             </div>
           </li>
