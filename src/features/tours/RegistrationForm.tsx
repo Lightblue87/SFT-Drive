@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/features/auth/AuthProvider'
 import type { Tour, RegistrationResult } from '@/types/tour'
 import { rpcErrorMessage } from '@/types/tour'
 
@@ -14,6 +15,7 @@ interface Props {
  * `register_for_tour` — dieses Formular validiert nur oberflächlich für UX.
  */
 export function RegistrationForm({ tour, onRegistered }: Props) {
+  const { user } = useAuth()
   const [manufacturer, setManufacturer] = useState('')
   const [model, setModel] = useState('')
   const [power, setPower] = useState('')
@@ -22,10 +24,47 @@ export function RegistrationForm({ tour, onRegistered }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Existiert eine Altersanforderung und ist kein Geburtsdatum im Profil
+  // gespeichert, muss es hier ergänzt werden (siehe CLAUDE.md §14.3, §6).
+  const [needsDateOfBirth, setNeedsDateOfBirth] = useState(false)
+  const [dateOfBirth, setDateOfBirth] = useState('')
+
+  useEffect(() => {
+    if (!tour.min_driver_age || !user) return
+
+    supabase
+      .from('profiles')
+      .select('date_of_birth')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (!data?.date_of_birth) setNeedsDateOfBirth(true)
+      })
+  }, [tour.min_driver_age, user])
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     setSubmitting(true)
+
+    if (needsDateOfBirth) {
+      if (!dateOfBirth) {
+        setError('Bitte gib dein Geburtsdatum an.')
+        setSubmitting(false)
+        return
+      }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ date_of_birth: dateOfBirth })
+        .eq('id', user!.id)
+
+      if (profileError) {
+        setError('Geburtsdatum konnte nicht gespeichert werden.')
+        setSubmitting(false)
+        return
+      }
+    }
 
     const { data, error: rpcError } = await supabase.rpc('register_for_tour', {
       p_tour_id: tour.id,
@@ -108,6 +147,19 @@ export function RegistrationForm({ tour, onRegistered }: Props) {
           className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
         />
       </label>
+
+      {needsDateOfBirth && (
+        <label className="flex flex-col gap-1 text-sm">
+          Geburtsdatum * (für die Mindestaltersprüfung dieser Tour erforderlich)
+          <input
+            required
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+          />
+        </label>
+      )}
 
       {error && <p className="text-sm text-sft-red">{error}</p>}
 
