@@ -140,9 +140,14 @@ export function RegisterPage() {
           />
           <span>
             Ich stimme der{' '}
-            <Link to="/datenschutz" className="text-sft-white underline">
+            <a
+              href="/datenschutz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sft-white underline"
+            >
               Datenschutzerklärung
-            </Link>{' '}
+            </a>{' '}
             zu.
           </span>
         </label>
