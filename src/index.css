@@ -5,3 +5,12 @@
 html {
   color-scheme: dark;
 }
+
+/* Verhindert automatisches Hineinzoomen von iOS Safari beim Fokussieren von
+   Formularfeldern — passiert, sobald die effektive Schriftgröße unter 16px
+   liegt (unsere Inputs erben sonst text-sm/14px von umschließenden Labels). */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
