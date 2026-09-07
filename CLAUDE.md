@@ -556,6 +556,19 @@ Regeln:
 - `passenger_edit_deadline_at` darf unabhängig vom Ende des normalen Anmeldezeitraums gesetzt werden.
 - Keine exakten privaten Treffpunkte, Kurviger-Links, Zello-Links oder internen Participant-Texte in dieser Tabelle speichern.
 
+### Umsetzungsentscheidung: Slug ist kein Admin-Eingabefeld
+
+`slug` ist rein intern (URL-Baustein) und wird serverseitig automatisch aus Titel und
+Startdatum abgeleitet (`slugify(Titel) + "-" + start_date`), nicht manuell im
+Admin-Formular eingegeben. Grund: Admins mussten das Konzept "Slug" sonst erst
+verstehen, obwohl es keine fachliche Entscheidung ist.
+
+- Bei bestehenden Touren bleibt der einmal vergebene Slug beim Bearbeiten unangetastet,
+  damit sich eine bereits geteilte URL nicht unter der Hand verschiebt.
+- Eine seltene Kollision (identischer Titel + Datum) wird beim Anlegen serverseitig
+  automatisch durch einen angehängten numerischen Suffix aufgelöst, ohne den Admin
+  damit zu behelligen.
+
 ---
 
 ### 8.4 tour_member_details — MEMBER
@@ -1312,6 +1325,10 @@ Mindestens:
 - ausgebuchte Touren
 - Entwürfe
 
+Das Dashboard muss einen direkten, sichtbaren Link zur Tourenverwaltung
+(`/admin/tours`) enthalten — nicht nur Links zu einzelnen bestehenden Touren. Sonst
+gibt es bei einer frischen Installation ohne Touren keinen Weg dorthin.
+
 ### Tourenverwaltung
 
 Admin kann:
@@ -1682,6 +1699,23 @@ object-fit: cover;
 Das gespeicherte Originalbild soll nicht unnötig zerstört werden.
 
 Optional kann später eine Fokus-/Crop-Position gespeichert werden.
+
+#### Umsetzung: Upload statt nur URL
+
+Der Admin kann das Coverbild direkt von Smartphone oder PC hochladen, nicht nur eine
+externe URL verlinken.
+
+- Supabase Storage Bucket `tour-covers`: öffentlich lesbar (Coverbilder erscheinen auf
+  öffentlichen Tourkacheln), Schreibzugriff (Insert/Update/Delete) nur für Admins über
+  `storage.objects`-RLS-Policies mit `is_admin()`.
+- Upload validiert Dateityp (`image/*`) und Maximalgröße (5 MB) im Client, bevor
+  hochgeladen wird.
+- Zusätzlich kann aus bereits hochgeladenen Bildern gewählt werden (kleine Galerie
+  vorhandener Dateien im Bucket), um Speicherplatz im Free Tier zu sparen, statt
+  wiederholt ähnliche Bilder neu hochzuladen.
+- Eine manuell eingetragene externe Bild-URL bleibt als eingeklappte Alternative
+  weiterhin möglich (z. B. für bereits andernorts gehostete Bilder).
+- Supabase Storage ist im kostenlosen Tarif enthalten (siehe §4 Kostenregel).
 
 ---
 
@@ -2140,6 +2174,43 @@ Designidee:
 - `prefers-reduced-motion` respektieren
 - bei reduzierter Bewegung statische Variante anzeigen
 - keine kritischen Daten oder App-Navigation hinter einer künstlich verlängerten Splash-Animation blockieren
+
+#### Umsetzung
+
+Der Splash verwendet das bereitgestellte Tacho-Video (`public/splash/startup.mp4`,
+Originalquelle vor dem Ausliefern remuxt/faststart, ohne Metadaten) mit dem
+Ruhestand-Frame als Poster (`public/splash/startup-poster.jpg`), das gleichzeitig als
+statischer Fallback bei `prefers-reduced-motion` dient.
+
+Da Supabase die Session oft in wenigen Millisekunden aus dem lokalen Speicher lädt, war
+der Splash sonst kaum wahrnehmbar. Es gilt deshalb eine kurze Mindestanzeigedauer von
+700 ms (die tatsächliche Initialisierung bestimmt weiterhin die tatsächliche
+Anzeigedauer, falls sie länger dauert) — bewusst kurz gehalten, um obige Regel nicht zu
+verletzen. Bei `prefers-reduced-motion` entfällt diese Mindestdauer, da dort ohnehin nur
+ein statisches Bild gezeigt wird.
+
+### iOS-Safari-Eigenheiten (aus der Praxis)
+
+Diese Punkte sind beim Testen der installierten PWA auf iPhone aufgefallen und gelten
+als verbindliche Anforderung, nicht nur als Bugfix:
+
+- **Safe Areas**: `apple-mobile-web-app-status-bar-style: black-translucent` legt die
+  Statusleiste transparent über den Seiteninhalt, statt ihn nach unten zu schieben.
+  Header und Bottom-Navigation müssen deshalb `env(safe-area-inset-top)` bzw.
+  `env(safe-area-inset-bottom)` als zusätzliches Padding berücksichtigen (zusammen mit
+  `viewport-fit=cover` im Viewport-Meta-Tag), sonst verschwinden sie ganz oder teilweise
+  hinter Statusleiste/Home-Indicator.
+- **Kein Auto-Zoom bei Formularfeldern**: iOS Safari zoomt beim Fokussieren eines
+  Eingabefelds automatisch hinein, sobald dessen effektive Schriftgröße unter 16px
+  liegt. Alle `input`/`textarea`/`select`-Elemente müssen deshalb mindestens 16px
+  Schriftgröße haben.
+- **Formular-Resilienz bei Tab-Reloads**: iOS Safari kann eine Seite beim App-Wechsel
+  (z. B. um Text aus einer anderen App zu kopieren) jederzeit aus dem Speicher werfen
+  und beim Zurückkehren komplett neu laden — der gesamte React-State geht dabei verloren.
+  Längere Formulare (insbesondere die Tourverwaltung im Admin-Bereich) sollen ihren
+  Eingabestand deshalb laufend in `localStorage` zwischenspeichern und nach einem
+  Neustart wiederherstellen (Wiederherstellung hat Vorrang vor bereits aus der DB
+  geladenen Werten), und den Entwurf nach erfolgreichem Speichern löschen.
 
 Wichtig:
 
@@ -3269,6 +3340,26 @@ Vor jedem Release prüfen:
 - Environment Variables konfigurieren
 - Supabase Redirect URLs konfigurieren
 - Production Test
+
+### Aktueller Deployment-Stand
+
+Dokumentiert den tatsächlich eingerichteten Stand, damit er nicht aus Chat-Verläufen
+rekonstruiert werden muss.
+
+- **Supabase-Projekt:** `spbbypvgjqjkpuskigau`, Region Irland (`eu-west-1`, EU-Datenhaltung).
+- **Cloudflare Pages:** Projekt `sft-drive`, Production Branch `main`, Build-Kommando
+  `npm run build`, Output-Verzeichnis `dist`, live unter `https://sft-drive.pages.dev`.
+- Umgebungsvariablen (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) sind in Cloudflare
+  Pages für Production **und** Preview gesetzt.
+- Supabase Auth → URL Configuration: Site URL und Redirect URLs
+  (`https://sft-drive.pages.dev/**`) sind auf die Cloudflare-Pages-Domain gesetzt, damit
+  Bestätigungs-/Passwort-Reset-Links korrekt zurückführen.
+- Migrationen werden mangels direktem DB-Zugriff aus der Entwicklungsumgebung heraus
+  manuell im Supabase SQL Editor in Dateiname-Reihenfolge eingespielt (siehe
+  `supabase/migrations/`), nicht automatisiert per CLI.
+- Erster Admin wurde über Dashboard → Authentication → Users → Add user (ohne
+  Metadaten, siehe defensiver `handle_new_user()`-Trigger) angelegt und per
+  `insert into public.user_roles ...` zum Admin gemacht.
 
 ---
 
