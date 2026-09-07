@@ -52,6 +52,13 @@ export function TourDetailPage() {
   }
 
   const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration } = data
+  // Cancelled/rejected sind keine aktiven Anmeldungen — die RPC erlaubt eine
+  // Neuanmeldung in diesem Fall ausdrücklich (kontrollierte Reaktivierung,
+  // siehe CLAUDE.md §8.7), das Formular muss dafür also wieder sichtbar sein.
+  const activeRegistration =
+    ownRegistration && ownRegistration.status !== 'cancelled' && ownRegistration.status !== 'rejected'
+      ? ownRegistration
+      : null
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
   const dayInfo = multiDay ? currentTourDay(tour.start_date, tour.end_date) : null
   const returnTo = encodeURIComponent(`/tours/${tour.slug}`)
@@ -137,37 +144,37 @@ export function TourDetailPage() {
           </Link>
         )}
 
-        {user && memberDetails && !ownRegistration && (
+        {user && memberDetails && !activeRegistration && (
           <RegistrationForm tour={tour} onRegistered={reload} />
         )}
 
-        {user && ownRegistration && (
+        {user && activeRegistration && (
           <div className="flex flex-col gap-4">
-            {STATUS_MESSAGE[ownRegistration.status] && (
-              <p className="text-sm">{STATUS_MESSAGE[ownRegistration.status]}</p>
+            {STATUS_MESSAGE[activeRegistration.status] && (
+              <p className="text-sm">{STATUS_MESSAGE[activeRegistration.status]}</p>
             )}
-            {ownRegistration.status === 'waitlisted' && (
+            {activeRegistration.status === 'waitlisted' && (
               <p className="text-sm">
                 {waitlistPosition != null ? `Warteliste · Position ${waitlistPosition}` : 'Warteliste'}
               </p>
             )}
-            {ownRegistration.status === 'confirmed' && (
+            {activeRegistration.status === 'confirmed' && (
               <p className="text-sm text-sft-red">Du bist dabei</p>
             )}
 
             <div className="rounded-md bg-sft-surface p-4 text-sm">
               <div>
-                {ownRegistration.vehicle_manufacturer} {ownRegistration.vehicle_model} ·{' '}
-                {ownRegistration.vehicle_power_ps} PS
+                {activeRegistration.vehicle_manufacturer} {activeRegistration.vehicle_model} ·{' '}
+                {activeRegistration.vehicle_power_ps} PS
               </div>
             </div>
 
-            {['pending', 'confirmed', 'waitlisted'].includes(ownRegistration.status) &&
+            {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) &&
               tour.passenger_edit_deadline_at &&
               new Date(tour.passenger_edit_deadline_at) > new Date() && (
                 <PassengerCountForm
                   tourId={tour.id}
-                  initialCount={ownRegistration.passenger_count}
+                  initialCount={activeRegistration.passenger_count}
                   onUpdated={reload}
                 />
               )}
@@ -220,7 +227,7 @@ export function TourDetailPage() {
               </div>
             )}
 
-            {['pending', 'confirmed', 'waitlisted'].includes(ownRegistration.status) && (
+            {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) && (
               <button
                 onClick={handleCancel}
                 className="rounded-md border border-sft-surface2 px-4 py-2.5 text-sm text-sft-gray"
