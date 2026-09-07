@@ -6,7 +6,7 @@ Entwickle **SFT Drive**, eine moderne, mobile-first Progressive Web App (PWA) zu
 
 Die Anwendung soll dauerhaft mit möglichst **0 € laufenden Kosten** betrieben werden können, solange die Nutzung innerhalb der Free-Tier-Grenzen der eingesetzten Dienste bleibt.
 
-Das Projekt wird in einem **neuen GitHub-Repository** aufgebaut. Der aktuelle Stand ist ein Greenfield-Projekt; es existiert noch keine technische Projektstruktur.
+Das Projekt befindet sich im GitHub-Repository `Lightblue87/SFT-Drive` und ist als produktive PWA unter `https://sft-drive.pages.dev` deployed. Der Kern-MVP sowie die später ergänzten Phasen 9–11 (Notifications, Tour Stops und Restaurant Ordering) sind umgesetzt. Diese Datei beschreibt daher sowohl die verbindliche Produktarchitektur als auch den tatsächlich implementierten Stand. Neue Arbeiten müssen vom bestehenden Code ausgehen und dürfen das Projekt nicht wie ein Greenfield-Projekt behandeln.
 
 Die Anwendung benötigt:
 
@@ -23,7 +23,7 @@ Die Anwendung benötigt:
 - technisch sichere Verhinderung von Überbuchungen,
 - PWA-Funktionalität für iOS, Android und Desktop.
 
-Die Anwendung soll von Anfang an so strukturiert werden, dass spätere Erweiterungen möglich sind, ohne das MVP unnötig zu verkomplizieren.
+Die bestehende Anwendung soll weiter so strukturiert werden, dass spätere Erweiterungen möglich sind, ohne funktionierende Bereiche unnötig zu verkomplizieren oder neu zu bauen.
 
 ### 1.1 Produktname und Branding
 
@@ -2754,6 +2754,16 @@ Keine unnötige zusätzliche Seite bauen.
 
 ---
 
+```text
+/notifications
+```
+
+Persönliches In-App Notification Center.
+
+Nur der eingeloggte User darf seine eigenen Mitteilungen lesen, als gelesen markieren oder löschen.
+
+---
+
 ### 21.3 Admin-Seiten
 
 Alle Admin-Routen müssen sowohl im Frontend als auch serverseitig geschützt sein.
@@ -2948,8 +2958,11 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
 | `/profile` | ❌ | ✅ | ✅ | ✅ |
 | `/profile/tours` | ❌ | ✅ | ✅ | ✅ |
 | `/profile/archive` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ |
+| `/notifications` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ eigener Inhalt |
 | `/admin` | ❌ | ❌ | ❌ | ✅ |
 | `/admin/tours/*` | ❌ | ❌ | ❌ | ✅ |
+| `/admin/users` | ❌ | ❌ | ❌ | ✅ |
+| `/admin/notifications` | ❌ | ❌ | ❌ | ✅ |
 | `/impressum` | ✅ | ✅ | ✅ | ✅ |
 | `/datenschutz` | ✅ | ✅ | ✅ | ✅ |
 
@@ -3244,6 +3257,8 @@ Vor jedem Release prüfen:
 ---
 
 ## 26. MVP Umfang
+
+Die Phasen 1–8 sind umgesetzt. Die folgende Auflistung bleibt als Architektur- und Regression-Referenz bestehen.
 
 ### Phase 1 — Projektbasis
 
@@ -3671,7 +3686,7 @@ Später optional:
 
 ### 27.10 Notification-Infrastruktur
 
-SFT Drive soll eine allgemeine Notification-Infrastruktur erhalten.
+SFT Drive besitzt eine allgemeine Notification-Infrastruktur.
 
 Mögliche Typen:
 
@@ -3683,9 +3698,10 @@ TOUR_UPDATE
 DEPARTURE_REMINDER
 WEATHER_WARNING
 ADMIN_MESSAGE
+NEW_TOUR_IN_REGION
 ```
 
-Nicht ausschließlich für Restaurants bauen.
+Die Infrastruktur ist bewusst nicht ausschließlich für Restaurants gebaut.
 
 ### 27.11 Push-Empfänger
 
@@ -3717,7 +3733,7 @@ Tap öffnet:
 /tours/:slug
 ```
 
-oder später gezielt:
+oder gezielt:
 
 ```text
 /tours/:slug/stops/:stopId/order
@@ -3825,9 +3841,7 @@ Mindestens:
 
 ### 27.18 Entwicklungsphasen
 
-Diese Erweiterung folgt **nach dem stabilen Kern-MVP**.
-
-Empfohlene Reihenfolge:
+Die ursprünglich nach dem Kern-MVP geplanten Phasen 9–11 sind inzwischen umgesetzt. Die folgende Reihenfolge bleibt als Architektur- und Historienreferenz bestehen.
 
 ```text
 Phase 9 — Notifications
@@ -3944,13 +3958,12 @@ Rolle nicht selbst entziehen.
 
 ## 28. Nicht im ersten MVP
 
-Diese Funktionen zunächst bewusst nicht implementieren:
+Der Kern-MVP ist abgeschlossen. Diese Liste markiert Funktionen, die weiterhin bewusst außerhalb des aktuell umgesetzten Scopes liegen:
 
 - Bezahlung
 - Ticketverkauf
 - automatische Rechnungen
 - WhatsApp API
-- Push Notifications im Kern-MVP (geplant ab Phase 9)
 - komplexe Chatfunktion
 - Live-GPS-Tracking
 - Fahrzeug-Telemetrie
@@ -3965,7 +3978,7 @@ Diese Funktionen zunächst bewusst nicht implementieren:
 - vollständige Mehrtagestour-Tagesetappenverwaltung, sofern nicht bereits für das MVP benötigt
 - direkte Zello-API-Integration
 
-Kurviger und Zello werden im MVP über hinterlegte Links integriert.
+Kurviger und Zello werden über hinterlegte Links integriert.
 
 Die Architektur darf spätere Erweiterungen ermöglichen.
 
@@ -3990,7 +4003,6 @@ Nicht jetzt implementieren, aber beim Datenmodell nicht unnötig verbauen:
 - Zello-Integration
 - QR-Code für Zello direkt in der Touransicht
 - Check-in am Treffpunkt
-- Push Notifications
 - E-Mail-Erinnerungen
 - Tourbilder / Galerie
 - Kommentare
@@ -4011,6 +4023,8 @@ Nicht jetzt implementieren, aber beim Datenmodell nicht unnötig verbauen:
 ---
 
 ## 30. Definition of Done für das erste MVP
+
+Der Kern-MVP wurde gegen diese Liste umgesetzt. Die Punkte dienen ab jetzt zusätzlich als Regression-Checkliste: neue Änderungen dürfen bereits erfüllte Anforderungen nicht wieder brechen.
 
 Das MVP gilt erst als fertig, wenn:
 
@@ -4102,61 +4116,38 @@ Das MVP gilt erst als fertig, wenn:
 
 ---
 
-## 31. Arbeitsweise bei Projektstart
+## 31. Arbeitsweise bei weiterer Entwicklung
 
-Wenn dieses Repository noch leer ist, beginne nicht sofort mit allen Features gleichzeitig.
+Das Repository ist produktiv aufgebaut und nicht mehr leer. Die ursprünglichen Initialisierungsschritte sind abgeschlossen und dürfen nicht erneut ausgeführt werden.
 
-Arbeite in klaren Schritten.
+Bei jeder neuen Aufgabe:
 
-### Schritt 1
+1. `CLAUDE.md`, relevante bestehende Komponenten, Migrationen, RPCs und Edge Functions zuerst lesen.
+2. Prüfen, ob die gewünschte Funktion bereits vollständig oder teilweise existiert.
+3. Bestehende Architektur erweitern statt parallele Lösungen aufzubauen.
+4. Datenbankänderungen als neue versionierte Migration hinzufügen; bereits produktiv angewendete Migrationen nicht nachträglich umschreiben.
+5. RLS, Berechtigungen und serverseitige Validierung bei jeder Datenmodelländerung explizit prüfen.
+6. Bestehende Produktionsdaten und historische Tour-/Registrierungsdaten erhalten.
+7. Bei PWA-/Service-Worker-Änderungen besonders auf bestehendes `injectManifest`-, Push- und Offline-Verhalten achten.
+8. Build, Linter und vorhandene Tests nach relevanten Änderungen ausführen.
+9. Neue Regressionstests ergänzen, wenn eine bestehende Kernanforderung betroffen ist.
+10. Deployment-relevante Änderungen in README bzw. im Abschnitt `Aktueller Deployment-Stand` dokumentieren.
 
-Analysiere dieses `CLAUDE.md`.
+Vor größeren Features zuerst kurz festhalten:
 
-Erstelle anschließend einen kurzen Implementierungsplan.
+- welche bestehenden Module betroffen sind,
+- welche Migrationen/RPCs/Edge Functions erweitert werden,
+- ob laufende Kosten entstehen können,
+- welche Security- und RLS-Risiken bestehen,
+- wie Rückwärtskompatibilität sichergestellt wird.
 
-### Schritt 2
+Nach jeder größeren Änderung:
 
-Initialisiere die Frontend-Struktur.
-
-Noch keine unnötigen Features.
-
-### Schritt 3
-
-Erstelle Datenbankschema und Migrationen.
-
-Zeige vor der Implementierung kurz:
-
-- Tabellen
-- Beziehungen
-- RLS-Konzept
-- RPC-Konzept für Touranmeldung
-
-### Schritt 4
-
-Implementiere Auth.
-
-### Schritt 5
-
-Implementiere Touren.
-
-### Schritt 6
-
-Implementiere sichere Anmeldung.
-
-### Schritt 7
-
-Implementiere Admin-Funktionen.
-
-### Schritt 8
-
-PWA, Tests und Deployment.
-
-Nach jeder größeren Phase:
-
-- Build prüfen
-- Fehler beheben
-- Änderungen kurz dokumentieren
-- nächste sinnvolle Phase nennen
+- Build prüfen,
+- Fehler beheben,
+- relevante Tests ausführen,
+- `CLAUDE.md` nur dann erweitern, wenn eine neue verbindliche Produktentscheidung oder dauerhafte technische Erkenntnis hinzugekommen ist,
+- nächsten sinnvollen Schritt nennen.
 
 ---
 
@@ -4175,4 +4166,4 @@ Keine unnötige Enterprise-Architektur für ein kleines Community-Projekt aufbau
 
 ## 33. Aktuelle Kernanforderung in einem Satz
 
-Baue **SFT Drive**, eine sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind und bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können und jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und die Architektur später Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer unterstützt.
+Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
