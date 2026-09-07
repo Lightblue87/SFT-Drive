@@ -1371,6 +1371,15 @@ Admin kann:
 - Anmeldezeitraum festlegen
 - Deadline für Änderung der Personenzahl festlegen
 
+#### Umsetzung: Archivierte Touren standardmäßig ausgeblendet
+
+In der Listenansicht `/admin/tours` sind Touren mit Status `archived` standardmäßig
+ausgeblendet (analog zur öffentlichen Übersicht, §8.3), nicht nur gefiltert nach Status
+wie in §21.3 grundsätzlich vorgesehen. Grund: sonst sammeln sich dort auf Dauer beliebig
+viele alte Touren an und die Verwaltung wird unübersichtlich. Eine Checkbox
+("Archivierte Touren einblenden (X)") oberhalb der Liste blendet sie bei Bedarf manuell
+wieder ein; sie erscheint nur, wenn tatsächlich archivierte Touren vorhanden sind.
+
 ### Teilnehmerverwaltung
 
 Pro Tour getrennte Gruppen anzeigen:
