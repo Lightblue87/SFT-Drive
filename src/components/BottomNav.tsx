@@ -16,7 +16,10 @@ export function BottomNav() {
   const { isAdmin } = useIsAdmin()
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-sft-surface2 bg-sft-black/95 backdrop-blur">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-10 flex border-t border-sft-surface2 bg-sft-black/95 backdrop-blur"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       <NavLink to="/tours" className={linkClass}>
         Touren
       </NavLink>
