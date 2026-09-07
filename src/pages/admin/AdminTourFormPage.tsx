@@ -79,6 +79,34 @@ export function AdminTourFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Mobile Browser (v. a. iOS Safari) können den Tab beim App-Wechsel jederzeit
+  // aus dem Speicher werfen und beim Zurückkommen komplett neu laden — ohne
+  // Zwischenspeicherung wäre dann der gesamte Formularinhalt weg. Der Entwurf
+  // wird deshalb bei jeder Änderung lokal gesichert und nach einem Neustart
+  // wiederhergestellt (nimmt Vorrang vor dem aus der DB geladenen Stand, da er
+  // den zuletzt eingegebenen, noch nicht gespeicherten Stand darstellt).
+  const draftKey = `sft-drive-tour-draft-${id ?? 'new'}`
+
+  useEffect(() => {
+    if (loading) return
+    try {
+      const saved = localStorage.getItem(draftKey)
+      if (saved) setForm(JSON.parse(saved))
+    } catch {
+      // localStorage nicht verfügbar (z. B. privater Modus) oder Entwurf beschädigt — ignorieren.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  useEffect(() => {
+    if (loading) return
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(form))
+    } catch {
+      // localStorage nicht verfügbar — Entwurfssicherung ist ein reines Komfort-Feature.
+    }
+  }, [form, loading, draftKey])
+
   useEffect(() => {
     if (!id) return
 
@@ -210,6 +238,12 @@ export function AdminTourFormPage() {
         zello_url: form.zello_url || null,
       }),
     ])
+
+    try {
+      localStorage.removeItem(draftKey)
+    } catch {
+      // ignorieren
+    }
 
     setSubmitting(false)
     navigate('/admin/tours')
