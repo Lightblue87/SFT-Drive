@@ -64,6 +64,22 @@ function toDatetimeLocal(value: string | null): string {
   return value.slice(0, 16)
 }
 
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Umlaute/Akzente auf Basisbuchstaben reduzieren
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function buildSlug(title: string, startDate: string): string {
+  const base = slugify(title)
+  if (!base) return ''
+  return startDate ? `${base}-${startDate}` : base
+}
+
 /**
  * Tour anlegen/bearbeiten (siehe CLAUDE.md §12, §21.3). Ein Formular für beide
  * Fälle: `/admin/tours/new` (kein `id`) und `/admin/tours/:id/edit`.
@@ -91,7 +107,9 @@ export function AdminTourFormPage() {
     if (loading) return
     try {
       const saved = localStorage.getItem(draftKey)
-      if (saved) setForm(JSON.parse(saved))
+      if (saved) {
+        setForm(JSON.parse(saved))
+      }
     } catch {
       // localStorage nicht verfügbar (z. B. privater Modus) oder Entwurf beschädigt — ignorieren.
     }
@@ -156,6 +174,15 @@ export function AdminTourFormPage() {
     load()
   }, [id])
 
+  // Der Slug ist rein intern (URL-Baustein) und wird automatisch aus Titel und
+  // Startdatum abgeleitet — kein sichtbares/editierbares Feld. Bei bestehenden
+  // Touren bleibt der geladene Slug unangetastet, damit sich die öffentliche
+  // URL nicht unter der Hand ändert.
+  useEffect(() => {
+    if (id) return
+    setForm((f) => ({ ...f, slug: buildSlug(f.title, f.start_date) }))
+  }, [id, form.title, form.start_date])
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -192,14 +219,27 @@ export function AdminTourFormPage() {
     let tourId = id
 
     if (!tourId) {
-      const { data, error: insertError } = await supabase
-        .from('tours')
-        .insert({ ...tourPayload, max_vehicles: newMaxVehicles, created_by: user?.id })
-        .select('id')
-        .single()
+      // Der Slug wird automatisch aus Titel + Datum abgeleitet und ist für den
+      // Admin unsichtbar — ein seltener Konflikt (identischer Titel + Datum)
+      // wird deshalb hier selbst aufgelöst, statt den Admin damit zu behelligen.
+      let insertPayload = { ...tourPayload, max_vehicles: newMaxVehicles, created_by: user?.id }
+      let data: { id: string } | null = null
+      let insertError: { code?: string } | null = null
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const result = await supabase.from('tours').insert(insertPayload).select('id').single()
+        data = result.data
+        insertError = result.error
+        if (!insertError) break
+        if (insertError.code === '23505') {
+          insertPayload = { ...insertPayload, slug: `${tourPayload.slug}-${attempt + 2}` }
+          continue
+        }
+        break
+      }
 
       if (insertError || !data) {
-        setError('Tour konnte nicht angelegt werden. Ist der Slug bereits vergeben?')
+        setError('Tour konnte nicht angelegt werden.')
         setSubmitting(false)
         return
       }
@@ -259,9 +299,6 @@ export function AdminTourFormPage() {
         <h2 className="text-sm font-medium text-sft-gray">Basisdaten</h2>
         <Field label="Titel *">
           <input required value={form.title} onChange={(e) => set('title', e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Slug * (für die URL, z. B. dolomiten-2027)">
-          <input required value={form.slug} onChange={(e) => set('slug', e.target.value)} className={inputClass} />
         </Field>
         <Field label="Region *">
           <input required value={form.region} onChange={(e) => set('region', e.target.value)} className={inputClass} />
