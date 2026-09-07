@@ -183,7 +183,7 @@ export function AdminTourRegistrationsPage() {
     .reduce((sum, r) => sum + 1 + r.passenger_count, 0)
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="py-6">
       <h1 className="text-xl font-semibold">Teilnehmer</h1>
 
       <div className="mt-3 rounded-md bg-sft-surface p-4 text-sm">

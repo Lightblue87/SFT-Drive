@@ -17,6 +17,7 @@ import { ImpressumPage } from '@/pages/ImpressumPage'
 import { DatenschutzPage } from '@/pages/DatenschutzPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
+import { AdminLayout } from '@/components/admin/AdminLayout'
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
 import { AdminToursPage } from '@/pages/admin/AdminToursPage'
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
@@ -81,57 +82,18 @@ export const router = createBrowserRouter([
         path: '/admin',
         element: (
           <RequireAdmin>
-            <AdminDashboardPage />
+            <AdminLayout />
           </RequireAdmin>
         ),
-      },
-      {
-        path: '/admin/tours',
-        element: (
-          <RequireAdmin>
-            <AdminToursPage />
-          </RequireAdmin>
-        ),
-      },
-      {
-        path: '/admin/tours/new',
-        element: (
-          <RequireAdmin>
-            <AdminTourFormPage />
-          </RequireAdmin>
-        ),
-      },
-      {
-        path: '/admin/tours/:id/edit',
-        element: (
-          <RequireAdmin>
-            <AdminTourFormPage />
-          </RequireAdmin>
-        ),
-      },
-      {
-        path: '/admin/tours/:id/registrations',
-        element: (
-          <RequireAdmin>
-            <AdminTourRegistrationsPage />
-          </RequireAdmin>
-        ),
-      },
-      {
-        path: '/admin/settings',
-        element: (
-          <RequireAdmin>
-            <AdminSettingsPage />
-          </RequireAdmin>
-        ),
-      },
-      {
-        path: '/admin/users',
-        element: (
-          <RequireAdmin>
-            <AdminUsersPage />
-          </RequireAdmin>
-        ),
+        children: [
+          { index: true, element: <AdminDashboardPage /> },
+          { path: 'tours', element: <AdminToursPage /> },
+          { path: 'tours/new', element: <AdminTourFormPage /> },
+          { path: 'tours/:id/edit', element: <AdminTourFormPage /> },
+          { path: 'tours/:id/registrations', element: <AdminTourRegistrationsPage /> },
+          { path: 'settings', element: <AdminSettingsPage /> },
+          { path: 'users', element: <AdminUsersPage /> },
+        ],
       },
 
       { path: '/404', element: <NotFoundPage /> },

@@ -92,7 +92,7 @@ export function AdminSettingsPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="mx-auto max-w-sm px-4 py-6">
+    <div className="py-6">
       <h1 className="text-xl font-semibold">Angaben für Impressum &amp; Datenschutz</h1>
       <p className="mt-2 text-sm text-sft-gray">
         Diese Angaben erscheinen öffentlich auf den Seiten „Impressum" und „Datenschutzerklärung".

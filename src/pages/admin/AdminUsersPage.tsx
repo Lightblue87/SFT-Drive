@@ -61,7 +61,7 @@ export function AdminUsersPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="py-6">
       <h1 className="text-xl font-semibold">Nutzerverwaltung</h1>
 
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
