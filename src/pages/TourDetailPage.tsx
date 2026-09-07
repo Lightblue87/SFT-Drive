@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
   pending: 'Deine Anfrage wird geprüft.',
@@ -26,6 +26,17 @@ export function TourDetailPage() {
   const { isAdmin } = useIsAdmin()
   const { data, loading, notFound, reload } = useTourDetail(slug)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (data?.ownRegistration?.status !== 'waitlisted') {
+      setWaitlistPosition(null)
+      return
+    }
+    supabase
+      .rpc('get_my_waitlist_position', { p_tour_id: data.tour.id })
+      .then(({ data: position }) => setWaitlistPosition(position as number | null))
+  }, [data?.ownRegistration?.status, data?.tour.id])
 
   if (loading) return <PageLoading />
 
@@ -136,7 +147,9 @@ export function TourDetailPage() {
               <p className="text-sm">{STATUS_MESSAGE[ownRegistration.status]}</p>
             )}
             {ownRegistration.status === 'waitlisted' && (
-              <p className="text-sm">Warteliste</p>
+              <p className="text-sm">
+                {waitlistPosition != null ? `Warteliste · Position ${waitlistPosition}` : 'Warteliste'}
+              </p>
             )}
             {ownRegistration.status === 'confirmed' && (
               <p className="text-sm text-sft-red">Du bist dabei</p>

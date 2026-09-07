@@ -18,6 +18,49 @@ interface AdminRegistrationRow {
   profiles: { username: string; first_name: string; last_name: string } | null
 }
 
+/** Admin darf die Personenzahl unabhängig von der Deadline korrigieren (§9.8). */
+function PassengerCountEditor({
+  registrationId,
+  passengerCount,
+  onSave,
+}: {
+  registrationId: string
+  passengerCount: number
+  onSave: (registrationId: string, count: number) => Promise<void>
+}) {
+  const [value, setValue] = useState(String(passengerCount))
+  const [saving, setSaving] = useState(false)
+
+  const changed = Number(value) !== passengerCount
+
+  return (
+    <div className="flex items-center gap-2 text-sft-gray">
+      <span>Personen:</span>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-14 rounded border border-sft-surface2 bg-sft-black px-1.5 py-0.5 text-sft-white"
+      />
+      {changed && (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true)
+            await onSave(registrationId, Number(value))
+            setSaving(false)
+          }}
+          className="text-xs text-sft-red underline disabled:opacity-60"
+        >
+          Speichern
+        </button>
+      )}
+    </div>
+  )
+}
+
 const GROUPS: { status: RegistrationStatus; label: string }[] = [
   { status: 'confirmed', label: 'Confirmed' },
   { status: 'pending', label: 'Pending' },
@@ -83,6 +126,15 @@ export function AdminTourRegistrationsPage() {
     load()
   }
 
+  async function savePassengerCount(registrationId: string, count: number) {
+    await runAction(() =>
+      supabase.rpc('admin_update_passenger_count', {
+        p_registration_id: registrationId,
+        p_passenger_count: count,
+      }),
+    )
+  }
+
   if (loading) return <PageLoading />
 
   const confirmedCount = rows.filter((r) => r.status === 'confirmed').length
@@ -125,7 +177,14 @@ export function AdminTourRegistrationsPage() {
                         {r.vehicle_manufacturer} {r.vehicle_model} · {r.vehicle_power_ps} PS
                         {r.license_plate && ` · ${r.license_plate}`}
                       </div>
-                      <div className="text-sft-gray">Personen: {1 + r.passenger_count}</div>
+                      <div className="text-sft-gray">Personen gesamt: {1 + r.passenger_count}</div>
+                      {['pending', 'confirmed', 'waitlisted'].includes(r.status) && (
+                        <PassengerCountEditor
+                          registrationId={r.id}
+                          passengerCount={r.passenger_count}
+                          onSave={savePassengerCount}
+                        />
+                      )}
                     </div>
                     {group.status === 'pending' && (
                       <div className="flex gap-2">
