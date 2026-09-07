@@ -10,7 +10,6 @@ export default defineConfig({
       includeAssets: [
         'icons/icon-192.png',
         'icons/icon-512.png',
-        'splash/startup.mp4',
         'splash/startup-poster.jpg',
       ],
       manifest: {
@@ -45,6 +44,14 @@ export default defineConfig({
         // App-Shell und statische Assets cachen. Dynamische Supabase-/Auth-Antworten
         // bewusst nicht persistent im Service Worker cachen (siehe CLAUDE.md §16).
         //
+        // Das Splash-Video (mp4) bewusst NICHT precachen: iOS Safari verlangt für die
+        // Video-Wiedergabe HTTP-Range-Requests (byte-weises Nachladen), ein von Workbox
+        // precachter Eintrag liefert aber immer die komplette Datei als eine Antwort ohne
+        // Range-Unterstützung zurück. Das ließ Safari die Autoplay-Wiedergabe verweigern
+        // und stattdessen nur das Poster-Bild mit Play-Button anzeigen. Ohne Precache-
+        // Eintrag geht die Anfrage direkt ans Netzwerk/den normalen HTTP-Cache des
+        // Browsers, der Range-Requests korrekt unterstützt.
+        //
         // navigateFallback muss die SPA-Shell (index.html) sein, nicht offline.html:
         // Workbox verwendet dieses Ziel für JEDE Navigation, deren URL nicht exakt
         // im Precache liegt (z. B. /tours/irgendein-slug oder der
@@ -53,7 +60,7 @@ export default defineConfig({
         // bei jedem Deep Link fälschlich "Keine Internetverbindung" angezeigt, obwohl
         // eine Verbindung bestand. Echter Offline-Zustand wird stattdessen über einen
         // Banner in der App selbst kommuniziert (navigator.onLine, siehe AppLayout).
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,jpg,mp4}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,jpg}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/admin/, /^\/api/],
       },
