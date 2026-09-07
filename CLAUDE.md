@@ -2825,6 +2825,8 @@ Keine unnötige zentrale Userverwaltung implementieren, solange Tour-Administrat
 │   ├── /profile/tours
 │   └── /profile/archive
 │
+├── /notifications                 [Phase 9]
+│
 ├── /impressum
 ├── /datenschutz
 │
@@ -2832,7 +2834,8 @@ Keine unnötige zentrale Userverwaltung implementieren, solange Tour-Administrat
     ├── /admin/tours
     │   ├── /admin/tours/new
     │   ├── /admin/tours/:id/edit
-    │   └── /admin/tours/:id/registrations
+    │   ├── /admin/tours/:id/registrations
+    │   └── /admin/tours/:id/stops            [Phase 10+]
     │
     └── /admin/users              [optional / später]
 ```
@@ -3051,7 +3054,35 @@ Die Struktur darf angepasst werden, wenn es dafür einen klaren technischen Grun
 
 ---
 
-## 23. Coding-Regeln für Claude
+## 23. Change Management und laufende Entwicklung
+
+Diese `CLAUDE.md` ist die zentrale und verbindliche Produktspezifikation für **SFT Drive**.
+
+Neue Anforderungen sollen bevorzugt **additiv** ergänzt werden. Bereits implementierte oder aktuell in Arbeit befindliche Bereiche dürfen nicht grundlos neu gebaut oder großflächig refaktoriert werden.
+
+Regeln:
+
+1. Vor jeder größeren Änderung bestehende Implementierung lesen.
+2. Prüfen, ob die neue Anforderung bestehende Datenmodelle, RLS, RPCs, Routes oder UI-Flows beeinflusst.
+3. Wenn keine zwingende Änderung nötig ist, bestehende Architektur unverändert lassen.
+4. Neue Features bevorzugt modular ergänzen.
+5. Wenn bestehende Datenmodelle erweitert werden müssen, nur die minimal notwendige Migration erstellen.
+6. Keine bereits funktionierende Phase erneut implementieren.
+7. Keine parallele zweite Architektur für dieselbe Funktion einführen.
+8. Keine zweite Auth-, Notification-, Tour- oder User-Lösung neben der bestehenden bauen.
+9. Neue Anforderungen klar einer bestehenden oder neuen Entwicklungsphase zuordnen.
+10. Bestehende Tests beibehalten und um neue Tests ergänzen.
+11. Breaking Changes vermeiden.
+12. Wenn ein Breaking Change unvermeidbar ist, Auswirkungen vor der Umsetzung dokumentieren.
+13. Datenmigrationen müssen versioniert und nachvollziehbar sein.
+14. Bereits gespeicherte historische Daten dürfen nicht unbeabsichtigt überschrieben oder gelöscht werden.
+15. Diese Datei bleibt die Single Source of Truth. Keine konkurrierende zweite Haupt-Spezifikationsdatei anlegen.
+
+Wenn eine neue Anforderung bereits teilweise durch bestehende Funktionen abgedeckt wird, vorhandene Funktionen erweitern statt Duplikate zu erzeugen.
+
+---
+
+## 24. Coding-Regeln für Claude
 
 Bei jeder Implementierung:
 
@@ -3077,7 +3108,7 @@ Wenn du einen Fehler findest, behebe nicht ungefragt große, nicht zusammenhäng
 
 ---
 
-## 24. Security Checklist
+## 25. Security Checklist
 
 Vor jedem Release prüfen:
 
@@ -3120,7 +3151,7 @@ Vor jedem Release prüfen:
 
 ---
 
-## 25. MVP Umfang
+## 26. MVP Umfang
 
 ### Phase 1 — Projektbasis
 
@@ -3241,7 +3272,490 @@ Vor jedem Release prüfen:
 
 ---
 
-## 26. Nicht im ersten MVP
+## 27. Restaurant-Stopps, Essensvorbestellung und Notifications
+
+Restaurant-Stopps sind eine wichtige organisatorische Erweiterung für SFT Drive und müssen für eintägige sowie mehrtägige Touren funktionieren.
+
+Die Funktion verwendet die bestehende bestätigte `tour_registration` als Teilnehmerbasis und darf die Touranmeldung nicht duplizieren.
+
+### 27.1 Grundprinzip
+
+Ein Admin kann innerhalb einer Tour einen Restaurant-Stopp anlegen.
+
+Bestätigte Teilnehmer können innerhalb einer definierten Frist Essen für die Personen ihres eigenen Fahrzeugs vorbestellen.
+
+Der Admin erhält eine aggregierte Gesamtbestellung und eine fahrzeugbezogene Detailansicht.
+
+Die Anzahl bestellter Gerichte beeinflusst niemals das Fahrzeuglimit der Tour.
+
+### 27.2 Allgemeine Tour-Stopps
+
+Empfohlene Tabelle:
+
+```text
+tour_stops
+```
+
+Mindestens:
+
+```text
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id)
+stage_id UUID NULL
+type TEXT
+title TEXT
+description TEXT NULL
+location_name TEXT NULL
+address TEXT NULL
+starts_at TIMESTAMPTZ NULL
+sort_order INTEGER
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Mögliche `type` Werte:
+
+```text
+restaurant
+meeting
+fuel
+break
+hotel
+viewpoint
+other
+```
+
+Regeln:
+
+- ein Tour-Stopp gehört genau zu einer Tour
+- bei Mehrtagestouren kann er optional einer Tagesetappe zugeordnet werden
+- private Stopps sind nur bestätigten Teilnehmern bzw. Admins sichtbar
+- Restaurant-Stopps können zusätzliche Bestellfunktionen erhalten
+
+### 27.3 Restaurant-Konfiguration
+
+```text
+restaurant_stop_settings
+```
+
+Mindestens:
+
+```text
+tour_stop_id UUID PRIMARY KEY REFERENCES tour_stops(id)
+ordering_enabled BOOLEAN DEFAULT FALSE
+ordering_open_at TIMESTAMPTZ NULL
+ordering_deadline_at TIMESTAMPTZ NULL
+restaurant_note TEXT NULL
+push_sent_at TIMESTAMPTZ NULL
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Regeln:
+
+- Essensbestellung pro Restaurant-Stopp aktivierbar
+- Bestellfrist durch Admin
+- nach Fristende keine Änderung mehr durch normale User
+- Admin darf weiterhin organisatorische Korrekturen vornehmen
+
+### 27.4 Speisekarte
+
+```text
+menu_items
+```
+
+Mindestens:
+
+```text
+id UUID PRIMARY KEY
+restaurant_stop_id UUID REFERENCES tour_stops(id)
+name TEXT
+description TEXT NULL
+price NUMERIC NULL
+is_available BOOLEAN DEFAULT TRUE
+is_vegetarian BOOLEAN DEFAULT FALSE
+is_vegan BOOLEAN DEFAULT FALSE
+allergen_info TEXT NULL
+sort_order INTEGER
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Regeln:
+
+- nur verfügbare Gerichte anzeigen
+- Preis optional
+- Beschreibung optional
+- Allergene optional
+- Menüpositionen sortierbar
+- bereits bestellte Menüpositionen nicht unkontrolliert löschen
+
+### 27.5 Bestellung pro Touranmeldung
+
+```text
+meal_orders
+```
+
+Mindestens:
+
+```text
+id UUID PRIMARY KEY
+restaurant_stop_id UUID REFERENCES tour_stops(id)
+registration_id UUID REFERENCES tour_registrations(id)
+status TEXT
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+submitted_at TIMESTAMPTZ NULL
+```
+
+Status:
+
+```text
+draft
+submitted
+cancelled
+```
+
+Pro `restaurant_stop_id + registration_id` darf nur eine aktive Bestellung existieren.
+
+### 27.6 Bestellpositionen
+
+```text
+meal_order_items
+```
+
+Mindestens:
+
+```text
+id UUID PRIMARY KEY
+meal_order_id UUID REFERENCES meal_orders(id)
+menu_item_id UUID REFERENCES menu_items(id)
+quantity INTEGER
+note TEXT NULL
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Regeln:
+
+- `quantity > 0`
+- Notiz optional, z. B. `ohne Zwiebeln`
+- nur Positionen der eigenen Bestellung bearbeitbar
+- nach Deadline für normale User schreibgeschützt
+
+### 27.7 Personenanzahl und Gerichte
+
+Gesamtpersonen im Fahrzeug:
+
+```text
+1 + passenger_count
+```
+
+Die App darf die Gerichtsanzahl mit der Personenzahl vergleichen, aber nicht hart begrenzen.
+
+Beispielhinweis:
+
+```text
+Du hast 3 Personen für diese Tour angegeben, aber aktuell 2 Gerichte ausgewählt.
+```
+
+Der User darf trotzdem absenden.
+
+### 27.8 Teilnehmer-UX
+
+Nur bestätigte Teilnehmer dürfen bestellen:
+
+```text
+tour_registrations.status = 'confirmed'
+```
+
+Beispiel:
+
+```text
+Mittagessen – Berggasthof
+12:30 Uhr
+
+Bestellung möglich bis:
+Donnerstag, 18:00 Uhr
+```
+
+CTA:
+
+```text
+Essen auswählen
+```
+
+Bis zur Deadline:
+
+```text
+Bestellung ändern
+```
+
+Danach:
+
+```text
+Bestellung geschlossen
+```
+
+### 27.9 Admin-Auswertung
+
+Beispiel:
+
+```text
+Restaurant: Berggasthof
+
+12 × Schnitzel
+7 × Burger
+4 × Veggie Bowl
+
+Gesamt: 23 Gerichte
+Bestätigte Personen der Tour: 27
+```
+
+Zusätzlich fahrzeugbezogene Detailansicht:
+
+```text
+S4shadow
+Audi S4
+3 Personen
+
+2 × Schnitzel
+1 × Burger
+```
+
+Später optional:
+
+- CSV Export
+- PDF Export
+- druckbare Bestellübersicht
+
+### 27.10 Notification-Infrastruktur
+
+SFT Drive soll eine allgemeine Notification-Infrastruktur erhalten.
+
+Mögliche Typen:
+
+```text
+RESTAURANT_ORDER_OPEN
+RESTAURANT_ORDER_REMINDER
+MEETING_POINT_CHANGED
+TOUR_UPDATE
+DEPARTURE_REMINDER
+WEATHER_WARNING
+ADMIN_MESSAGE
+```
+
+Nicht ausschließlich für Restaurants bauen.
+
+### 27.11 Push-Empfänger
+
+Restaurant-Push standardmäßig nur an bestätigte Teilnehmer der jeweiligen Tour.
+
+Nicht senden an:
+
+```text
+Visitor
+pending
+waitlisted
+rejected
+cancelled
+```
+
+### 27.12 Push-Inhalt und Deep Link
+
+Beispiel:
+
+```text
+Mittagessen für die Harz Tour
+
+Bitte wähle dein Essen bis Donnerstag, 18:00 Uhr.
+```
+
+Tap öffnet:
+
+```text
+/tours/:slug
+```
+
+oder später gezielt:
+
+```text
+/tours/:slug/stops/:stopId/order
+```
+
+### 27.13 In-App Notification Center
+
+Push darf nie der einzige Informationskanal sein.
+
+Jede wichtige Push-Mitteilung wird zusätzlich in der App gespeichert.
+
+Route:
+
+```text
+/notifications
+```
+
+Beispiel:
+
+```text
+Mitteilungen
+
+● Essensbestellung geöffnet
+  Dolomiten Tour · Tag 2
+
+● Treffpunkt geändert
+  Harz Tour
+```
+
+Im Header darf eine Glocke mit Badge erscheinen.
+
+### 27.14 Notifications-Datenmodell
+
+```text
+notifications
+```
+
+Mindestens:
+
+```text
+id UUID PRIMARY KEY
+user_id UUID REFERENCES auth.users(id)
+tour_id UUID NULL REFERENCES tours(id)
+type TEXT
+title TEXT
+body TEXT
+target_path TEXT NULL
+created_at TIMESTAMPTZ
+read_at TIMESTAMPTZ NULL
+```
+
+Regeln:
+
+- User sieht nur eigene Notifications
+- User markiert nur eigene Notifications als gelesen
+- keine unnötig privaten Daten in Notification-Inhalten
+
+### 27.15 Push Subscriptions
+
+```text
+push_subscriptions
+```
+
+Mindestens:
+
+```text
+id UUID PRIMARY KEY
+user_id UUID REFERENCES auth.users(id)
+endpoint TEXT
+p256dh TEXT
+auth TEXT
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+last_used_at TIMESTAMPTZ NULL
+```
+
+Regeln:
+
+- mehrere Geräte pro User möglich
+- User verwaltet nur eigene Subscription
+- ungültige Subscriptions entfernbar
+- Push ist nie Voraussetzung für die App-Nutzung
+
+### 27.16 PWA-Verhalten
+
+- Permission erst nach klarer User-Aktion anfragen
+- keine Push-Abfrage beim ersten Appstart
+- Nutzen vorab erklären
+- Ablehnung muss möglich sein
+- App bleibt vollständig nutzbar
+- Notification Center bleibt verfügbar
+
+### 27.17 Security und RLS
+
+Mindestens:
+
+- nur bestätigte Teilnehmer dürfen für die eigene Registrierung bestellen
+- fremde Bestellungen nicht les- oder änderbar
+- Admin darf Bestellungen seiner Touren sehen
+- Bestellfrist serverseitig prüfen
+- Menüverfügbarkeit serverseitig prüfen
+- User-ID nie als unsicheren Berechtigungsnachweis aus Clientparametern akzeptieren
+- Push-Empfänger serverseitig aus Tourregistrierungen ableiten
+- Notification-Zugriff über `auth.uid()` absichern
+
+### 27.18 Entwicklungsphasen
+
+Diese Erweiterung folgt **nach dem stabilen Kern-MVP**.
+
+Empfohlene Reihenfolge:
+
+```text
+Phase 9 — Notifications
+Phase 10 — Tour Stops
+Phase 11 — Restaurant Ordering
+```
+
+#### Phase 9 — Notifications
+
+- In-App Notification Center
+- Read/Unread
+- Deep Links
+- Push Subscription
+- Web Push
+- Admin Notification Trigger
+- Security / RLS
+
+#### Phase 10 — Tour Stops
+
+- generische Stopps
+- Restaurant
+- Meeting
+- Fuel
+- Break
+- Hotel
+- Zuordnung zu Tagesetappen
+- Sichtbarkeitsregeln
+
+#### Phase 11 — Restaurant Ordering
+
+- Restaurant-Konfiguration
+- Speisekarte
+- Bestellfrist
+- Bestellung pro Tourregistrierung
+- Mengen und Notizen
+- Admin-Gesamtauswertung
+- fahrzeugbezogene Detailansicht
+- Push bei Öffnung
+- Reminder Push
+
+### 27.19 Definition of Done Restaurant / Notifications
+
+Die Erweiterung gilt erst als fertig, wenn:
+
+1. Admin Restaurant-Stopp anlegen kann
+2. Speisekarte anlegbar und sortierbar ist
+3. Bestellfrist gesetzt werden kann
+4. nur bestätigte Teilnehmer bestellen können
+5. Teilnehmer nur für eigene Tourregistrierung bestellen
+6. Änderungen bis zur Deadline möglich sind
+7. nach Deadline normale User nicht mehr ändern
+8. Admin weiterhin korrigieren kann
+9. Gerichtsanzahl nicht hart an Personenzahl gebunden ist
+10. bei Abweichung ein Hinweis erscheint
+11. Admin eine aggregierte Gesamtbestellung sieht
+12. Admin fahrzeugbezogene Bestellungen sieht
+13. Push nur an relevante bestätigte Teilnehmer geht
+14. Push-Tap einen Deep Link öffnet
+15. wichtige Pushes zusätzlich im Notification Center vorhanden sind
+16. User nur eigene Notifications sieht
+17. Push ablehnbar ist
+18. mehrere Geräte pro User möglich sind
+19. RLS und Deadline serverseitig getestet sind
+20. bestehende Tour-, Auth- und Registrierungsfunktionen unverändert weiter funktionieren
+
+---
+
+## 28. Nicht im ersten MVP
 
 Diese Funktionen zunächst bewusst nicht implementieren:
 
@@ -3249,7 +3763,7 @@ Diese Funktionen zunächst bewusst nicht implementieren:
 - Ticketverkauf
 - automatische Rechnungen
 - WhatsApp API
-- Push Notifications
+- Push Notifications im Kern-MVP (geplant ab Phase 9)
 - komplexe Chatfunktion
 - Live-GPS-Tracking
 - Fahrzeug-Telemetrie
@@ -3270,7 +3784,7 @@ Die Architektur darf spätere Erweiterungen ermöglichen.
 
 ---
 
-## 27. Denkbare spätere Erweiterungen
+## 29. Denkbare spätere Erweiterungen
 
 Nicht jetzt implementieren, aber beim Datenmodell nicht unnötig verbauen:
 
@@ -3309,7 +3823,7 @@ Nicht jetzt implementieren, aber beim Datenmodell nicht unnötig verbauen:
 
 ---
 
-## 28. Definition of Done für das erste MVP
+## 30. Definition of Done für das erste MVP
 
 Das MVP gilt erst als fertig, wenn:
 
@@ -3401,7 +3915,7 @@ Das MVP gilt erst als fertig, wenn:
 
 ---
 
-## 29. Arbeitsweise bei Projektstart
+## 31. Arbeitsweise bei Projektstart
 
 Wenn dieses Repository noch leer ist, beginne nicht sofort mit allen Features gleichzeitig.
 
@@ -3459,7 +3973,7 @@ Nach jeder größeren Phase:
 
 ---
 
-## 30. Entscheidungsregel
+## 32. Entscheidungsregel
 
 Wenn du zwischen einer einfachen und einer komplexen Lösung wählen kannst, bevorzuge die einfache Lösung, sofern sie:
 
@@ -3472,6 +3986,6 @@ Keine unnötige Enterprise-Architektur für ein kleines Community-Projekt aufbau
 
 ---
 
-## 31. Aktuelle Kernanforderung in einem Satz
+## 33. Aktuelle Kernanforderung in einem Satz
 
-Baue **SFT Drive**, eine sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind und bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können und jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt.
+Baue **SFT Drive**, eine sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind und bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können und jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und die Architektur später Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer unterstützt.
