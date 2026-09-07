@@ -1,0 +1,224 @@
+import { useParams, Link } from 'react-router-dom'
+import { useTourDetail } from '@/features/tours/useTourDetail'
+import { RegistrationForm } from '@/features/tours/RegistrationForm'
+import { PassengerCountForm } from '@/features/tours/PassengerCountForm'
+import { PageLoading } from '@/components/PageLoading'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { useIsAdmin } from '@/features/auth/useIsAdmin'
+import { supabase } from '@/lib/supabase'
+import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
+import { rpcErrorMessage } from '@/types/tour'
+import type { RegistrationResult } from '@/types/tour'
+import { useState } from 'react'
+
+const STATUS_MESSAGE: Record<string, string> = {
+  pending: 'Deine Anfrage wird geprüft.',
+  rejected: 'Deine Anfrage wurde leider abgelehnt.',
+}
+
+/**
+ * Öffentliche Tourdetailseite mit zustandsabhängiger Erweiterung
+ * (Visitor / Member / Confirmed Participant / Admin, siehe CLAUDE.md §14).
+ */
+export function TourDetailPage() {
+  const { slug } = useParams<{ slug: string }>()
+  const { user } = useAuth()
+  const { isAdmin } = useIsAdmin()
+  const { data, loading, notFound, reload } = useTourDetail(slug)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+
+  if (loading) return <PageLoading />
+
+  if (notFound || !data) {
+    return (
+      <div className="mx-auto max-w-sm px-4 py-16 text-center">
+        <h1 className="text-xl font-semibold">Diese Seite wurde nicht gefunden.</h1>
+        <Link to="/tours" className="mt-6 inline-block text-sft-red underline">
+          Zur Tourübersicht
+        </Link>
+      </div>
+    )
+  }
+
+  const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration } = data
+  const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
+  const dayInfo = multiDay ? currentTourDay(tour.start_date, tour.end_date) : null
+  const returnTo = encodeURIComponent(`/tours/${tour.slug}`)
+
+  async function handleCancel() {
+    setCancelError(null)
+    const { data: result, error } = await supabase.rpc('cancel_tour_registration', {
+      p_tour_id: tour.id,
+    })
+    if (error) {
+      setCancelError('Stornierung fehlgeschlagen.')
+      return
+    }
+    const r = result as RegistrationResult
+    if (r.code !== 'CANCELLED') {
+      setCancelError(rpcErrorMessage(r.code))
+      return
+    }
+    reload()
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-6">
+      <h1 className="text-xl font-semibold">{tour.title}</h1>
+
+      <div className="mt-3 aspect-square w-full overflow-hidden rounded-lg bg-sft-surface">
+        {tour.cover_image_url ? (
+          <img src={tour.cover_image_url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-sft-gray">SFT Drive</div>
+        )}
+      </div>
+
+      <div className="mt-4 space-y-1 text-sm">
+        <div>
+          {formatDateRange(tour.start_date, tour.end_date)}
+          {multiDay && ` · ${tourDayCount(tour.start_date, tour.end_date)} Tage`}
+        </div>
+        {dayInfo && (
+          <div className="text-sft-red">
+            Läuft aktuell · Tag {dayInfo} von {tourDayCount(tour.start_date, tour.end_date)}
+          </div>
+        )}
+        <div className="text-sft-gray">
+          {tour.region}
+          {tour.route_length_km != null && ` · ${tour.route_length_km} km`}
+        </div>
+        {stats && (
+          <div className="text-sft-gray">
+            {stats.is_full ? 'Ausgebucht' : `${stats.free_vehicle_slots} von ${stats.max_vehicles} Fahrzeugplätzen frei`}
+          </div>
+        )}
+        <div className="text-sft-gray">
+          {tour.min_power_ps != null && `Mindestleistung ${tour.min_power_ps} PS`}
+          {tour.max_power_ps != null && ` · Maximal ${tour.max_power_ps} PS`}
+          {tour.min_driver_age != null && ` · Mindestalter ${tour.min_driver_age}`}
+        </div>
+        {tour.license_plate_required && (
+          <div className="text-sft-gray">Kennzeichen bei Anmeldung erforderlich</div>
+        )}
+      </div>
+
+      {tour.public_description && (
+        <p className="mt-4 text-sm text-sft-gray">{tour.public_description}</p>
+      )}
+
+      {isAdmin && (
+        <Link
+          to={`/admin/tours/${tour.id}/edit`}
+          className="mt-4 inline-block rounded-md bg-sft-surface px-3 py-1.5 text-sm"
+        >
+          Tour bearbeiten
+        </Link>
+      )}
+
+      <div className="mt-6 border-t border-sft-surface2 pt-6">
+        {!user && (
+          <Link
+            to={`/login?returnTo=${returnTo}`}
+            className="block rounded-md bg-sft-red px-4 py-2.5 text-center font-medium"
+          >
+            Für diese Tour anmelden
+          </Link>
+        )}
+
+        {user && memberDetails && !ownRegistration && (
+          <RegistrationForm tour={tour} onRegistered={reload} />
+        )}
+
+        {user && ownRegistration && (
+          <div className="flex flex-col gap-4">
+            {STATUS_MESSAGE[ownRegistration.status] && (
+              <p className="text-sm">{STATUS_MESSAGE[ownRegistration.status]}</p>
+            )}
+            {ownRegistration.status === 'waitlisted' && (
+              <p className="text-sm">Warteliste</p>
+            )}
+            {ownRegistration.status === 'confirmed' && (
+              <p className="text-sm text-sft-red">Du bist dabei</p>
+            )}
+
+            <div className="rounded-md bg-sft-surface p-4 text-sm">
+              <div>
+                {ownRegistration.vehicle_manufacturer} {ownRegistration.vehicle_model} ·{' '}
+                {ownRegistration.vehicle_power_ps} PS
+              </div>
+            </div>
+
+            {['pending', 'confirmed', 'waitlisted'].includes(ownRegistration.status) &&
+              tour.passenger_edit_deadline_at &&
+              new Date(tour.passenger_edit_deadline_at) > new Date() && (
+                <PassengerCountForm
+                  tourId={tour.id}
+                  initialCount={ownRegistration.passenger_count}
+                  onUpdated={reload}
+                />
+              )}
+
+            {participantDetails && (
+              <div className="flex flex-col gap-3 rounded-md bg-sft-surface p-4 text-sm">
+                {participantDetails.meeting_point_private && (
+                  <div>Treffpunkt: {participantDetails.meeting_point_private}</div>
+                )}
+                {participantDetails.kurviger_url && (
+                  <a
+                    href={participantDetails.kurviger_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-md bg-sft-red px-4 py-2.5 text-center font-medium"
+                  >
+                    Route in Kurviger öffnen
+                  </a>
+                )}
+                {participantDetails.zello_url ? (
+                  <a
+                    href={participantDetails.zello_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-md bg-sft-surface2 px-4 py-2.5 text-center"
+                  >
+                    Zello-Kanal öffnen
+                  </a>
+                ) : (
+                  <div className="text-sft-gray">
+                    Zello-Zugang: Der QR-Code für den Tourkanal wird am Treffpunkt bereitgestellt.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {confirmedVehicles.length > 0 && (
+              <div className="rounded-md bg-sft-surface p-4 text-sm">
+                <h2 className="mb-2 font-medium">Bestätigte Fahrzeuge</h2>
+                <ul className="flex flex-col gap-1">
+                  {confirmedVehicles.map((v) => (
+                    <li
+                      key={v.registration_id}
+                      className={v.is_self ? 'font-medium text-sft-red' : ''}
+                    >
+                      {v.username} · {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {['pending', 'confirmed', 'waitlisted'].includes(ownRegistration.status) && (
+              <button
+                onClick={handleCancel}
+                className="rounded-md border border-sft-surface2 px-4 py-2.5 text-sm text-sft-gray"
+              >
+                Teilnahme stornieren
+              </button>
+            )}
+            {cancelError && <p className="text-sm text-sft-red">{cancelError}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
