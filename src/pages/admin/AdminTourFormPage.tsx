@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -94,6 +94,8 @@ export function AdminTourFormPage() {
   const [loading, setLoading] = useState(!!id)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   // Mobile Browser (v. a. iOS Safari) können den Tab beim App-Wechsel jederzeit
   // aus dem Speicher werfen und beim Zurückkommen komplett neu laden — ohne
@@ -185,6 +187,44 @@ export function AdminTourFormPage() {
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  const MAX_COVER_IMAGE_BYTES = 5 * 1024 * 1024
+
+  async function handleCoverImageUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = '' // erneutes Auswählen derselben Datei soll wieder auslösen
+    if (!file) return
+
+    setUploadError(null)
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Bitte eine Bilddatei auswählen.')
+      return
+    }
+    if (file.size > MAX_COVER_IMAGE_BYTES) {
+      setUploadError('Bild ist zu groß (max. 5 MB).')
+      return
+    }
+
+    setUploading(true)
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${crypto.randomUUID()}.${extension}`
+
+    const { error: uploadErr } = await supabase.storage.from('tour-covers').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    })
+
+    if (uploadErr) {
+      setUploadError('Upload fehlgeschlagen. Bitte erneut versuchen.')
+      setUploading(false)
+      return
+    }
+
+    const { data } = supabase.storage.from('tour-covers').getPublicUrl(path)
+    set('cover_image_url', data.publicUrl)
+    setUploading(false)
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -332,8 +372,47 @@ export function AdminTourFormPage() {
             className={inputClass}
           />
         </Field>
-        <Field label="Coverbild-URL">
-          <input value={form.cover_image_url} onChange={(e) => set('cover_image_url', e.target.value)} className={inputClass} />
+        <Field label="Coverbild (quadratisch, z. B. Tourlogo, Fahrzeugfoto, Routen-Screenshot)">
+          <div className="flex flex-col gap-2">
+            {form.cover_image_url && (
+              <img
+                src={form.cover_image_url}
+                alt=""
+                className="aspect-square w-32 rounded-md object-cover"
+              />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer rounded-md bg-sft-surface2 px-3 py-2 text-sm">
+                {uploading ? 'Wird hochgeladen…' : form.cover_image_url ? 'Bild ändern' : 'Bild hochladen'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverImageUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
+              {form.cover_image_url && (
+                <button
+                  type="button"
+                  onClick={() => set('cover_image_url', '')}
+                  className="rounded-md border border-sft-surface2 px-3 py-2 text-sm text-sft-gray"
+                >
+                  Entfernen
+                </button>
+              )}
+            </div>
+            {uploadError && <p className="text-sm text-sft-red">{uploadError}</p>}
+            <details className="text-sm text-sft-gray">
+              <summary className="cursor-pointer">Stattdessen Bild-URL eintragen</summary>
+              <input
+                value={form.cover_image_url}
+                onChange={(e) => set('cover_image_url', e.target.value)}
+                placeholder="https://…"
+                className={`${inputClass} mt-2`}
+              />
+            </details>
+          </div>
         </Field>
         <Field label="Status">
           <select value={form.status} onChange={(e) => set('status', e.target.value as TourStatus)} className={inputClass}>
