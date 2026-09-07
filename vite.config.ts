@@ -7,7 +7,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: [
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'splash/startup.mp4',
+        'splash/startup-poster.jpg',
+      ],
       manifest: {
         name: 'SFT Drive',
         short_name: 'SFT Drive',
@@ -39,7 +44,7 @@ export default defineConfig({
       workbox: {
         // App-Shell und statische Assets cachen. Dynamische Supabase-/Auth-Antworten
         // bewusst nicht persistent im Service Worker cachen (siehe CLAUDE.md §16).
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,jpg,mp4}'],
         navigateFallback: '/offline.html',
         navigateFallbackDenylist: [/^\/admin/, /^\/api/],
       },
