@@ -96,6 +96,9 @@ export function AdminTourFormPage() {
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [showGallery, setShowGallery] = useState(false)
+  const [galleryImages, setGalleryImages] = useState<{ name: string; url: string }[] | null>(null)
+  const [galleryLoading, setGalleryLoading] = useState(false)
 
   // Mobile Browser (v. a. iOS Safari) können den Tab beim App-Wechsel jederzeit
   // aus dem Speicher werfen und beim Zurückkommen komplett neu laden — ohne
@@ -225,6 +228,24 @@ export function AdminTourFormPage() {
     const { data } = supabase.storage.from('tour-covers').getPublicUrl(path)
     set('cover_image_url', data.publicUrl)
     setUploading(false)
+  }
+
+  async function openGallery() {
+    setShowGallery(true)
+    if (galleryImages) return // schon geladen
+
+    setGalleryLoading(true)
+    const { data } = await supabase.storage
+      .from('tour-covers')
+      .list('', { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
+
+    setGalleryImages(
+      (data ?? []).map((file) => ({
+        name: file.name,
+        url: supabase.storage.from('tour-covers').getPublicUrl(file.name).data.publicUrl,
+      })),
+    )
+    setGalleryLoading(false)
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -392,6 +413,13 @@ export function AdminTourFormPage() {
                   className="hidden"
                 />
               </label>
+              <button
+                type="button"
+                onClick={openGallery}
+                className="rounded-md border border-sft-surface2 px-3 py-2 text-sm"
+              >
+                Vorhandenes Bild wählen
+              </button>
               {form.cover_image_url && (
                 <button
                   type="button"
@@ -559,6 +587,49 @@ export function AdminTourFormPage() {
           {submitting ? 'Wird gespeichert…' : 'Speichern'}
         </button>
       </form>
+
+      {showGallery && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
+          onClick={() => setShowGallery(false)}
+        >
+          <div
+            className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-t-lg bg-sft-surface p-4 sm:rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-medium">Vorhandenes Bild wählen</h2>
+              <button type="button" onClick={() => setShowGallery(false)} className="text-sft-gray">
+                Schließen
+              </button>
+            </div>
+
+            {galleryLoading && <PageLoading />}
+
+            {!galleryLoading && galleryImages && galleryImages.length === 0 && (
+              <p className="text-sm text-sft-gray">Noch keine hochgeladenen Bilder vorhanden.</p>
+            )}
+
+            {!galleryLoading && galleryImages && galleryImages.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {galleryImages.map((img) => (
+                  <button
+                    key={img.name}
+                    type="button"
+                    onClick={() => {
+                      set('cover_image_url', img.url)
+                      setShowGallery(false)
+                    }}
+                    className="aspect-square overflow-hidden rounded-md border border-sft-surface2"
+                  >
+                    <img src={img.url} alt="" className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
