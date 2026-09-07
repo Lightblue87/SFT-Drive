@@ -79,12 +79,17 @@ export function AdminToursPage() {
                   <span className="text-sft-red">→</span>
                 </div>
               </Link>
-              <Link
-                to={`/admin/tours/${tour.id}/registrations`}
-                className="mt-1 block text-xs text-sft-gray underline"
-              >
-                Teilnehmer verwalten
-              </Link>
+              <div className="mt-1 flex gap-3">
+                <Link
+                  to={`/admin/tours/${tour.id}/registrations`}
+                  className="text-xs text-sft-gray underline"
+                >
+                  Teilnehmer verwalten
+                </Link>
+                <Link to={`/admin/tours/${tour.id}/stops`} className="text-xs text-sft-gray underline">
+                  Tour-Stopps verwalten
+                </Link>
+              </div>
             </li>
           ))}
         </ul>

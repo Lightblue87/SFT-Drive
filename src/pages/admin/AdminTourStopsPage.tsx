@@ -52,6 +52,33 @@ export function AdminTourStopsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Mobile Browser (v. a. iOS Safari) können den Tab beim App-Wechsel jederzeit aus dem
+  // Speicher werfen; ohne Zwischenspeicherung geht ein noch nicht gespeicherter Stopp-
+  // Entwurf beim Verlassen/Zurückkehren zur Seite verloren (§16). Deshalb wie beim
+  // Tourformular lokal sichern und nach einem Neustart wiederherstellen.
+  const draftKey = `sft-drive-tour-stop-draft-${id ?? 'new'}`
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(draftKey)
+      if (saved) {
+        const parsed = JSON.parse(saved) as { editingId: string | null; form: FormState }
+        setEditingId(parsed.editingId)
+        setForm(parsed.form)
+      }
+    } catch {
+      // localStorage nicht verfügbar oder Entwurf beschädigt — ignorieren.
+    }
+  }, [draftKey])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ editingId, form }))
+    } catch {
+      // localStorage nicht verfügbar — Entwurfssicherung ist ein reines Komfort-Feature.
+    }
+  }, [editingId, form, draftKey])
+
   const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
@@ -88,6 +115,11 @@ export function AdminTourStopsPage() {
   function resetForm() {
     setEditingId(null)
     setForm(EMPTY_FORM)
+    try {
+      localStorage.removeItem(draftKey)
+    } catch {
+      // localStorage nicht verfügbar — kein Problem, der Entwurf ist ohnehin verworfen.
+    }
   }
 
   async function save() {

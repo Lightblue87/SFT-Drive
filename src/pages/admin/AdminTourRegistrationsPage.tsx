@@ -155,9 +155,6 @@ export function AdminTourRegistrationsPage() {
         <Link to="/admin/notifications" className="inline-block text-sm underline">
           Mitteilung an diese Tour senden →
         </Link>
-        <Link to={`/admin/tours/${id}/stops`} className="inline-block text-sm underline">
-          Tour-Stopps verwalten →
-        </Link>
       </div>
 
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
