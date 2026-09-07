@@ -2872,11 +2872,18 @@ Kann alternativ als Drawer / Modal innerhalb der Teilnehmerverwaltung umgesetzt 
 /admin/users
 ```
 
-Nicht zwingend MVP.
+Umgesetzt (§27.20): einfache Nutzerverwaltung, primär für die Admin-Rollen-
+Vergabe/-Übergabe (`admin_list_users`/`admin_set_admin_role`-RPCs) — bewusst
+kein umfassendes CRM, nur so viel wie für diesen Zweck nötig.
 
-Nur vorbereiten, wenn tatsächlich eine Userverwaltung benötigt wird.
+---
 
-Keine unnötige zentrale Userverwaltung implementieren, solange Tour-Administration ausreicht.
+```text
+/admin/notifications
+```
+
+Umgesetzt (§27.20): zentrale Mitteilungsverwaltung, Ziel wählbar zwischen
+einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
 
 ---
 
@@ -2896,7 +2903,7 @@ Keine unnötige zentrale Userverwaltung implementieren, solange Tour-Administrat
 │   ├── /profile/tours
 │   └── /profile/archive
 │
-├── /notifications                 [Phase 9]
+├── /notifications
 │
 ├── /impressum
 ├── /datenschutz
@@ -2906,9 +2913,12 @@ Keine unnötige zentrale Userverwaltung implementieren, solange Tour-Administrat
     │   ├── /admin/tours/new
     │   ├── /admin/tours/:id/edit
     │   ├── /admin/tours/:id/registrations
-    │   └── /admin/tours/:id/stops            [Phase 10+]
+    │   └── /admin/tours/:id/stops
+    │       └── /admin/tours/:id/stops/:stopId    (Restaurant-Stopps, §27.20)
     │
-    └── /admin/users              [optional / später]
+    ├── /admin/settings
+    ├── /admin/users
+    └── /admin/notifications
 ```
 
 ---
@@ -3360,6 +3370,18 @@ rekonstruiert werden muss.
 - Erster Admin wurde über Dashboard → Authentication → Users → Add user (ohne
   Metadaten, siehe defensiver `handle_new_user()`-Trigger) angelegt und per
   `insert into public.user_roles ...` zum Admin gemacht.
+- Zwei Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
+  ebenfalls manuell deployed, kein CI/CD dafür): `delete-account` (vollständige
+  Auth-Kontolöschung, §7) und `send-push` (Web-Push-Zustellung, §27). Für
+  `send-push` sind zusätzlich drei projektweite Edge-Function-Secrets gesetzt:
+  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche
+  VAPID-Schlüssel liegt zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den
+  Cloudflare-Pages-Umgebungsvariablen (Production und Preview).
+- Der PWA-Build läuft seit Phase 9 über vite-plugin-pwas `injectManifest`-
+  Strategie mit eigenem Service Worker (`src/sw.ts`), nicht mehr über
+  `generateSW` — nötig für die `push`/`notificationclick`-Handler von Web
+  Push. Precaching- und Navigate-Fallback-Verhalten sind dort nachgebaut,
+  siehe die Kommentare in `vite.config.ts` und `src/sw.ts`.
 
 ---
 
@@ -3843,6 +3865,51 @@ Die Erweiterung gilt erst als fertig, wenn:
 18. mehrere Geräte pro User möglich sind
 19. RLS und Deadline serverseitig getestet sind
 20. bestehende Tour-, Auth- und Registrierungsfunktionen unverändert weiter funktionieren
+
+### 27.20 Umsetzungsstand
+
+Phase 9, 10 und 11 sind umgesetzt (Migrationen `20260907081600` bis
+`20260907082000`, jeweils lokal gegen eine echte, nicht-privilegierte
+Postgres-Rolle auf RLS getestet, nicht nur als Superuser).
+
+**Phase 9 — Notifications:** vollständig, inklusive echter Web-Push-Zustellung
+(eigener Service Worker per `injectManifest`-Strategie statt `generateSW`,
+VAPID-Schlüsselpaar, Supabase Edge Function `send-push`). Zusätzlich zur
+ursprünglichen Spezifikation umgesetzt:
+
+- Regionsbasierte Benachrichtigungspräferenzen (`notification_preferences`,
+  Chip-Auswahl in `/profile`): User werden automatisch per DB-Trigger
+  benachrichtigt, sobald eine Tour in einer abonnierten Region veröffentlicht
+  wird (Typ `NEW_TOUR_IN_REGION`).
+- Admin-Broadcast an alle Nutzer (`admin_send_broadcast_notification`),
+  zusätzlich zur tourbezogenen Mitteilung — beides zentral über
+  `/admin/notifications` auslösbar, nicht mehr in die Teilnehmerverwaltung
+  einer einzelnen Tour verschachtelt.
+- Swipe-to-delete für einzelne Mitteilungen (`delete_notification`-RPC).
+
+**Phase 10 — Tour Stops:** vollständig (`tour_stops`, Admin-Verwaltung unter
+`/admin/tours/:id/stops`, Anzeige für bestätigte Teilnehmer auf der
+Tourdetailseite). Zuordnung zu Tagesetappen (`stage_id`) ist im Datenmodell
+vorbereitet, im MVP-UI aber noch ungenutzt (§8.6 gilt unverändert).
+
+**Phase 11 — Restaurant Ordering:** Kernfunktion vollständig
+(`restaurant_stop_settings`, `menu_items`, `meal_orders`,
+`meal_order_items`, `submit_meal_order`/`admin_update_meal_order`-RPCs,
+Admin-Auswertung unter `/admin/tours/:id/stops/:stopId`, Bestellformular auf
+der Tourdetailseite). **Noch offen:** die automatischen Pushes
+`RESTAURANT_ORDER_OPEN` und `RESTAURANT_ORDER_REMINDER` (§27.19 Punkte
+13-14, letzterer Teil) — dafür fehlt noch ein zeitgesteuerter Trigger
+(z. B. ein Cron-Job auf der Edge Function), der bislang nicht existiert.
+Bis dahin erfährt ein Teilnehmer von einer neuen Speisekarte nur, wenn der
+Admin zusätzlich eine reguläre Mitteilung über `/admin/notifications`
+verschickt.
+
+Ebenfalls neu, additiv zu §12/§21.3 ergänzt: **`/admin/users`**
+(Nutzerverwaltung) — ein Admin kann andere User direkt in der App zum Admin
+machen bzw. die Rolle wieder entziehen (`admin_list_users`,
+`admin_set_admin_role`-RPCs), für eine einfache Admin-Übergabe ohne
+direkten Datenbankzugriff. Der letzte verbleibende Admin kann sich die
+Rolle nicht selbst entziehen.
 
 ---
 
