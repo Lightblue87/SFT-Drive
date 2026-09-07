@@ -26,10 +26,18 @@ export function AdminUsersPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.rpc('admin_list_users')
+    const { data, error } = await supabase.rpc('admin_list_users')
+    if (error) {
+      setLoadError(error.message)
+      setUsers([])
+      setLoading(false)
+      return
+    }
+    setLoadError(null)
     setUsers((data as UserRow[]) ?? [])
     setLoading(false)
   }, [])
@@ -121,6 +129,9 @@ export function AdminUsersPage() {
         className="mt-4 w-full rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
       />
 
+      {loadError && (
+        <p className="mt-3 text-sm text-sft-red">Nutzer konnten nicht geladen werden: {loadError}</p>
+      )}
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
 
       <ul className="mt-4 flex flex-col gap-2">
