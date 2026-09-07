@@ -7,9 +7,14 @@ Die vollständige Produkt- und technische Spezifikation steht in [`CLAUDE.md`](.
 
 ## Status
 
-Projektbasis (Phase 1 laut CLAUDE.md §25): Frontend-Grundgerüst mit Routing, Auth-Anbindung
-(Supabase Auth) und PWA-Konfiguration. Das Datenbankschema (Touren, Registrierungen, RLS, RPCs)
-folgt in der nächsten Phase.
+- Phase 1 (CLAUDE.md §25): Frontend-Grundgerüst mit Routing, Auth-Anbindung (Supabase Auth) und
+  PWA-Konfiguration. ✅
+- Phase 2: Datenbankschema, RLS und die sicherheitskritischen RPCs für Touranmeldung/Warteliste
+  (CLAUDE.md §8, §9). ✅ Migrationen liegen in [`supabase/migrations/`](./supabase/migrations),
+  gegen ein lokales Postgres validiert (Schema-Aufbau, Anmeldung, Kapazitätsprüfung unter
+  parallelen Requests, Stornierung/Nachrücken, Altersprüfung — siehe Kommentare in den Dateien).
+  Noch nicht gegen ein echtes Supabase-Projekt angewendet/getestet.
+- Noch offen: Admin-UI und Public-Tour-UI an das Schema anbinden (aktuell Platzhalter).
 
 ## Stack
 
@@ -17,7 +22,7 @@ folgt in der nächsten Phase.
 - React Router
 - Tailwind CSS
 - vite-plugin-pwa
-- Supabase (Auth, Postgres, RLS) — Backend folgt
+- Supabase (Auth, Postgres, RLS)
 
 ## Setup
 
@@ -27,6 +32,25 @@ cp .env.example .env
 # .env mit Supabase-Projekt-URL und anon Key befüllen
 npm run dev
 ```
+
+## Datenbank einrichten
+
+1. Supabase-Projekt anlegen (siehe [supabase.com](https://supabase.com), Region z. B.
+   Frankfurt/`eu-central-1` für EU-Datenhaltung).
+2. Migrationen anwenden — entweder mit der [Supabase CLI](https://supabase.com/docs/guides/cli):
+   ```bash
+   supabase link --project-ref <project-ref>
+   supabase db push
+   ```
+   oder manuell: die Dateien in [`supabase/migrations/`](./supabase/migrations) in
+   **aufsteigender Dateinamen-Reihenfolge** im SQL-Editor des Supabase-Dashboards ausführen.
+3. Ersten Admin setzen (es gibt bewusst keinen "Make me admin"-Mechanismus im Frontend, siehe
+   CLAUDE.md §8.2):
+   ```sql
+   insert into public.user_roles (user_id, role)
+   values ('<auth.users.id des gewünschten Admins>', 'admin');
+   ```
+4. `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` (Project Settings → Data API) in `.env` eintragen.
 
 ## Build
 
