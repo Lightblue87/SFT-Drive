@@ -145,7 +145,11 @@ export function TourDetailPage() {
         )}
 
         {user && memberDetails && !activeRegistration && (
-          <RegistrationForm tour={tour} onRegistered={reload} />
+          <RegistrationForm
+            tour={tour}
+            onRegistered={reload}
+            wasRejected={ownRegistration?.status === 'rejected'}
+          />
         )}
 
         {user && activeRegistration && (

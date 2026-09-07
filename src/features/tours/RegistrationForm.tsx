@@ -7,6 +7,12 @@ import { rpcErrorMessage } from '@/types/tour'
 interface Props {
   tour: Tour
   onRegistered: () => void
+  /**
+   * War die vorherige Registrierung `rejected`, erzwingt die RPC unabhängig
+   * vom Bestätigungsmodus wieder `pending` (eine Admin-Ablehnung wiegt
+   * schwerer als der Automatik-Modus) — der Button-Text muss das widerspiegeln.
+   */
+  wasRejected?: boolean
 }
 
 /**
@@ -14,7 +20,7 @@ interface Props {
  * Kapazitäts-/Anforderungsprüfung passiert ausschließlich serverseitig in
  * `register_for_tour` — dieses Formular validiert nur oberflächlich für UX.
  */
-export function RegistrationForm({ tour, onRegistered }: Props) {
+export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   const { user } = useAuth()
   const [manufacturer, setManufacturer] = useState('')
   const [model, setModel] = useState('')
@@ -91,10 +97,18 @@ export function RegistrationForm({ tour, onRegistered }: Props) {
     onRegistered()
   }
 
-  const submitLabel = tour.confirmation_mode === 'automatic' ? 'Verbindlich anmelden' : 'Teilnahme anfragen'
+  const submitLabel =
+    !wasRejected && tour.confirmation_mode === 'automatic' ? 'Verbindlich anmelden' : 'Teilnahme anfragen'
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {wasRejected && (
+        <p className="rounded-md bg-sft-surface p-3 text-sm text-sft-gray">
+          Deine vorherige Anfrage für diese Tour wurde abgelehnt. Eine Neuanmeldung muss erneut vom
+          Admin bestätigt werden.
+        </p>
+      )}
+
       <label className="flex flex-col gap-1 text-sm">
         Hersteller *
         <input
