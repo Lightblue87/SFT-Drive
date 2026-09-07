@@ -7,7 +7,7 @@ export function Header() {
   return (
     <header
       className="sticky top-0 z-10 flex items-center justify-between border-b border-sft-surface2 bg-sft-black/95 px-4 backdrop-blur"
-      style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.625rem)', paddingBottom: '0.625rem' }}
     >
       <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
         <span className="text-sft-red">SFT</span>
