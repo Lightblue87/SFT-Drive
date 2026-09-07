@@ -3892,17 +3892,19 @@ ursprünglichen Spezifikation umgesetzt:
 Tourdetailseite). Zuordnung zu Tagesetappen (`stage_id`) ist im Datenmodell
 vorbereitet, im MVP-UI aber noch ungenutzt (§8.6 gilt unverändert).
 
-**Phase 11 — Restaurant Ordering:** Kernfunktion vollständig
-(`restaurant_stop_settings`, `menu_items`, `meal_orders`,
+**Phase 11 — Restaurant Ordering:** vollständig, inklusive der automatischen
+Pushes (`restaurant_stop_settings`, `menu_items`, `meal_orders`,
 `meal_order_items`, `submit_meal_order`/`admin_update_meal_order`-RPCs,
 Admin-Auswertung unter `/admin/tours/:id/stops/:stopId`, Bestellformular auf
-der Tourdetailseite). **Noch offen:** die automatischen Pushes
-`RESTAURANT_ORDER_OPEN` und `RESTAURANT_ORDER_REMINDER` (§27.19 Punkte
-13-14, letzterer Teil) — dafür fehlt noch ein zeitgesteuerter Trigger
-(z. B. ein Cron-Job auf der Edge Function), der bislang nicht existiert.
-Bis dahin erfährt ein Teilnehmer von einer neuen Speisekarte nur, wenn der
-Admin zusätzlich eine reguläre Mitteilung über `/admin/notifications`
-verschickt.
+der Tourdetailseite). `RESTAURANT_ORDER_OPEN` (sobald das Bestellfenster
+öffnet) und `RESTAURANT_ORDER_REMINDER` (24 Stunden vor Fristablauf, nur an
+Teilnehmer ohne bereits eingereichte Bestellung) laufen über eine eigene
+Edge Function `restaurant-order-notifications`, zeitgesteuert per
+`pg_cron` (alle 15 Minuten) statt von der App selbst ausgelöst — der
+Service-Role-Key dient dabei als gemeinsames Geheimnis zwischen `pg_cron`
+(über Supabase Vault) und der Function, keine User-JWT-Prüfung nötig, da
+kein Client diese Function je aufruft. `push_sent_at`/`reminder_sent_at`
+auf `restaurant_stop_settings` verhindern Doppelversand.
 
 Ebenfalls neu, additiv zu §12/§21.3 ergänzt: **`/admin/users`**
 (Nutzerverwaltung) — ein Admin kann andere User direkt in der App zum Admin
