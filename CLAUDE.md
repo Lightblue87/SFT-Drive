@@ -908,6 +908,17 @@ Falls RPC-Funktionen mit `SECURITY DEFINER` umgesetzt werden:
 - keine generischen Admin-Bypass-Funktionen bauen
 - Rechte und Ownership in Migrationen dokumentieren
 
+**Praxis-Falle bei `RETURN QUERY` mit `RETURNS TABLE`:** Anders als ein normales
+`SELECT` verlangt `RETURN QUERY` in PL/pgSQL eine exakte Typübereinstimmung mit der
+deklarierten Rückgabesignatur, ohne automatischen Cast. `auth.users.email` ist in
+Supabase intern `character varying(255)`, nicht `text` — eine Spalte wie `u.email` muss
+deshalb explizit als `u.email::text` ausgegeben werden, sonst schlägt die Funktion erst
+zur Laufzeit mit `structure of query does not match function result type` fehl, obwohl
+die Migration selbst fehlerfrei durchläuft (siehe `admin_list_users()`,
+20260907082300). Beim Schreiben neuer `SECURITY DEFINER`-Funktionen mit
+`RETURNS TABLE` auf Spalten aus `auth.users` oder anderen nicht selbst definierten
+Tabellen deshalb vorsorglich explizit casten.
+
 ---
 
 ## 9. Tour-Anmeldung, Freigabe, Warteliste und Kapazität
@@ -3370,13 +3381,29 @@ rekonstruiert werden muss.
 - Erster Admin wurde über Dashboard → Authentication → Users → Add user (ohne
   Metadaten, siehe defensiver `handle_new_user()`-Trigger) angelegt und per
   `insert into public.user_roles ...` zum Admin gemacht.
-- Zwei Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
+- Vier Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
   ebenfalls manuell deployed, kein CI/CD dafür): `delete-account` (vollständige
-  Auth-Kontolöschung, §7) und `send-push` (Web-Push-Zustellung, §27). Für
-  `send-push` sind zusätzlich drei projektweite Edge-Function-Secrets gesetzt:
-  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche
-  VAPID-Schlüssel liegt zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den
-  Cloudflare-Pages-Umgebungsvariablen (Production und Preview).
+  Auth-Kontolöschung, §7), `send-push` (Web-Push-Zustellung, §27),
+  `admin-manage-user` (Sperren/Entsperren/Löschen fremder Konten aus
+  `/admin/users`, §21.3/§27.20) und `restaurant-order-notifications`
+  (zeitgesteuerte Restaurant-Bestell-Pushes über `pg_cron`, §27.10/§27.20). Für
+  `send-push` und `restaurant-order-notifications` sind zusätzlich drei
+  projektweite Edge-Function-Secrets gesetzt: `VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche VAPID-Schlüssel liegt
+  zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den Cloudflare-Pages-
+  Umgebungsvariablen (Production und Preview). Für `restaurant-order-
+  notifications` ist zusätzlich per `pg_cron`/`pg_net`/Supabase Vault ein
+  15-Minuten-Job eingerichtet (Setup-Anleitung als Kommentar am Anfang der
+  Function selbst dokumentiert, nicht als Migration, da er den echten
+  Service-Role-Key enthält).
+- Edge Functions in diesem Projekt werden ausschließlich über "Deploy a new
+  function" mit korrektem Namen von Anfang an angelegt. Ein nachträgliches
+  Umbenennen über Dashboard → Settings → Name ändert nur die Anzeige, nicht
+  den tatsächlichen Slug/die aufgerufene URL — bei falschem Namen die Function
+  löschen und mit dem korrekten Namen neu anlegen, nicht umbenennen.
+- Bei `SECURITY DEFINER`-Funktionen mit `RETURNS TABLE`, die Spalten aus
+  `auth.users` ausgeben (z. B. `email`), diese explizit auf `text` casten
+  (`u.email::text`) — siehe §8.12 "Praxis-Falle bei `RETURN QUERY`".
 - Der PWA-Build läuft seit Phase 9 über vite-plugin-pwas `injectManifest`-
   Strategie mit eigenem Service Worker (`src/sw.ts`), nicht mehr über
   `generateSW` — nötig für die `push`/`notificationclick`-Handler von Web
