@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
+import { NotificationBell } from '@/components/NotificationBell'
 
 export function Header() {
   const { user } = useAuth()
@@ -15,12 +16,15 @@ export function Header() {
       </Link>
 
       {user ? (
-        <Link
-          to="/profile"
-          className="rounded-full bg-sft-surface px-3 py-1.5 text-sm text-sft-white"
-        >
-          Profil
-        </Link>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <Link
+            to="/profile"
+            className="rounded-full bg-sft-surface px-3 py-1.5 text-sm text-sft-white"
+          >
+            Profil
+          </Link>
+        </div>
       ) : (
         <Link
           to="/login"

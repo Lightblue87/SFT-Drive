@@ -12,6 +12,7 @@ import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { ProfileToursPage } from '@/pages/ProfileToursPage'
 import { ProfileArchivePage } from '@/pages/ProfileArchivePage'
+import { NotificationsPage } from '@/pages/NotificationsPage'
 import { ImpressumPage } from '@/pages/ImpressumPage'
 import { DatenschutzPage } from '@/pages/DatenschutzPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -64,6 +65,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ProfileArchivePage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/notifications',
+        element: (
+          <RequireAuth>
+            <NotificationsPage />
           </RequireAuth>
         ),
       },
