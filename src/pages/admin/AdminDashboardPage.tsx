@@ -61,7 +61,12 @@ export function AdminDashboardPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="text-xl font-semibold">Admin Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Admin Dashboard</h1>
+        <Link to="/admin/tours" className="rounded-md bg-sft-red px-3 py-1.5 text-sm">
+          Tourenverwaltung
+        </Link>
+      </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-md bg-sft-surface p-3">
