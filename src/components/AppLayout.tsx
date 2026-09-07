@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Header } from '@/components/Header'
 import { BottomNav } from '@/components/BottomNav'
+import { Footer } from '@/components/Footer'
 
 export function AppLayout() {
   return (
@@ -8,6 +9,7 @@ export function AppLayout() {
       <Header />
       <main className="flex-1" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
         <Outlet />
+        <Footer />
       </main>
       <BottomNav />
     </div>
