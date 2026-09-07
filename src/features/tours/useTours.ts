@@ -1,0 +1,98 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { Tour, PublicTourStats } from '@/types/tour'
+
+export interface TourWithStats {
+  tour: Tour
+  stats: PublicTourStats | null
+  ownStatus: string | null
+}
+
+function sortTours(tours: Tour[]): Tour[] {
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  const running = tours.filter((t) => t.start_date <= todayStr && t.end_date >= todayStr)
+  const upcoming = tours
+    .filter((t) => t.start_date > todayStr)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const past = tours
+    .filter((t) => t.end_date < todayStr)
+    .sort((a, b) => b.end_date.localeCompare(a.end_date))
+
+  return [...running, ...upcoming, ...past]
+}
+
+/**
+ * Lädt veröffentlichte Touren (RLS beschränkt Visitor/User ohnehin auf
+ * `status = 'published'`, siehe supabase/migrations) und reichert sie um
+ * öffentliche Kapazitätsdaten und den eigenen Anmeldestatus an.
+ */
+export function useTours() {
+  const [tours, setTours] = useState<TourWithStats[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      setError(null)
+
+      const { data: tourRows, error: toursError } = await supabase
+        .from('tours')
+        .select('*')
+        .eq('status', 'published')
+
+      if (cancelled) return
+
+      if (toursError) {
+        setError('Touren konnten nicht geladen werden.')
+        setLoading(false)
+        return
+      }
+
+      const sorted = sortTours((tourRows ?? []) as Tour[])
+
+      const { data: authData } = await supabase.auth.getUser()
+      const userId = authData.user?.id
+
+      const results: TourWithStats[] = await Promise.all(
+        sorted.map(async (tour) => {
+          const { data: stats } = await supabase.rpc('get_public_tour_stats', {
+            p_tour_id: tour.id,
+          })
+
+          let ownStatus: string | null = null
+          if (userId) {
+            const { data: reg } = await supabase
+              .from('tour_registrations')
+              .select('status')
+              .eq('tour_id', tour.id)
+              .eq('user_id', userId)
+              .maybeSingle()
+            ownStatus = reg?.status ?? null
+          }
+
+          return {
+            tour,
+            stats: (stats?.[0] as PublicTourStats) ?? null,
+            ownStatus,
+          }
+        }),
+      )
+
+      if (!cancelled) {
+        setTours(results)
+        setLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return { tours, loading, error }
+}

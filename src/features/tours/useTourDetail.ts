@@ -1,0 +1,101 @@
+import { useCallback, useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import type {
+  Tour,
+  TourMemberDetails,
+  TourParticipantDetails,
+  PublicTourStats,
+  TourRegistration,
+  ConfirmedVehicle,
+} from '@/types/tour'
+
+export interface TourDetailData {
+  tour: Tour
+  stats: PublicTourStats | null
+  memberDetails: TourMemberDetails | null
+  participantDetails: TourParticipantDetails | null
+  confirmedVehicles: ConfirmedVehicle[]
+  ownRegistration: TourRegistration | null
+}
+
+/**
+ * Lädt eine Tour zustandsabhängig nach Sichtbarkeitsstufe (siehe CLAUDE.md §10,
+ * §14). RLS entscheidet serverseitig, was tatsächlich zurückkommt — Member-
+ * und Participant-Details werden hier best-effort nachgeladen und bleiben
+ * `null`, wenn der Caller keinen Zugriff hat (RLS liefert dann leere Ergebnisse
+ * statt Fehler).
+ */
+export function useTourDetail(slug: string | undefined) {
+  const [data, setData] = useState<TourDetailData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+
+  const reload = useCallback(async () => {
+    if (!slug) return
+    setLoading(true)
+    setNotFound(false)
+
+    const { data: tourRow, error: tourError } = await supabase
+      .from('tours')
+      .select('*')
+      .eq('slug', slug)
+      .maybeSingle()
+
+    if (tourError || !tourRow) {
+      setNotFound(true)
+      setLoading(false)
+      return
+    }
+
+    const tour = tourRow as Tour
+
+    const { data: authData } = await supabase.auth.getUser()
+    const userId = authData.user?.id
+
+    const [{ data: stats }, { data: memberDetails }] = await Promise.all([
+      supabase.rpc('get_public_tour_stats', { p_tour_id: tour.id }),
+      userId
+        ? supabase.from('tour_member_details').select('*').eq('tour_id', tour.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
+    let ownRegistration: TourRegistration | null = null
+    let participantDetails: TourParticipantDetails | null = null
+    let confirmedVehicles: ConfirmedVehicle[] = []
+
+    if (userId) {
+      const { data: reg } = await supabase
+        .from('tour_registrations')
+        .select('*')
+        .eq('tour_id', tour.id)
+        .eq('user_id', userId)
+        .maybeSingle()
+      ownRegistration = (reg as TourRegistration) ?? null
+
+      if (ownRegistration?.status === 'confirmed') {
+        const [{ data: pd }, { data: vehicles }] = await Promise.all([
+          supabase.from('tour_participant_details').select('*').eq('tour_id', tour.id).maybeSingle(),
+          supabase.rpc('get_confirmed_tour_vehicles', { p_tour_id: tour.id }),
+        ])
+        participantDetails = (pd as TourParticipantDetails) ?? null
+        confirmedVehicles = (vehicles as ConfirmedVehicle[]) ?? []
+      }
+    }
+
+    setData({
+      tour,
+      stats: (stats?.[0] as PublicTourStats) ?? null,
+      memberDetails: (memberDetails as TourMemberDetails) ?? null,
+      participantDetails,
+      confirmedVehicles,
+      ownRegistration,
+    })
+    setLoading(false)
+  }, [slug])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  return { data, loading, notFound, reload }
+}
