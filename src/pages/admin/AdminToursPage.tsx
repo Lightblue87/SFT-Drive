@@ -17,6 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
 export function AdminToursPage() {
   const [tours, setTours] = useState<Tour[]>([])
   const [loading, setLoading] = useState(true)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     supabase
@@ -31,6 +32,12 @@ export function AdminToursPage() {
 
   if (loading) return <PageLoading />
 
+  // Archivierte Touren sind standardmäßig ausgeblendet (§8.3: "Archived-Touren sind
+  // standardmäßig nicht in der normalen Tourübersicht sichtbar") — sonst verliert sich
+  // die Tourenverwaltung auf Dauer in alten Touren. Manuell über den Filter einblendbar.
+  const visibleTours = showArchived ? tours : tours.filter((tour) => tour.status !== 'archived')
+  const archivedCount = tours.length - tours.filter((tour) => tour.status !== 'archived').length
+
   return (
     <div className="py-6">
       <div className="flex items-center justify-between">
@@ -40,11 +47,22 @@ export function AdminToursPage() {
         </Link>
       </div>
 
-      {tours.length === 0 ? (
+      {archivedCount > 0 && (
+        <label className="mt-4 flex items-center gap-2 text-sm text-sft-gray">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+          />
+          Archivierte Touren einblenden ({archivedCount})
+        </label>
+      )}
+
+      {visibleTours.length === 0 ? (
         <p className="mt-4 text-sm text-sft-gray">Noch keine Touren vorhanden.</p>
       ) : (
         <ul className="mt-4 flex flex-col gap-2">
-          {tours.map((tour) => (
+          {visibleTours.map((tour) => (
             <li key={tour.id}>
               <Link
                 to={`/admin/tours/${tour.id}/edit`}
