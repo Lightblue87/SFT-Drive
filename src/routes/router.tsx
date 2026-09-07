@@ -25,6 +25,7 @@ import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
 import { AdminTourFormPage } from '@/pages/admin/AdminTourFormPage'
 import { AdminTourRegistrationsPage } from '@/pages/admin/AdminTourRegistrationsPage'
+import { AdminTourStopsPage } from '@/pages/admin/AdminTourStopsPage'
 
 /**
  * Zentrale Routing-Konfiguration (siehe CLAUDE.md §21). `/` und `/tours`
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
           { path: 'tours/new', element: <AdminTourFormPage /> },
           { path: 'tours/:id/edit', element: <AdminTourFormPage /> },
           { path: 'tours/:id/registrations', element: <AdminTourRegistrationsPage /> },
+          { path: 'tours/:id/stops', element: <AdminTourStopsPage /> },
           { path: 'settings', element: <AdminSettingsPage /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },

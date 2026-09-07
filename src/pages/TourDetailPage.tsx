@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
+import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -51,7 +52,7 @@ export function TourDetailPage() {
     )
   }
 
-  const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration } = data
+  const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration, stops } = data
   // Cancelled/rejected sind keine aktiven Anmeldungen — die RPC erlaubt eine
   // Neuanmeldung in diesem Fall ausdrücklich (kontrollierte Reaktivierung,
   // siehe CLAUDE.md §8.7), das Formular muss dafür also wieder sichtbar sein.
@@ -212,6 +213,35 @@ export function TourDetailPage() {
                     Zello-Zugang: Der QR-Code für den Tourkanal wird am Treffpunkt bereitgestellt.
                   </div>
                 )}
+              </div>
+            )}
+
+            {stops.length > 0 && (
+              <div className="rounded-md bg-sft-surface p-4 text-sm">
+                <h2 className="mb-2 font-medium">Stopps</h2>
+                <ul className="flex flex-col gap-3">
+                  {stops.map((stop) => (
+                    <li key={stop.id}>
+                      <div className="font-medium">
+                        {TOUR_STOP_TYPE_LABELS[stop.type]} · {stop.title}
+                      </div>
+                      {stop.starts_at && (
+                        <div className="text-sft-gray">
+                          {new Date(stop.starts_at).toLocaleString('de-DE', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </div>
+                      )}
+                      {stop.location_name && <div className="text-sft-gray">{stop.location_name}</div>}
+                      {stop.address && <div className="text-sft-gray">{stop.address}</div>}
+                      {stop.description && <div className="text-sft-gray">{stop.description}</div>}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

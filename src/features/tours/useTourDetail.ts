@@ -8,6 +8,7 @@ import type {
   TourRegistration,
   ConfirmedVehicle,
 } from '@/types/tour'
+import type { TourStop } from '@/types/tourStop'
 
 export interface TourDetailData {
   tour: Tour
@@ -16,6 +17,7 @@ export interface TourDetailData {
   participantDetails: TourParticipantDetails | null
   confirmedVehicles: ConfirmedVehicle[]
   ownRegistration: TourRegistration | null
+  stops: TourStop[]
 }
 
 /**
@@ -62,6 +64,7 @@ export function useTourDetail(slug: string | undefined) {
     let ownRegistration: TourRegistration | null = null
     let participantDetails: TourParticipantDetails | null = null
     let confirmedVehicles: ConfirmedVehicle[] = []
+    let stops: TourStop[] = []
 
     if (userId) {
       const { data: reg } = await supabase
@@ -73,12 +76,14 @@ export function useTourDetail(slug: string | undefined) {
       ownRegistration = (reg as TourRegistration) ?? null
 
       if (ownRegistration?.status === 'confirmed') {
-        const [{ data: pd }, { data: vehicles }] = await Promise.all([
+        const [{ data: pd }, { data: vehicles }, { data: stopRows }] = await Promise.all([
           supabase.from('tour_participant_details').select('*').eq('tour_id', tour.id).maybeSingle(),
           supabase.rpc('get_confirmed_tour_vehicles', { p_tour_id: tour.id }),
+          supabase.from('tour_stops').select('*').eq('tour_id', tour.id).order('sort_order', { ascending: true }),
         ])
         participantDetails = (pd as TourParticipantDetails) ?? null
         confirmedVehicles = (vehicles as ConfirmedVehicle[]) ?? []
+        stops = (stopRows as TourStop[]) ?? []
       }
     }
 
@@ -89,6 +94,7 @@ export function useTourDetail(slug: string | undefined) {
       participantDetails,
       confirmedVehicles,
       ownRegistration,
+      stops,
     })
     setLoading(false)
   }, [slug])
