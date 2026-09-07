@@ -25,6 +25,9 @@ export function AdminNav() {
       <NavLink to="/admin/users" className={linkClass}>
         Nutzer
       </NavLink>
+      <NavLink to="/admin/notifications" className={linkClass}>
+        Mitteilungen
+      </NavLink>
     </div>
   )
 }

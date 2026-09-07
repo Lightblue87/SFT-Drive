@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { usePushSubscription } from '@/features/notifications/usePushSubscription'
+import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
 
 interface Profile {
   username: string
@@ -125,6 +126,8 @@ export function ProfilePage() {
           )}
         </div>
       )}
+
+      <RegionNotificationPreferences />
 
       <button
         onClick={() => supabase.auth.signOut()}

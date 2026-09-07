@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import type { RegistrationStatus, RegistrationResult } from '@/types/tour'
@@ -76,13 +76,6 @@ export function AdminTourRegistrationsPage() {
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const [showMessageForm, setShowMessageForm] = useState(false)
-  const [messageTitle, setMessageTitle] = useState('')
-  const [messageBody, setMessageBody] = useState('')
-  const [messageSending, setMessageSending] = useState(false)
-  const [messageSent, setMessageSent] = useState(false)
-  const [messageError, setMessageError] = useState<string | null>(null)
-
   const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
@@ -133,46 +126,6 @@ export function AdminTourRegistrationsPage() {
     load()
   }
 
-  async function sendMessage() {
-    setMessageError(null)
-    setMessageSent(false)
-
-    if (!id || !messageTitle.trim() || !messageBody.trim()) {
-      setMessageError('Bitte Titel und Text ausfüllen.')
-      return
-    }
-
-    setMessageSending(true)
-    const { data, error } = await supabase.rpc('admin_send_tour_notification', {
-      p_tour_id: id,
-      p_title: messageTitle.trim(),
-      p_body: messageBody.trim(),
-    })
-    setMessageSending(false)
-
-    if (error) {
-      setMessageError('Mitteilung konnte nicht gesendet werden.')
-      return
-    }
-
-    const result = data as RegistrationResult
-    if (result.code !== 'OK') {
-      setMessageError(rpcErrorMessage(result.code))
-      return
-    }
-
-    // Push ist rein zusätzlich zur bereits erstellten In-App-Mitteilung
-    // (siehe CLAUDE.md §27.16) — ein Fehlschlag hier darf die Kernfunktion
-    // nicht als gescheitert melden, deshalb bewusst kein await auf den Erfolg.
-    void supabase.functions.invoke('send-push', {
-      body: { tour_id: id, title: messageTitle.trim(), body: messageBody.trim() },
-    })
-
-    setMessageTitle('')
-    setMessageBody('')
-    setMessageSent(true)
-  }
-
   async function savePassengerCount(registrationId: string, count: number) {
     await runAction(() =>
       supabase.rpc('admin_update_passenger_count', {
@@ -198,46 +151,9 @@ export function AdminTourRegistrationsPage() {
         <div>Bestätigte Personen: {confirmedPersons}</div>
       </div>
 
-      <div className="mt-3">
-        {!showMessageForm ? (
-          <button onClick={() => setShowMessageForm(true)} className="text-sm underline">
-            Mitteilung an bestätigte Teilnehmer senden
-          </button>
-        ) : (
-          <div className="flex flex-col gap-2 rounded-md bg-sft-surface p-4 text-sm">
-            <input
-              value={messageTitle}
-              onChange={(e) => setMessageTitle(e.target.value)}
-              placeholder="Titel"
-              className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-            />
-            <textarea
-              value={messageBody}
-              onChange={(e) => setMessageBody(e.target.value)}
-              placeholder="Text"
-              rows={3}
-              className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-            />
-            {messageError && <p className="text-sft-red">{messageError}</p>}
-            {messageSent && <p className="text-sft-gray">Mitteilung gesendet.</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={sendMessage}
-                disabled={messageSending}
-                className="rounded-md bg-sft-red px-3 py-1.5 text-xs disabled:opacity-60"
-              >
-                {messageSending ? 'Wird gesendet…' : 'Senden'}
-              </button>
-              <button
-                onClick={() => setShowMessageForm(false)}
-                className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs text-sft-gray"
-              >
-                Abbrechen
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <Link to="/admin/notifications" className="mt-3 inline-block text-sm underline">
+        Mitteilung an diese Tour senden →
+      </Link>
 
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
 

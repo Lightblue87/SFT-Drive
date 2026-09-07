@@ -21,8 +21,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
 
+// Entweder an die bestätigten Teilnehmer einer bestimmten Tour (tour_id) oder
+// als Broadcast an alle Nutzer mit einer gespeicherten Push-Subscription.
 interface RequestBody {
-  tour_id: string
+  tour_id?: string
+  broadcast?: boolean
   title: string
   body: string
 }
@@ -44,7 +47,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
   }
 
-  if (!payload.tour_id || !payload.title || !payload.body) {
+  if ((!payload.tour_id && !payload.broadcast) || !payload.title || !payload.body) {
     return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
   }
 
@@ -81,21 +84,25 @@ Deno.serve(async (req: Request) => {
   // Ab hier service_role — ausschließlich serverseitig, nie im Client.
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
-  const { data: registrations } = await adminClient
-    .from('tour_registrations')
-    .select('user_id')
-    .eq('tour_id', payload.tour_id)
-    .eq('status', 'confirmed')
+  let subscriptionsQuery = adminClient.from('push_subscriptions').select('id, endpoint, p256dh, auth')
 
-  const userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
-  if (userIds.length === 0) {
-    return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200 })
+  if (payload.broadcast) {
+    // Keine weitere Einschränkung — alle Subscriptions.
+  } else {
+    const { data: registrations } = await adminClient
+      .from('tour_registrations')
+      .select('user_id')
+      .eq('tour_id', payload.tour_id!)
+      .eq('status', 'confirmed')
+
+    const userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
+    if (userIds.length === 0) {
+      return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200 })
+    }
+    subscriptionsQuery = subscriptionsQuery.in('user_id', userIds)
   }
 
-  const { data: subscriptions } = await adminClient
-    .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
-    .in('user_id', userIds)
+  const { data: subscriptions } = await subscriptionsQuery
 
   let sent = 0
   let failed = 0
