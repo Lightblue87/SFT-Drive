@@ -18,6 +18,7 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
 
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
 import { AdminToursPage } from '@/pages/admin/AdminToursPage'
+import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
 import { AdminTourFormPage } from '@/pages/admin/AdminTourFormPage'
 import { AdminTourRegistrationsPage } from '@/pages/admin/AdminTourRegistrationsPage'
 
@@ -103,6 +104,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAdmin>
             <AdminTourRegistrationsPage />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: '/admin/settings',
+        element: (
+          <RequireAdmin>
+            <AdminSettingsPage />
           </RequireAdmin>
         ),
       },
