@@ -211,20 +211,38 @@ export function AdminTourRegistrationsPage() {
                         </button>
                       </div>
                     )}
-                    {group.status === 'confirmed' && (
-                      <button
-                        onClick={() =>
-                          runAction(() =>
-                            supabase.rpc('admin_remove_registration', {
-                              p_registration_id: r.id,
-                              p_reason: null,
-                            }),
-                          )
-                        }
-                        className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs text-sft-gray"
-                      >
-                        Entfernen
-                      </button>
+                    {(group.status === 'confirmed' || group.status === 'waitlisted') && (
+                      <div className="flex flex-col items-end gap-1">
+                        <button
+                          onClick={() =>
+                            runAction(() =>
+                              supabase.rpc('admin_remove_registration', {
+                                p_registration_id: r.id,
+                                p_reason: null,
+                              }),
+                            )
+                          }
+                          className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs text-sft-gray"
+                        >
+                          Entfernen
+                        </button>
+                        <button
+                          onClick={() =>
+                            runAction(() =>
+                              supabase.rpc('reject_tour_registration', {
+                                p_registration_id: r.id,
+                                p_reason: null,
+                              }),
+                            )
+                          }
+                          className="rounded-md border border-sft-red/50 px-3 py-1.5 text-xs text-sft-red"
+                        >
+                          Ablehnen
+                        </button>
+                        <p className="max-w-[9rem] text-right text-[11px] leading-tight text-sft-gray">
+                          Ablehnen verhindert eine spätere automatische Neubestätigung für diese Tour.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </li>
