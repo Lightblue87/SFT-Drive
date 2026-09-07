@@ -61,7 +61,10 @@ export function ProfilePage() {
     setDeleteError(null)
     setDeleting(true)
 
-    const { error } = await supabase.rpc('delete_own_account')
+    // Anonymisiert das Profil, storniert aktive Anmeldungen und löscht
+    // anschließend den Auth-Account selbst (Edge Function, benötigt
+    // service_role — siehe supabase/functions/delete-account).
+    const { error } = await supabase.functions.invoke('delete-account')
 
     if (error) {
       setDeleteError('Konto konnte nicht gelöscht werden. Bitte versuche es erneut.')
@@ -157,9 +160,10 @@ export function ProfilePage() {
         ) : (
           <div className="flex flex-col gap-3 rounded-md border border-sft-red/50 p-4 text-sm">
             <p>
-              Dein Profil (Username, Vor- und Nachname, Geburtsdatum) wird anonymisiert und
-              laufende Touranmeldungen werden storniert. Diese Aktion kann nicht rückgängig
-              gemacht werden.
+              Dein Profil (Username, Vor- und Nachname, Geburtsdatum) wird anonymisiert, laufende
+              Touranmeldungen werden storniert und dein Konto wird anschließend endgültig
+              gelöscht — ein Login ist danach nicht mehr möglich. Diese Aktion kann nicht
+              rückgängig gemacht werden.
             </p>
             {deleteError && <p className="text-sft-red">{deleteError}</p>}
             <div className="flex gap-2">
