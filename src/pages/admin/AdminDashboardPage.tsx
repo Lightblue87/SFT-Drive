@@ -70,6 +70,9 @@ export function AdminDashboardPage() {
           <Link to="/admin/settings" className="rounded-md border border-sft-surface2 px-3 py-1.5 text-sm">
             Einstellungen
           </Link>
+          <Link to="/admin/users" className="rounded-md border border-sft-surface2 px-3 py-1.5 text-sm">
+            Nutzer
+          </Link>
         </div>
       </div>
 

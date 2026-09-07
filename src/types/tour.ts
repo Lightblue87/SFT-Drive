@@ -125,6 +125,8 @@ export type RpcResultCode =
   | 'PASSENGER_EDIT_DEADLINE_PASSED'
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
+  | 'USER_NOT_FOUND'
+  | 'LAST_ADMIN'
 
 export interface RegistrationResult {
   code: RpcResultCode
@@ -151,6 +153,8 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   PASSENGER_EDIT_DEADLINE_PASSED: 'Die Frist zur Änderung der Personenzahl ist abgelaufen.',
   UNAUTHENTICATED: 'Bitte melde dich an, um fortzufahren.',
   FORBIDDEN: 'Dazu bist du nicht berechtigt.',
+  USER_NOT_FOUND: 'Dieser Nutzer wurde nicht gefunden.',
+  LAST_ADMIN: 'Der letzte verbleibende Admin kann die Rolle nicht ablegen.',
 }
 
 export function rpcErrorMessage(code: string): string {
