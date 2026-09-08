@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { formatDateRange, isMultiDayTour, tourDayCount } from '@/utils/date'
@@ -37,6 +37,7 @@ const MONTH_ABBR = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SE
  * (siehe CLAUDE.md §21.2).
  */
 export function ProfileToursPage() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,7 +74,17 @@ export function ProfileToursPage() {
 
   return (
     <div className="pb-[110px]">
-      <div className="px-[18px] pb-4 pt-1.5 text-[26px] font-semibold leading-none">Meine Touren</div>
+      <div className="flex items-center gap-3 px-4 pb-4 pt-1.5">
+        <button
+          onClick={() => navigate('/profile')}
+          className="tap-scale flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] border border-white/10 bg-[#131316]"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M15 4 7 12l8 8" stroke="#f5f5f5" strokeWidth="2" />
+          </svg>
+        </button>
+        <div className="text-[22px] font-semibold leading-none">Meine Touren</div>
+      </div>
 
       {rows.length === 0 ? (
         <p className="px-[18px] text-sm text-sft-gray">Du bist aktuell zu keiner Tour angemeldet.</p>
