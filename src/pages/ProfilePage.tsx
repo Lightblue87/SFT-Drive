@@ -102,6 +102,9 @@ export function ProfilePage() {
         <Link to="/profile/archive" className="rounded-md bg-sft-surface px-4 py-3">
           Tourenarchiv
         </Link>
+        <Link to="/profile/friends" className="rounded-md bg-sft-surface px-4 py-3">
+          Freunde
+        </Link>
       </div>
 
       {permission !== 'unsupported' && permission !== 'granted' && (

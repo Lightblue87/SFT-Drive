@@ -78,6 +78,10 @@ export interface TourRegistration {
 export interface ConfirmedVehicle {
   registration_id: string
   username: string
+  // Nur bei akzeptierter Freundschaft zwischen Betrachter und Fahrer gesetzt
+  // (Phase 12, siehe CLAUDE.md §34.1/§8.9) — sonst null.
+  first_name: string | null
+  last_name: string | null
   vehicle_manufacturer: string
   vehicle_model: string
   vehicle_power_ps: number
@@ -163,6 +167,10 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   ORDERING_NOT_OPEN: 'Die Essensbestellung hat noch nicht begonnen.',
   ORDERING_CLOSED: 'Die Bestellfrist ist abgelaufen.',
   MENU_ITEM_INVALID: 'Ein ausgewähltes Gericht ist nicht verfügbar.',
+  CANNOT_FRIEND_SELF: 'Du kannst dir nicht selbst eine Freundschaftsanfrage senden.',
+  ALREADY_FRIENDS: 'Ihr seid bereits befreundet.',
+  REQUEST_ALREADY_SENT: 'Du hast bereits eine Anfrage an diesen Nutzer gesendet.',
+  FRIENDSHIP_NOT_FOUND: 'Diese Freundschaftsanfrage wurde nicht gefunden.',
 }
 
 export function rpcErrorMessage(code: string): string {

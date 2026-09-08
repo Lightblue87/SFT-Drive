@@ -1309,15 +1309,13 @@ Geplantes Prinzip (siehe §34.1 für die verbindliche Ausarbeitung):
 - Bei `friendships.status = accepted` dürfen beide Nutzer gegenseitig Vor- und Nachnamen sehen.
 - Wird die Freundschaft beendet, entfällt die Klarnamenfreigabe sofort für beide Seiten.
 
-Diese Funktion ist **nicht Bestandteil des ersten MVP**.
-
-Später denkbare Tabelle:
-
-```text
-friendships
-```
-
-mit einem klaren Request-/Accepted-Modell und eindeutiger Paarbeziehung.
+Diese Funktion war nicht Bestandteil des ersten MVP, ist inzwischen aber als
+Phase 12 umgesetzt (Migration `20260908090000_friendships.sql`, siehe §34.1):
+Tabelle `friendships` mit Request-/Accepted-Modell und eindeutiger
+Paarbeziehung, RPCs `search_users_by_username`, `send_friend_request`,
+`respond_friend_request`, `cancel_friend_request`, `end_friendship`,
+`list_my_friendships`, sowie die Phase-12-Ausnahme in
+`get_confirmed_tour_vehicles` (§8.9) und die UI unter `/profile/friends`.
 
 ---
 
@@ -2757,6 +2755,16 @@ Pro Eintrag anzeigen:
 ---
 
 ```text
+/profile/friends
+```
+
+Umgesetzt (Phase 12, §34.1): Freunde, eingehende/ausgehende Anfragen, Nutzersuche
+per Username. Eine akzeptierte Freundschaft ist die gegenseitige
+Klarnamenfreigabe — kein separater Freigabe-Schalter.
+
+---
+
+```text
 /profile/tours/:registrationId
 ```
 
@@ -2940,7 +2948,8 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
 │
 ├── /profile
 │   ├── /profile/tours
-│   └── /profile/archive
+│   ├── /profile/archive
+│   └── /profile/friends
 │
 ├── /notifications
 │
@@ -2976,6 +2985,7 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
 | `/profile` | ❌ | ✅ | ✅ | ✅ |
 | `/profile/tours` | ❌ | ✅ | ✅ | ✅ |
 | `/profile/archive` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ |
+| `/profile/friends` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ |
 | `/notifications` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ eigener Inhalt |
 | `/admin` | ❌ | ❌ | ❌ | ✅ |
 | `/admin/tours/*` | ❌ | ❌ | ❌ | ✅ |
@@ -4057,8 +4067,6 @@ Nicht jetzt implementieren, aber beim Datenmodell nicht unnötig verbauen:
 
 - persönliche Fahrzeuggarage mit mehreren Fahrzeugen
 - Fahrzeug bei Touranmeldung aus gespeicherter Garage auswählen
-- Freunde / Freundesanfragen
-- gegenseitige Klarnamenfreigabe für bestätigte Freunde
 - Tour-Kategorien
 - wiederkehrende Events
 - Tagesetappen für Mehrtagestouren

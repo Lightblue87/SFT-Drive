@@ -261,7 +261,8 @@ export function TourDetailPage() {
                       key={v.registration_id}
                       className={v.is_self ? 'font-medium text-sft-red' : ''}
                     >
-                      {v.username} · {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
+                      {v.first_name && v.last_name ? `${v.first_name} · ${v.username}` : v.username} ·{' '}
+                      {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
                     </li>
                   ))}
                 </ul>
