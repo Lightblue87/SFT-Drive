@@ -56,9 +56,9 @@ export function RegionNotificationPreferences() {
   if (loading || availableRegions.length === 0) return null
 
   return (
-    <div className="mt-6 rounded-md bg-sft-surface p-4 text-sm">
+    <div className="rounded-2xl border border-white/8 bg-sft-card p-4 text-sm">
       <p className="font-medium">Benachrichtigungen nach Region</p>
-      <p className="mt-1 text-sft-gray">
+      <p className="mt-1.5 text-xs leading-relaxed text-sft-gray">
         Erhalte eine Mitteilung, sobald eine neue Tour in einer ausgewählten Region veröffentlicht
         wird.
       </p>
@@ -68,8 +68,8 @@ export function RegionNotificationPreferences() {
             key={region}
             onClick={() => toggle(region)}
             disabled={pendingRegion === region}
-            className={`rounded-full px-3 py-1.5 text-xs disabled:opacity-60 ${
-              selected.has(region) ? 'bg-sft-red' : 'border border-sft-surface2 text-sft-gray'
+            className={`tap-scale rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-60 ${
+              selected.has(region) ? 'bg-sft-red text-white' : 'border border-white/13 text-sft-gray'
             }`}
           >
             {region}

@@ -16,7 +16,7 @@ interface Profile {
 }
 
 const fieldInput =
-  'rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white'
+  'rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[16px] text-sft-white'
 
 export function ProfilePage() {
   const { user } = useAuth()

@@ -14,9 +14,9 @@ export function DatenschutzPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 text-sm leading-relaxed">
-      <h1 className="text-xl font-semibold">Datenschutzerklärung</h1>
+      <h1 className="text-2xl font-semibold">Datenschutzerklärung</h1>
 
-      <p className="mt-4 rounded-md bg-sft-surface p-3 text-sft-gray">
+      <p className="mt-4 rounded-2xl border border-white/9 bg-sft-card p-3.5 text-sft-gray">
         Hinweis: Dies ist eine Vorlage auf Basis der tatsächlich in SFT Drive verarbeiteten Daten.
         Sie ersetzt keine individuelle Rechtsberatung.
       </p>

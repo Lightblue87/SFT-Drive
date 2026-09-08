@@ -116,9 +116,9 @@ export function RegisterPage() {
 
   if (submitted) {
     return (
-      <div className="mx-auto max-w-sm px-4 py-8">
-        <h1 className="text-xl font-semibold">Fast geschafft</h1>
-        <p className="mt-4 text-sm text-sft-gray">
+      <div className="mx-auto max-w-sm px-6 py-16 text-center">
+        <h1 className="text-2xl font-semibold">Fast geschafft</h1>
+        <p className="mt-3 text-[13px] leading-relaxed text-sft-gray">
           Bitte bestätige deine E-Mail-Adresse über den Link, den wir dir gerade geschickt haben.
         </p>
       </div>

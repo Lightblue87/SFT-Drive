@@ -59,7 +59,7 @@ export function SwipeToDelete({ onDelete, children }: Props) {
           transition: dragging ? 'none' : 'transform 0.2s ease-out',
           touchAction: 'pan-y',
         }}
-        className="relative bg-sft-surface"
+        className="relative bg-sft-black"
       >
         {children}
       </div>
