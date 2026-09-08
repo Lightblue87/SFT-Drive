@@ -214,7 +214,7 @@ export function AdminRestaurantStopPage() {
             />
           </span>
         </button>
-        <label className="block">
+        <label className="min-w-0 block">
           <span className={fieldLabel}>ÖFFNET</span>
           <input
             type="datetime-local"
@@ -223,7 +223,7 @@ export function AdminRestaurantStopPage() {
             className={`${fieldInput} font-mono`}
           />
         </label>
-        <label className="mt-3.5 block">
+        <label className="mt-3.5 block min-w-0">
           <span className={fieldLabel}>SCHLIESST</span>
           <input
             type="datetime-local"
@@ -232,7 +232,7 @@ export function AdminRestaurantStopPage() {
             className={`${fieldInput} font-mono`}
           />
         </label>
-        <label className="mt-3.5 block">
+        <label className="mt-3.5 block min-w-0">
           <span className={fieldLabel}>HINWEIS (Z. B. ÖFFNUNGSZEITEN)</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} className={fieldInput} />
         </label>

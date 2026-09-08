@@ -401,10 +401,10 @@ export function AdminTourFormPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="pt-3">
+    <div className="min-w-0 pt-3">
       <div className="mb-3.5 text-[19px] font-semibold">{id ? 'Tour bearbeiten' : 'Neue Tour'}</div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+      <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-3.5">
         <Section title="Grunddaten">
           <Field label="TITEL *">
             <input required value={form.title} onChange={(e) => set('title', e.target.value)} className={inputClass} />
@@ -783,7 +783,7 @@ const selectClass =
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
       <div className="mb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">{title.toUpperCase()}</div>
       <div className="flex min-w-0 flex-col gap-3.5">{children}</div>
     </div>

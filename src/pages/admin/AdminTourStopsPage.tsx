@@ -210,7 +210,7 @@ export function AdminTourStopsPage() {
       <div className="mt-3.5 flex flex-col gap-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
         <p className="text-[13px] font-medium">{editingId ? 'Stopp bearbeiten' : 'Neuen Stopp anlegen'}</p>
 
-        <label>
+        <label className="min-w-0">
           <span className={fieldLabel}>TYP</span>
           <select
             value={form.type}
@@ -225,12 +225,12 @@ export function AdminTourStopsPage() {
           </select>
         </label>
 
-        <label>
+        <label className="min-w-0">
           <span className={fieldLabel}>TITEL *</span>
           <input value={form.title} onChange={(e) => set('title', e.target.value)} className={fieldInput} />
         </label>
 
-        <label>
+        <label className="min-w-0">
           <span className={fieldLabel}>ORTSNAME</span>
           <input
             value={form.location_name}
@@ -239,12 +239,12 @@ export function AdminTourStopsPage() {
           />
         </label>
 
-        <label>
+        <label className="min-w-0">
           <span className={fieldLabel}>ADRESSE</span>
           <input value={form.address} onChange={(e) => set('address', e.target.value)} className={fieldInput} />
         </label>
 
-        <label>
+        <label className="min-w-0">
           <span className={fieldLabel}>BESCHREIBUNG</span>
           <textarea
             value={form.description}
@@ -254,7 +254,7 @@ export function AdminTourStopsPage() {
           />
         </label>
 
-        <label className="block">
+        <label className="min-w-0 block">
           <span className={fieldLabel}>UHRZEIT</span>
           <input
             type="datetime-local"
@@ -263,7 +263,7 @@ export function AdminTourStopsPage() {
             className={`${fieldInput} font-mono`}
           />
         </label>
-        <label className="block">
+        <label className="min-w-0 block">
           <span className={fieldLabel}>REIHENFOLGE</span>
           <input
             type="number"
