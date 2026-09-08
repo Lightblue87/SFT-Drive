@@ -3957,11 +3957,60 @@ kein Client diese Function je aufruft. `push_sent_at`/`reminder_sent_at`
 auf `restaurant_stop_settings` verhindern Doppelversand.
 
 Ebenfalls neu, additiv zu §12/§21.3 ergänzt: **`/admin/users`**
-(Nutzerverwaltung) — ein Admin kann andere User direkt in der App zum Admin
-machen bzw. die Rolle wieder entziehen (`admin_list_users`,
-`admin_set_admin_role`-RPCs), für eine einfache Admin-Übergabe ohne
-direkten Datenbankzugriff. Der letzte verbleibende Admin kann sich die
-Rolle nicht selbst entziehen.
+(Nutzerverwaltung) — inzwischen umfangreicher als die ursprüngliche reine
+Rollenübergabe. Aktuell umgesetzt: Suche nach Username/Vorname/Nachname/
+E-Mail, Anzeige von Username, Klarname, E-Mail, Registrierungsdatum,
+Adminstatus und Sperrstatus, Adminrolle vergeben/entziehen
+(`admin_list_users`/`admin_set_admin_role`-RPCs), Nutzer sperren/entsperren
+und Nutzerkonto administrativ löschen (Edge Function `admin-manage-user` +
+`admin_delete_user_account`-RPC). Selbstsperrung und administrative
+Selbstlöschung über diesen Weg sind verboten; der letzte verbleibende Admin
+kann sich die Rolle nicht selbst entziehen und nicht administrativ gelöscht
+werden.
+
+### 27.21 Weitere Ergänzungen (nachträglich dokumentiert)
+
+Migrationen, die zum produktiven Stand von Phase 9–11 gehören, über die in
+§27.20 genannten hinaus:
+
+```text
+20260907082100_restaurant_order_notification_tracking.sql
+20260907082200_admin_user_details_ban_delete.sql
+20260907082300_fix_admin_list_users_email_type.sql
+```
+
+Bereits produktiv angewendete Migrationen niemals nachträglich umschreiben —
+Änderungen immer als neue Migration ergänzen.
+
+`restaurant_stop_settings` besitzt neben `push_sent_at` zusätzlich
+`reminder_sent_at TIMESTAMPTZ NULL`, um `RESTAURANT_ORDER_OPEN` und
+`RESTAURANT_ORDER_REMINDER` unabhängig voneinander vor Doppelversand zu
+schützen (siehe oben, Edge Function `restaurant-order-notifications`).
+
+In `/admin/tours` sind `archived` Touren standardmäßig ausgeblendet (§12
+"Umsetzung: Archivierte Touren standardmäßig ausgeblendet"). Eine Checkbox
+blendet sie bei Bedarf wieder ein und erscheint nur, wenn archivierte Touren
+existieren.
+
+Der Admin-Flow für Tour-Stopps (`/admin/tours/:id/stops`) verwendet wie das
+Tourformular einen lokal in `localStorage` zwischengespeicherten
+Formularentwurf, damit Eingaben bei iOS-Safari-Reloads oder beim Verlassen
+und Zurückkehren zur Seite nicht verloren gehen (§16 "Formular-Resilienz bei
+Tab-Reloads"). Nach erfolgreichem Speichern wird der Entwurf bereinigt. Der
+Link zu "Tour-Stopps verwalten" sitzt in der Tourenverwaltung (`/admin/tours`)
+neben "Teilnehmer verwalten" der jeweiligen Tour, nicht in der
+Teilnehmerverwaltung selbst.
+
+Die Admin-Unternavigation (auf allen `/admin/*`-Seiten sichtbar) ist in
+dieser Reihenfolge:
+
+```text
+Dashboard
+Tourenverwaltung
+Mitteilungen
+Nutzer
+Impressum & Datenschutz
+```
 
 ---
 

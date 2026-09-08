@@ -1,92 +1,148 @@
 # SFT Drive
 
-**SFT Drive** by Sportfahrer Treff — eine mobile-first Progressive Web App (PWA) zur Organisation
-und Planung von gemeinsamen Sportwagen-Ausfahrten.
+**SFT Drive** by Sportfahrer Treff — mobile-first Progressive Web App (PWA) zur Organisation gemeinsamer Sportwagen-Ausfahrten.
 
-Die vollständige Produkt- und technische Spezifikation steht in [`CLAUDE.md`](./CLAUDE.md).
+Produktive App: `https://sft-drive.pages.dev`
+
+Die vollständige, verbindliche Projekt- und Produktspezifikation steht in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Status
 
-- Phase 1 (CLAUDE.md §25): Frontend-Grundgerüst mit Routing, Auth-Anbindung (Supabase Auth) und
-  PWA-Konfiguration. ✅
-- Phase 2: Datenbankschema, RLS und die sicherheitskritischen RPCs für Touranmeldung/Warteliste
-  (CLAUDE.md §8, §9). ✅ Migrationen liegen in [`supabase/migrations/`](./supabase/migrations),
-  gegen ein lokales Postgres validiert (Schema-Aufbau, Anmeldung, Kapazitätsprüfung unter
-  parallelen Requests, Stornierung/Nachrücken, Altersprüfung — siehe Kommentare in den Dateien).
-  Noch nicht gegen ein echtes Supabase-Projekt angewendet/getestet.
-- Noch offen: Admin-UI und Public-Tour-UI an das Schema anbinden (aktuell Platzhalter).
+Der Kern-MVP sowie die Erweiterungsphasen 9–11 sind umgesetzt.
+
+- Phase 1–8: Projektbasis, Supabase, Auth, Touren, sichere Registrierung/Warteliste, Admin, PWA und Deployment ✅
+- Phase 9: In-App Notifications + Web Push + Regions-Abos + Admin-Broadcast ✅
+- Phase 10: generische Tour-Stopps ✅
+- Phase 11: Restaurant-Speisekarte, Essensvorbestellung, Admin-Auswertung und automatische Reminder-Pushes ✅
+- Persönliches Tourenarchiv ✅
+- Admin-Nutzerverwaltung mit Rollenvergabe, Sperren/Entsperren und Kontolöschung ✅
 
 ## Stack
 
 - React + TypeScript + Vite
 - React Router
 - Tailwind CSS
-- vite-plugin-pwa
-- Supabase (Auth, Postgres, RLS)
+- vite-plugin-pwa mit `injectManifest`
+- Supabase Auth
+- Supabase PostgreSQL
+- Row Level Security
+- PostgreSQL RPCs
+- Supabase Storage
+- Supabase Edge Functions
+- Cloudflare Pages
 
-## Setup
+## Lokales Setup
 
 ```bash
 npm install
 cp .env.example .env
-# .env mit Supabase-Projekt-URL und anon Key befüllen
 npm run dev
 ```
 
-## Datenbank einrichten
+Benötigte Frontend-Variablen:
 
-1. Supabase-Projekt anlegen (siehe [supabase.com](https://supabase.com), Region z. B.
-   Frankfurt/`eu-central-1` für EU-Datenhaltung).
-2. Migrationen anwenden — entweder mit der [Supabase CLI](https://supabase.com/docs/guides/cli):
-   ```bash
-   supabase link --project-ref <project-ref>
-   supabase db push
-   ```
-   oder manuell: die Dateien in [`supabase/migrations/`](./supabase/migrations) in
-   **aufsteigender Dateinamen-Reihenfolge** im SQL-Editor des Supabase-Dashboards ausführen.
-3. Ersten Admin setzen (es gibt bewusst keinen "Make me admin"-Mechanismus im Frontend, siehe
-   CLAUDE.md §8.2):
-   ```sql
-   insert into public.user_roles (user_id, role)
-   values ('<auth.users.id des gewünschten Admins>', 'admin');
-   ```
-4. `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` (Project Settings → Data API) in `.env` eintragen.
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_VAPID_PUBLIC_KEY   # für Web Push
+```
+
+Keine `service_role`-Credentials im Frontend oder Repository speichern.
 
 ## Build
 
 ```bash
 npm run build
+npm run lint
 npm run preview
 ```
 
-## Umgebungsvariablen
+## Datenbank
 
-Siehe [`.env.example`](./.env.example). Es wird ausschließlich der öffentliche
-Supabase anon/publishable Key im Frontend verwendet — niemals der `service_role` Key.
+Alle Schemaänderungen liegen versioniert unter:
+
+```text
+supabase/migrations/
+```
+
+Aktuell reicht die Migrationshistorie mindestens bis:
+
+```text
+20260907082300_fix_admin_list_users_email_type.sql
+```
+
+Bereits produktiv angewendete Migrationen nicht nachträglich verändern. Änderungen immer über eine neue Migration ergänzen.
+
+## Edge Functions
+
+Aktuell gehören zum produktiven Aufbau:
+
+- `delete-account` — vollständige eigene Kontolöschung
+- `send-push` — Web-Push-Zustellung
+- `admin-manage-user` — Admin-seitiges Sperren/Entsperren/Löschen von Nutzerkonten
+- `restaurant-order-notifications` — zeitgesteuerte Restaurant-Bestell-Pushes
+
+Für Push werden serverseitig verwendet:
+
+```text
+VAPID_PUBLIC_KEY
+VAPID_PRIVATE_KEY
+VAPID_SUBJECT
+```
+
+Der private VAPID-Key und der Supabase `service_role` bleiben ausschließlich serverseitig.
+
+## Restaurant-Benachrichtigungen
+
+Die Restaurantbestellung unterstützt:
+
+- `RESTAURANT_ORDER_OPEN`
+- `RESTAURANT_ORDER_REMINDER`
+
+Die automatische Verarbeitung läuft über `restaurant-order-notifications` und einen `pg_cron`-Job in 15-Minuten-Intervallen. `push_sent_at` und `reminder_sent_at` verhindern Doppelversand.
+
+## PWA / Web Push
+
+Seit Phase 9 verwendet die PWA einen eigenen Service Worker unter `src/sw.ts` und vite-plugin-pwas `injectManifest`-Strategie. Dadurch können `push`- und `notificationclick`-Events kontrolliert verarbeitet werden, während App-Shell-/Offline-Verhalten erhalten bleibt.
+
+Push ist optional. Das In-App Notification Center unter `/notifications` funktioniert unabhängig davon, ob der User Push-Berechtigungen erteilt.
+
+## Admin-Bereich
+
+Zentrale Adminbereiche:
+
+```text
+/admin
+/admin/tours
+/admin/notifications
+/admin/users
+/admin/settings
+```
+
+Tourbezogen zusätzlich:
+
+```text
+/admin/tours/:id/registrations
+/admin/tours/:id/stops
+/admin/tours/:id/stops/:stopId
+```
+
+Archivierte Touren sind in `/admin/tours` standardmäßig ausgeblendet und können bei Bedarf eingeblendet werden.
 
 ## Deployment
 
-Vorgesehen: GitHub → Cloudflare Pages (automatisches Deployment, Build-Kommando `npm run build`,
-Output-Verzeichnis `dist`). Umgebungsvariablen (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
-optional `VITE_VAPID_PUBLIC_KEY` für Web Push) werden in den Cloudflare-Pages-Projekteinstellungen
-gesetzt.
+Production:
 
-## Web Push (optional)
+```text
+GitHub main
+→ Cloudflare Pages
+→ npm run build
+→ dist
+→ https://sft-drive.pages.dev
+```
 
-Für Push-Benachrichtigungen (siehe CLAUDE.md §27.10-§27.17) zusätzlich nötig:
-
-1. Ein VAPID-Schlüsselpaar generieren (kostenlos, rein kryptografisch — z. B. via
-   `npx web-push generate-vapid-keys`).
-2. `VITE_VAPID_PUBLIC_KEY` (öffentlicher Schlüssel) in Cloudflare Pages setzen.
-3. Die Supabase Edge Function `supabase/functions/send-push` deployen (Dashboard →
-   Edge Functions → "Deploy a new function" → Name exakt `send-push`).
-4. Als Edge-Function-Secrets (projektweit) hinterlegen: `VAPID_PUBLIC_KEY`,
-   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (z. B. `mailto:admin@example.de`).
-
-Ohne diese Konfiguration funktioniert die App unverändert — Push ist rein optional,
-das In-App-Notification-Center (`/notifications`) funktioniert davon unabhängig.
+Supabase Auth Site-/Redirect-URLs müssen auf die produktive Cloudflare-Pages-Domain abgestimmt sein.
 
 ## Kostenmodell
 
-Das Projekt ist auf dauerhaft kostenlosen Betrieb innerhalb der Free-Tier-Grenzen von
-Cloudflare Pages und Supabase ausgelegt (siehe CLAUDE.md §4).
+Das Projekt ist weiterhin auf Betrieb innerhalb der kostenlosen Tarife von Cloudflare Pages und Supabase ausgelegt. Neue Dienste oder Funktionen mit laufenden Kosten dürfen nicht ohne ausdrückliche Entscheidung eingeführt werden.
