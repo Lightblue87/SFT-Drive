@@ -852,6 +852,14 @@ ODER
 Caller besitzt für diese Tour status = confirmed
 ```
 
+**Phase-12-Ausnahme (§34.1):** Besteht zwischen dem Caller und dem
+betreffenden Teilnehmer eine akzeptierte Freundschaft (`friendships.status
+= 'accepted'`), darf die Funktion für genau diesen Teilnehmer zusätzlich
+`first_name`/`last_name` ausgeben. Ohne akzeptierte Freundschaft bleibt die
+Ausgabe wie oben beschrieben — `first_name`/`last_name` werden weiterhin
+nicht ausgegeben. Bis Phase 12 implementiert ist, gibt die Funktion keine
+Klarnamen aus.
+
 ---
 
 ### 8.10 Öffentliche Kapazitätsdaten
@@ -1292,13 +1300,14 @@ Die eigene Zeile darf hervorgehoben werden.
 
 Das Datenmodell und die UI sollen eine spätere gegenseitige Freundesfreigabe nicht unnötig blockieren.
 
-Geplantes Prinzip:
+Geplantes Prinzip (siehe §34.1 für die verbindliche Ausarbeitung):
 
 - User A sendet User B eine Freundesanfrage.
-- User B bestätigt.
-- Erst bei bestätigter gegenseitiger Verbindung dürfen beide den Klarnamen des jeweils anderen sehen.
-- Die Freigabe gilt beidseitig.
-- Eine Freundschaft kann wieder beendet werden.
+- Solange die Anfrage `pending` ist, wird kein Klarname freigegeben.
+- User B nimmt die Anfrage an.
+- Die Annahme der Freundschaftsanfrage **ist** die gegenseitige Zustimmung zur Klarnamenfreigabe — es gibt keinen separaten Freigabe-Schalter und keine einseitige/gerichtete Freigabe.
+- Bei `friendships.status = accepted` dürfen beide Nutzer gegenseitig Vor- und Nachnamen sehen.
+- Wird die Freundschaft beendet, entfällt die Klarnamenfreigabe sofort für beide Seiten.
 
 Diese Funktion ist **nicht Bestandteil des ersten MVP**.
 
@@ -3241,7 +3250,7 @@ Vor jedem Release prüfen:
 - [ ] Participant-Inhalte sind nur für `confirmed` erreichbar
 - [ ] `pending` erhält keine Participant-Inhalte
 - [ ] `waitlisted` erhält keine Participant-Inhalte
-- [ ] Fahrzeugliste gibt keine Klarnamen aus
+- [ ] Fahrzeugliste gibt keine unberechtigt freigegebenen Klarnamen aus (vor Umsetzung von Phase 12, §34.1: weiterhin keine Klarnamen)
 - [ ] Fahrzeugliste gibt keine Kennzeichen aus
 - [ ] Fahrzeugliste gibt keine fremde Personenzahl aus
 - [ ] öffentliche Kapazitätsabfrage gibt keine Userdaten aus
@@ -4123,7 +4132,7 @@ Das MVP gilt erst als fertig, wenn:
 35. nur bestätigte Fahrer Participant-Inhalte sehen
 36. nur bestätigte Fahrer die Liste der bestätigten mitfahrenden Fahrzeuge sehen
 37. in dieser Liste Username, Hersteller, Modell und PS sichtbar sind
-38. dort keine Klarnamen oder Kennzeichen anderer User sichtbar sind
+38. dort keine unberechtigt freigegebenen Klarnamen und keine Kennzeichen anderer User sichtbar sind (vor Umsetzung von Phase 12, §34.1: weiterhin keine Klarnamen)
 39. normale User keinen Adminzugriff erhalten
 40. RLS getestet wurde
 41. andere User fremde Profile nicht direkt auslesen können
@@ -4243,73 +4252,73 @@ Phase 15 — Tagesrouten für Mehrtagestouren
 
 ### 34.1 Phase 12 — Freunde und Klarnamenfreigabe
 
-Ziel ist eine datensparsame Freundesfunktion, über die Nutzer gezielt entscheiden können, welchen bestätigten Freunden sie ihren eigenen Klarnamen anzeigen.
+Die Freundschaftsfunktion hat aktuell genau einen Zweck: gegenseitige
+Klarnamenfreigabe. Sie besitzt aktuell keine weiteren Social-Funktionen —
+keine Posts, Activity Feeds, Direktnachrichten oder ähnliche Funktionen.
+
+Ablauf:
+
+1. User A sucht User B über den Username.
+2. User A sendet eine Freundschaftsanfrage.
+3. Solange die Anfrage `pending` ist, werden keine Klarnamen freigegeben.
+4. User B nimmt die Anfrage an.
+5. Mit der Annahme stimmen beide Seiten der gegenseitigen Klarnamenfreigabe zu.
+6. Bei `friendships.status = accepted` dürfen beide Nutzer gegenseitig Vor- und Nachnamen sehen.
+7. Wird die Freundschaft beendet, entfällt die Klarnamenfreigabe sofort für beide Seiten.
 
 Grundregeln:
 
 - User sollen andere Mitglieder primär über den **Username** finden können.
 - Die Suche darf keine E-Mail-Adressen, Geburtsdaten oder andere privaten Profildaten offenlegen.
-- Ein User kann eine Freundesanfrage senden.
 - Der Empfänger kann die Anfrage annehmen oder ablehnen.
 - Eine bestehende Freundschaft kann von beiden Seiten beendet werden.
-- Ein Blockieren eines anderen Users soll möglich sein; blockierte Nutzer dürfen keine neuen Freundesanfragen senden.
-- Eine akzeptierte Freundschaft allein gibt **nicht automatisch** den Klarnamen frei.
-- Die Klarnamenfreigabe ist eine separate, freiwillige und jederzeit widerrufbare Entscheidung **pro Freund und pro Richtung**.
-- User A kann seinen Klarnamen für User B freigeben, ohne dass User B seinen Klarnamen für User A freigeben muss.
-- Widerruf der Freigabe muss sofort wirken.
-- Beim Beenden einer Freundschaft darf eine vorherige Klarnamenfreigabe nicht weiter gelten.
+- Es gibt **keinen** separaten Schalter „Meinen Klarnamen freigeben“ — die akzeptierte Freundschaft selbst ist die gegenseitige Klarnamenfreigabe.
+- Es gibt **keine** gerichtete/einseitige Klarnamenfreigabe.
+- Bis Phase 12 implementiert ist, bleibt das aktuelle Produktionsverhalten: Teilnehmer sehen keine Klarnamen.
 
-Mögliches Datenmodell:
+Datenmodell — nur eine `friendships`-Beziehung, keine zusätzliche Tabelle für gerichtete Freigaben (insbesondere **keine** `friend_name_shares`):
 
 ```text
 friendships
 id UUID PRIMARY KEY
 requester_id UUID REFERENCES auth.users(id)
 addressee_id UUID REFERENCES auth.users(id)
-status TEXT                 -- pending | accepted | rejected | blocked
+status TEXT                 -- pending | accepted | rejected
 created_at TIMESTAMPTZ
 accepted_at TIMESTAMPTZ NULL
 updated_at TIMESTAMPTZ
 ```
 
-Für die gerichtete Freigabe des eigenen Klarnamens bevorzugt eine separate, eindeutige Beziehung oder eine äquivalente sichere Lösung, beispielsweise:
+Regeln zum Datenmodell:
 
-```text
-friend_name_shares
-owner_user_id UUID REFERENCES auth.users(id)
-friend_user_id UUID REFERENCES auth.users(id)
-share_real_name BOOLEAN DEFAULT FALSE
-updated_at TIMESTAMPTZ
-UNIQUE(owner_user_id, friend_user_id)
-```
+- Selbst-Freundschaften (`requester_id = addressee_id`) verhindern.
+- Eine akzeptierte Freundschaft muss eindeutig zwischen genau zwei Usern bestehen; inverse Doppelbeziehungen (A→B und B→A gleichzeitig) verhindern.
 
 Sicherheitsregeln:
 
-- Ein User darf ausschließlich über seinen eigenen Account Freundesanfragen senden und eigene Anfragen/Freundschaften bearbeiten.
-- Ein User darf ausschließlich **seinen eigenen** Klarnamen freigeben oder die Freigabe widerrufen.
-- Eine Klarnamenfreigabe ist nur gegenüber einer aktuell akzeptierten Freundschaft wirksam.
+- Ein User darf ausschließlich über seinen eigenen Account (`auth.uid()`, serverseitig bestimmt) Freundesanfragen senden und eigene Anfragen/Freundschaften bearbeiten.
 - Keine breite SELECT-Policy auf `profiles` einführen.
-- Die Ausgabe des Klarnamens erfolgt über kontrollierte RPCs/Views oder durch eine gezielte Erweiterung bestehender sicherer RPCs.
-- `first_name` und `last_name` dürfen nur an genau den Caller ausgegeben werden, für den eine wirksame Freigabe besteht, oder an Admins im bereits erlaubten administrativen Kontext.
-- E-Mail, Kennzeichen, Geburtsdatum und sonstige private Daten werden durch Freundschaft **nicht** freigegeben.
+- Die Ausgabe der Klarnamen erfolgt ausschließlich über kontrollierte RPCs/Views oder durch eine gezielte, sichere Erweiterung bestehender Teilnehmer-RPCs (siehe §8.9 Phase-12-Ausnahme).
+- `first_name`/`last_name` dürfen nur an einen Caller ausgegeben werden, der mit dem betreffenden User eine akzeptierte Freundschaft besitzt, oder an Admins im bereits erlaubten administrativen Kontext.
+- E-Mail, Kennzeichen, Geburtsdatum und sonstige private Daten werden durch die Freundschaft **niemals** freigegeben.
 
 Teilnehmerliste einer Tour:
 
-Standard ohne Freigabe:
+Standard ohne akzeptierte Freundschaft:
 
 ```text
 S4shadow
 Audi S4 · 440 PS
 ```
 
-Wenn der betreffende Fahrer seinen Klarnamen für den betrachtenden Freund freigegeben hat:
+Bei akzeptierter Freundschaft zwischen Caller und Fahrer:
 
 ```text
 Mirko · S4shadow
 Audi S4 · 440 PS
 ```
 
-Die bestehende Teilnehmer-Fahrzeugliste darf also optional den freigegebenen Klarnamen ergänzen, aber niemals die bisherigen Datenschutzgrenzen für andere Teilnehmer lockern.
+Die bestehende Teilnehmer-Fahrzeugliste darf also optional den durch eine akzeptierte Freundschaft freigegebenen Klarnamen ergänzen, aber niemals die bisherigen Datenschutzgrenzen für andere Teilnehmer lockern.
 
 UI mindestens:
 
@@ -4319,8 +4328,6 @@ UI mindestens:
 - Freund hinzufügen / Anfrage senden
 - Anfrage annehmen / ablehnen
 - Freundschaft beenden
-- User blockieren / Blockierung aufheben
-- pro Freund Schalter `Meinen Klarnamen freigeben`
 
 ### 34.2 Phase 13 — Persönliche Fahrzeuggarage
 
