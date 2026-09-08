@@ -40,9 +40,26 @@ function AdminIcon() {
   )
 }
 
+function GarageIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 20v-8l2.5-5h11L20 12v8M4 20h2v-2h12v2h2M4 20h16"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="7.5" cy="15.5" r="1.3" fill="currentColor" />
+      <circle cx="16.5" cy="15.5" r="1.3" fill="currentColor" />
+    </svg>
+  )
+}
+
 /**
- * Kompakte Bottom-Navigation, maximal 4 primäre Ziele (siehe CLAUDE.md §21.6).
- * Archiv ist bewusst nicht als eigener Punkt geführt, sondern über /profile erreichbar.
+ * Kompakte Bottom-Navigation. Archiv und Freunde sind bewusst nicht als
+ * eigener Punkt geführt, sondern über /profile erreichbar (siehe CLAUDE.md
+ * §21.6) — die Garage wurde auf ausdrücklichen Wunsch als eigenes primäres
+ * Ziel ergänzt.
  */
 export function BottomNav() {
   const { user } = useAuth()
@@ -74,6 +91,10 @@ export function BottomNav() {
               Admin
             </NavLink>
           )}
+          <NavLink to="/profile/vehicles" className={itemClass}>
+            <GarageIcon />
+            Garage
+          </NavLink>
         </>
       ) : (
         <NavLink to="/login" className={itemClass}>
