@@ -2972,8 +2972,9 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
     │   ├── /admin/tours/new
     │   ├── /admin/tours/:id/edit
     │   ├── /admin/tours/:id/registrations
-    │   └── /admin/tours/:id/stops
-    │       └── /admin/tours/:id/stops/:stopId    (Restaurant-Stopps, §27.20)
+    │   ├── /admin/tours/:id/stops
+    │   │   └── /admin/tours/:id/stops/:stopId    (Restaurant-Stopps, §27.20)
+    │   └── /admin/tours/:id/stages                (Tagesrouten, nur Mehrtagestouren, §34.4)
     │
     ├── /admin/settings
     ├── /admin/users
@@ -4257,13 +4258,12 @@ Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App 
 
 ---
 
-## 34. Geplante Entwicklungsphasen 12–15
+## 34. Entwicklungsphasen 12–15
 
 Diese Phasen bauen additiv auf dem produktiven Stand der Phasen 1–11 auf. Aussagen in
 §28/§29, die diese vier Themen noch nur als allgemeine spätere Erweiterung aufführen,
 bleiben als Historienreferenz bestehen; für die konkrete Planung gilt dieser Abschnitt.
-Phase 12, 13 und 14 sind inzwischen umgesetzt (siehe §34.1/§34.2/§34.3); Phase 15 ist
-weiterhin **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**.
+Alle vier Phasen sind inzwischen umgesetzt (siehe §34.1–§34.4).
 
 Reihenfolge:
 
@@ -4271,7 +4271,7 @@ Reihenfolge:
 Phase 12 — Freunde und Klarnamenfreigabe (umgesetzt)
 Phase 13 — Persönliche Fahrzeuggarage (umgesetzt)
 Phase 14 — Zeitgesteuerter Check-in am Treffpunkt (umgesetzt, ohne automatische Benachrichtigung)
-Phase 15 — Tagesrouten für Mehrtagestouren
+Phase 15 — Tagesrouten für Mehrtagestouren (umgesetzt)
 ```
 
 ### 34.1 Phase 12 — Freunde und Klarnamenfreigabe
@@ -4568,6 +4568,23 @@ sonstige URL       → Route öffnen
 ```
 
 Die Erkennung ist reine UX-Verbesserung. Die Berechtigung und Speicherung hängen nicht vom erkannten Anbieter ab.
+
+**Umsetzungsstand:** implementiert (Migration `20260908103000_tour_stage_route_url.sql`
+ergänzt lediglich `route_url` auf dem bereits bestehenden `tour_stages` —
+die alte Migration `20260907080350` mit `kurviger_url` und den übrigen
+Spalten bleibt unverändert; lokal gegen eine echte `authenticated`-Rolle
+bestätigt, dass Nicht-Teilnehmer weiterhin keine Etappenzeilen lesen
+können). Admin-Verwaltung unter `/admin/tours/:id/stages`
+(verlinkt aus der Tourenverwaltung als "Tagesrouten verwalten", nur bei
+`end_date > start_date`) leitet die Tage automatisch aus `start_date`/
+`end_date` ab und bietet pro Tag genau ein Routen-Linkfeld — bereits
+vorhandene `kurviger_url`-Werte werden dort als Vorbefüllung berücksichtigt.
+Auf der Tourdetailseite sehen bestätigte Teilnehmer einer Mehrtagestour
+einen "Tagesrouten"-Abschnitt mit einem Button pro Tag (Beschriftung anhand
+der URL erkannt: Kurviger/Google Maps/Apple Karten/generisch), der auf
+`route_url` zurückgreift und ansonsten auf das vorhandene `kurviger_url`
+zurückfällt. Eintägige Touren sind unverändert und nutzen weiterhin den
+bestehenden Haupt-Kurviger-Link auf Tour-Ebene.
 
 ### 34.5 Gemeinsame Regeln für Phasen 12–15
 

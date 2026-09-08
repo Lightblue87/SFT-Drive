@@ -89,6 +89,11 @@ export function AdminToursPage() {
                 <Link to={`/admin/tours/${tour.id}/stops`} className="text-xs text-sft-gray underline">
                   Tour-Stopps verwalten
                 </Link>
+                {tour.end_date > tour.start_date && (
+                  <Link to={`/admin/tours/${tour.id}/stages`} className="text-xs text-sft-gray underline">
+                    Tagesrouten verwalten
+                  </Link>
+                )}
               </div>
             </li>
           ))}

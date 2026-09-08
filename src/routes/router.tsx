@@ -28,6 +28,7 @@ import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
 import { AdminTourFormPage } from '@/pages/admin/AdminTourFormPage'
 import { AdminTourRegistrationsPage } from '@/pages/admin/AdminTourRegistrationsPage'
 import { AdminTourStopsPage } from '@/pages/admin/AdminTourStopsPage'
+import { AdminTourStagesPage } from '@/pages/admin/AdminTourStagesPage'
 import { AdminRestaurantStopPage } from '@/pages/admin/AdminRestaurantStopPage'
 
 /**
@@ -114,6 +115,7 @@ export const router = createBrowserRouter([
           { path: 'tours/:id/registrations', element: <AdminTourRegistrationsPage /> },
           { path: 'tours/:id/stops', element: <AdminTourStopsPage /> },
           { path: 'tours/:id/stops/:stopId', element: <AdminRestaurantStopPage /> },
+          { path: 'tours/:id/stages', element: <AdminTourStagesPage /> },
           { path: 'settings', element: <AdminSettingsPage /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },

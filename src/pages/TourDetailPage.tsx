@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { useIsAdmin } from '@/features/auth/useIsAdmin'
 import { supabase } from '@/lib/supabase'
 import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
+import { routeButtonLabel } from '@/utils/routeLink'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
@@ -54,7 +55,8 @@ export function TourDetailPage() {
     )
   }
 
-  const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration, stops } = data
+  const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration, stops, stages } =
+    data
   // Cancelled/rejected sind keine aktiven Anmeldungen — die RPC erlaubt eine
   // Neuanmeldung in diesem Fall ausdrücklich (kontrollierte Reaktivierung,
   // siehe CLAUDE.md §8.7), das Formular muss dafür also wieder sichtbar sein.
@@ -223,6 +225,38 @@ export function TourDetailPage() {
                     Zello-Zugang: Der QR-Code für den Tourkanal wird am Treffpunkt bereitgestellt.
                   </div>
                 )}
+              </div>
+            )}
+
+            {multiDay && stages.some((s) => s.route_url || s.kurviger_url) && (
+              <div className="rounded-md bg-sft-surface p-4 text-sm">
+                <h2 className="mb-2 font-medium">Tagesrouten</h2>
+                <ul className="flex flex-col gap-2">
+                  {stages.map((stage) => {
+                    const url = stage.route_url ?? stage.kurviger_url
+                    if (!url) return null
+                    return (
+                      <li key={stage.id} className="flex flex-col gap-1">
+                        <div className="text-sft-gray">
+                          Tag {stage.stage_number} ·{' '}
+                          {new Date(stage.stage_date).toLocaleDateString('de-DE', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })}
+                        </div>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md bg-sft-surface2 px-4 py-2 text-center"
+                        >
+                          {routeButtonLabel(url)}
+                        </a>
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
             )}
 

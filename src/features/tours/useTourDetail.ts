@@ -9,6 +9,7 @@ import type {
   ConfirmedVehicle,
 } from '@/types/tour'
 import type { TourStop } from '@/types/tourStop'
+import type { TourStage } from '@/types/tourStage'
 
 export interface TourDetailData {
   tour: Tour
@@ -18,6 +19,7 @@ export interface TourDetailData {
   confirmedVehicles: ConfirmedVehicle[]
   ownRegistration: TourRegistration | null
   stops: TourStop[]
+  stages: TourStage[]
 }
 
 /**
@@ -65,6 +67,7 @@ export function useTourDetail(slug: string | undefined) {
     let participantDetails: TourParticipantDetails | null = null
     let confirmedVehicles: ConfirmedVehicle[] = []
     let stops: TourStop[] = []
+    let stages: TourStage[] = []
 
     if (userId) {
       const { data: reg } = await supabase
@@ -76,14 +79,20 @@ export function useTourDetail(slug: string | undefined) {
       ownRegistration = (reg as TourRegistration) ?? null
 
       if (ownRegistration?.status === 'confirmed') {
-        const [{ data: pd }, { data: vehicles }, { data: stopRows }] = await Promise.all([
+        const [{ data: pd }, { data: vehicles }, { data: stopRows }, { data: stageRows }] = await Promise.all([
           supabase.from('tour_participant_details').select('*').eq('tour_id', tour.id).maybeSingle(),
           supabase.rpc('get_confirmed_tour_vehicles', { p_tour_id: tour.id }),
           supabase.from('tour_stops').select('*').eq('tour_id', tour.id).order('sort_order', { ascending: true }),
+          supabase
+            .from('tour_stages')
+            .select('*')
+            .eq('tour_id', tour.id)
+            .order('stage_number', { ascending: true }),
         ])
         participantDetails = (pd as TourParticipantDetails) ?? null
         confirmedVehicles = (vehicles as ConfirmedVehicle[]) ?? []
         stops = (stopRows as TourStop[]) ?? []
+        stages = (stageRows as TourStage[]) ?? []
       }
     }
 
@@ -95,6 +104,7 @@ export function useTourDetail(slug: string | undefined) {
       confirmedVehicles,
       ownRegistration,
       stops,
+      stages,
     })
     setLoading(false)
   }, [slug])
