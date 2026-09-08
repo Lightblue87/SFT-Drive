@@ -34,6 +34,9 @@ export interface Tour {
   registration_open_at: string | null
   registration_close_at: string | null
   passenger_edit_deadline_at: string | null
+  check_in_enabled: boolean
+  check_in_open_minutes_before: number
+  check_in_close_minutes_after: number
   status: TourStatus
   cover_image_url: string | null
   created_by: string | null
@@ -73,6 +76,7 @@ export interface TourRegistration {
   license_plate: string | null
   passenger_count: number
   registered_at: string
+  checked_in_at: string | null
 }
 
 export interface ConfirmedVehicle {
@@ -171,6 +175,11 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   ALREADY_FRIENDS: 'Ihr seid bereits befreundet.',
   REQUEST_ALREADY_SENT: 'Du hast bereits eine Anfrage an diesen Nutzer gesendet.',
   FRIENDSHIP_NOT_FOUND: 'Diese Freundschaftsanfrage wurde nicht gefunden.',
+  CHECK_IN_NOT_ENABLED: 'Für diese Tour ist kein Check-in aktiviert.',
+  MEETING_TIME_NOT_SET: 'Für diese Tour ist keine Treffpunktzeit hinterlegt.',
+  ALREADY_CHECKED_IN: 'Du bist bereits eingecheckt.',
+  CHECK_IN_NOT_OPEN: 'Der Check-in hat noch nicht begonnen.',
+  CHECK_IN_CLOSED: 'Der Check-in-Zeitraum ist bereits abgelaufen.',
 }
 
 export function rpcErrorMessage(code: string): string {

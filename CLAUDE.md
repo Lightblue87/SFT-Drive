@@ -4262,7 +4262,7 @@ Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App 
 Diese Phasen bauen additiv auf dem produktiven Stand der Phasen 1–11 auf. Aussagen in
 §28/§29, die diese vier Themen noch nur als allgemeine spätere Erweiterung aufführen,
 bleiben als Historienreferenz bestehen; für die konkrete Planung gilt dieser Abschnitt.
-Phase 12 und 13 sind inzwischen umgesetzt (siehe §34.1/§34.2); Phase 14 und 15 sind
+Phase 12, 13 und 14 sind inzwischen umgesetzt (siehe §34.1/§34.2/§34.3); Phase 15 ist
 weiterhin **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**.
 
 Reihenfolge:
@@ -4270,7 +4270,7 @@ Reihenfolge:
 ```text
 Phase 12 — Freunde und Klarnamenfreigabe (umgesetzt)
 Phase 13 — Persönliche Fahrzeuggarage (umgesetzt)
-Phase 14 — Zeitgesteuerter Check-in am Treffpunkt
+Phase 14 — Zeitgesteuerter Check-in am Treffpunkt (umgesetzt, ohne automatische Benachrichtigung)
 Phase 15 — Tagesrouten für Mehrtagestouren
 ```
 
@@ -4487,6 +4487,21 @@ Tourarchiv:
 
 - `checked_in_at` kann künftig genutzt werden, um tatsächliche Anwesenheit von einer lediglich bestätigten Registrierung zu unterscheiden.
 - Bestehende historische Touren ohne Check-in-Daten dürfen dadurch nicht aus dem Archiv verschwinden oder rückwirkend als "nicht teilgenommen" bewertet werden.
+
+**Umsetzungsstand:** implementiert (Migration `20260908100000_check_in.sql`,
+lokal gegen eine echte `authenticated`-Rolle getestet: Fenstergrenzen zu
+früh/zu spät, Doppel-Check-in, fehlende eigene Registrierung und der
+Admin-Override außerhalb des Fensters wurden alle korrekt abgewiesen bzw.
+akzeptiert). Self-Check-in über `check_in_to_tour`, Admin-Override über
+`admin_set_checked_in` (auch außerhalb des Fensters möglich). Frontend:
+`CheckInButton` auf der Tourdetailseite (nur sichtbar innerhalb des
+clientseitig berechneten Fensters — die eigentliche Prüfung bleibt
+serverseitig), Treffpunktzeit sowie Check-in-Konfiguration im
+Admin-Tourformular editierbar (bisher gab es dort noch kein Feld für
+`meeting_at`), Status/manueller Toggle in der Teilnehmerverwaltung inklusive
+"Eingecheckt: X / Y"-Zähler. Die in §34.3 als optional formulierte
+automatische `CHECK_IN_OPEN`-Benachrichtigung (Push/In-App beim Öffnen des
+Fensters) ist **nicht** Teil dieser Umsetzung.
 
 ### 34.4 Phase 15 — Tagesrouten für Mehrtagestouren
 

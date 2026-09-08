@@ -11,6 +11,7 @@ import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
 import { MealOrderForm } from '@/features/tours/MealOrderForm'
+import { CheckInButton } from '@/features/tours/CheckInButton'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -166,6 +167,14 @@ export function TourDetailPage() {
             )}
             {activeRegistration.status === 'confirmed' && (
               <p className="text-sm text-sft-red">Du bist dabei</p>
+            )}
+
+            {activeRegistration.status === 'confirmed' && (
+              <CheckInButton
+                tour={tour}
+                checkedInAt={activeRegistration.checked_in_at}
+                onCheckedIn={reload}
+              />
             )}
 
             <div className="rounded-md bg-sft-surface p-4 text-sm">

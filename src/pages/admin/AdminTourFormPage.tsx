@@ -14,6 +14,7 @@ interface FormState {
   end_date: string
   region: string
   route_length_km: string
+  meeting_at: string
   meeting_point_public: string
   max_vehicles: string
   confirmation_mode: ConfirmationMode
@@ -24,6 +25,9 @@ interface FormState {
   registration_open_at: string
   registration_close_at: string
   passenger_edit_deadline_at: string
+  check_in_enabled: boolean
+  check_in_open_minutes_before: string
+  check_in_close_minutes_after: string
   status: TourStatus
   cover_image_url: string
   member_description: string
@@ -41,6 +45,7 @@ const EMPTY: FormState = {
   end_date: '',
   region: '',
   route_length_km: '',
+  meeting_at: '',
   meeting_point_public: '',
   max_vehicles: '10',
   confirmation_mode: 'manual',
@@ -51,6 +56,9 @@ const EMPTY: FormState = {
   registration_open_at: '',
   registration_close_at: '',
   passenger_edit_deadline_at: '',
+  check_in_enabled: false,
+  check_in_open_minutes_before: '30',
+  check_in_close_minutes_after: '15',
   status: 'draft',
   cover_image_url: '',
   member_description: '',
@@ -175,6 +183,7 @@ export function AdminTourFormPage() {
         end_date: tour.end_date,
         region: tour.region,
         route_length_km: tour.route_length_km?.toString() ?? '',
+        meeting_at: toDatetimeLocal(tour.meeting_at),
         meeting_point_public: tour.meeting_point_public ?? '',
         max_vehicles: tour.max_vehicles.toString(),
         confirmation_mode: tour.confirmation_mode,
@@ -185,6 +194,9 @@ export function AdminTourFormPage() {
         registration_open_at: toDatetimeLocal(tour.registration_open_at),
         registration_close_at: toDatetimeLocal(tour.registration_close_at),
         passenger_edit_deadline_at: toDatetimeLocal(tour.passenger_edit_deadline_at),
+        check_in_enabled: tour.check_in_enabled,
+        check_in_open_minutes_before: tour.check_in_open_minutes_before.toString(),
+        check_in_close_minutes_after: tour.check_in_close_minutes_after.toString(),
         status: tour.status,
         cover_image_url: tour.cover_image_url ?? '',
         member_description: member?.member_description ?? '',
@@ -281,6 +293,7 @@ export function AdminTourFormPage() {
       end_date: form.end_date,
       region: form.region.trim(),
       route_length_km: form.route_length_km ? Number(form.route_length_km) : null,
+      meeting_at: fromDatetimeLocal(form.meeting_at),
       meeting_point_public: form.meeting_point_public || null,
       confirmation_mode: form.confirmation_mode,
       license_plate_required: form.license_plate_required,
@@ -290,6 +303,9 @@ export function AdminTourFormPage() {
       registration_open_at: fromDatetimeLocal(form.registration_open_at),
       registration_close_at: fromDatetimeLocal(form.registration_close_at),
       passenger_edit_deadline_at: fromDatetimeLocal(form.passenger_edit_deadline_at),
+      check_in_enabled: form.check_in_enabled,
+      check_in_open_minutes_before: Number(form.check_in_open_minutes_before) || 0,
+      check_in_close_minutes_after: Number(form.check_in_close_minutes_after) || 0,
       status: form.status,
       cover_image_url: form.cover_image_url || null,
       published_at: form.status === 'published' ? new Date().toISOString() : null,
@@ -494,12 +510,52 @@ export function AdminTourFormPage() {
         </Field>
 
         <h2 className="mt-2 text-sm font-medium text-sft-gray">Treffpunkt</h2>
+        <Field label="Treffpunktzeit">
+          <input
+            type="datetime-local"
+            value={form.meeting_at}
+            onChange={(e) => set('meeting_at', e.target.value)}
+            className={inputClass}
+          />
+        </Field>
         <Field label="Öffentlicher Treffpunkt (nur ungefähr)">
           <input value={form.meeting_point_public} onChange={(e) => set('meeting_point_public', e.target.value)} className={inputClass} />
         </Field>
         <Field label="Genauer Treffpunkt (nur bestätigte Teilnehmer)">
           <input value={form.meeting_point_private} onChange={(e) => set('meeting_point_private', e.target.value)} className={inputClass} />
         </Field>
+
+        <h2 className="mt-2 text-sm font-medium text-sft-gray">Check-in am Treffpunkt</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.check_in_enabled}
+            onChange={(e) => set('check_in_enabled', e.target.checked)}
+          />
+          Check-in aktivieren (benötigt Treffpunktzeit)
+        </label>
+        {form.check_in_enabled && (
+          <div className="flex gap-3">
+            <Field label="Öffnet X Minuten vorher">
+              <input
+                type="number"
+                min={0}
+                value={form.check_in_open_minutes_before}
+                onChange={(e) => set('check_in_open_minutes_before', e.target.value)}
+                className={`${inputClass} w-24`}
+              />
+            </Field>
+            <Field label="Schließt X Minuten danach">
+              <input
+                type="number"
+                min={0}
+                value={form.check_in_close_minutes_after}
+                onChange={(e) => set('check_in_close_minutes_after', e.target.value)}
+                className={`${inputClass} w-24`}
+              />
+            </Field>
+          </div>
+        )}
 
         <h2 className="mt-2 text-sm font-medium text-sft-gray">Kurviger &amp; Zello</h2>
         <Field label="Kurviger-Link (nur bestätigte Teilnehmer)">

@@ -14,6 +14,7 @@ interface AdminRegistrationRow {
   license_plate: string | null
   passenger_count: number
   registered_at: string
+  checked_in_at: string | null
   user_id: string
   profiles: { username: string; first_name: string; last_name: string } | null
 }
@@ -86,7 +87,7 @@ export function AdminTourRegistrationsPage() {
     const { data: regs } = await supabase
       .from('tour_registrations')
       .select(
-        'id, status, vehicle_manufacturer, vehicle_model, vehicle_power_ps, license_plate, passenger_count, registered_at, user_id',
+        'id, status, vehicle_manufacturer, vehicle_model, vehicle_power_ps, license_plate, passenger_count, registered_at, checked_in_at, user_id',
       )
       .eq('tour_id', id)
       .order('registered_at', { ascending: true })
@@ -135,12 +136,21 @@ export function AdminTourRegistrationsPage() {
     )
   }
 
+  async function toggleCheckedIn(registrationId: string, checkedIn: boolean) {
+    await runAction(() =>
+      supabase.rpc('admin_set_checked_in', {
+        p_registration_id: registrationId,
+        p_checked_in: checkedIn,
+      }),
+    )
+  }
+
   if (loading) return <PageLoading />
 
-  const confirmedCount = rows.filter((r) => r.status === 'confirmed').length
-  const confirmedPersons = rows
-    .filter((r) => r.status === 'confirmed')
-    .reduce((sum, r) => sum + 1 + r.passenger_count, 0)
+  const confirmedRows = rows.filter((r) => r.status === 'confirmed')
+  const confirmedCount = confirmedRows.length
+  const confirmedPersons = confirmedRows.reduce((sum, r) => sum + 1 + r.passenger_count, 0)
+  const checkedInCount = confirmedRows.filter((r) => r.checked_in_at).length
 
   return (
     <div className="py-6">
@@ -149,6 +159,11 @@ export function AdminTourRegistrationsPage() {
       <div className="mt-3 rounded-md bg-sft-surface p-4 text-sm">
         <div>Bestätigte Fahrzeuge: {confirmedCount}</div>
         <div>Bestätigte Personen: {confirmedPersons}</div>
+        {confirmedCount > 0 && (
+          <div>
+            Eingecheckt: {checkedInCount} / {confirmedCount}
+          </div>
+        )}
       </div>
 
       <div className="mt-3 flex flex-col gap-1">
@@ -190,6 +205,27 @@ export function AdminTourRegistrationsPage() {
                           passengerCount={r.passenger_count}
                           onSave={savePassengerCount}
                         />
+                      )}
+                      {r.status === 'confirmed' && (
+                        <div className="flex items-center gap-2 text-sft-gray">
+                          {r.checked_in_at ? (
+                            <span>
+                              ✓ Angekommen ·{' '}
+                              {new Date(r.checked_in_at).toLocaleTimeString('de-DE', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          ) : (
+                            <span>Noch nicht eingecheckt</span>
+                          )}
+                          <button
+                            onClick={() => toggleCheckedIn(r.id, !r.checked_in_at)}
+                            className="text-xs underline"
+                          >
+                            {r.checked_in_at ? 'Check-in zurücksetzen' : 'Als angekommen markieren'}
+                          </button>
+                        </div>
                       )}
                     </div>
                     {group.status === 'pending' && (
