@@ -196,7 +196,7 @@ export function AdminRestaurantStopPage() {
 
   return (
     <div className="flex flex-col gap-3.5 pt-3">
-      <div className="rounded-2xl border border-white/9 bg-sft-card p-3.5">
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
         <div className="mb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">BESTELLFENSTER</div>
         <button
           type="button"

@@ -207,7 +207,7 @@ export function AdminTourStopsPage() {
         {stops.length === 0 && <p className="px-4 pb-4 text-sm text-sft-gray">Noch keine Stopps angelegt.</p>}
       </div>
 
-      <div className="mt-3.5 flex flex-col gap-3.5 rounded-2xl border border-white/9 bg-sft-card p-3.5">
+      <div className="mt-3.5 flex flex-col gap-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
         <p className="text-[13px] font-medium">{editingId ? 'Stopp bearbeiten' : 'Neuen Stopp anlegen'}</p>
 
         <label>

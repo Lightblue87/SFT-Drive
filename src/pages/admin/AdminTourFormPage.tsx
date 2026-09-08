@@ -783,9 +783,9 @@ const selectClass =
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-white/9 bg-sft-card p-3.5">
+    <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
       <div className="mb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">{title.toUpperCase()}</div>
-      <div className="flex flex-col gap-3.5">{children}</div>
+      <div className="flex min-w-0 flex-col gap-3.5">{children}</div>
     </div>
   )
 }

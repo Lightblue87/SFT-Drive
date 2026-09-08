@@ -7,7 +7,7 @@ import { PullToRefresh } from '@/components/PullToRefresh'
 
 export function AppLayout() {
   return (
-    <div className="flex min-h-screen flex-col bg-sft-black font-sans text-sft-white">
+    <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-sft-black font-sans text-sft-white">
       <PullToRefresh />
       <OfflineBanner />
       <Header />

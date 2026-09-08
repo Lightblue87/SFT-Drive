@@ -10,7 +10,16 @@ html {
 body {
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
-  max-width: 100vw;
+}
+
+/* #root statt body: manche WebKit-Versionen respektieren overflow-x:hidden auf
+   html/body nicht zuverlässig für Layout-Überlauf, der von tief verschachtelten
+   nativen Formularelementen (date/datetime-local) verursacht wird — der Wert
+   auf einem tatsächlichen Block-Container mit eigenem Layout-Kontext ist die
+   robustere Absicherung. */
+#root {
+  overflow-x: hidden;
+  width: 100%;
 }
 
 /* Verhindert automatisches Hineinzoomen von iOS Safari beim Fokussieren von
