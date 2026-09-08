@@ -487,7 +487,7 @@ export function AdminTourFormPage() {
         </Section>
 
         <Section title="Zeitraum & Treffpunkt">
-          <div className="grid grid-cols-2 gap-[11px]">
+          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
             <Field label="Start">
               <input
                 required
@@ -545,7 +545,7 @@ export function AdminTourFormPage() {
               className={`${inputClass} font-mono font-medium`}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-[11px]">
+          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
             <Field label="WhatsApp">
               <input
                 value={form.whatsapp_group_url}
@@ -564,7 +564,7 @@ export function AdminTourFormPage() {
         </Section>
 
         <Section title="Teilnahme & Grenzen">
-          <div className="grid grid-cols-2 gap-[11px]">
+          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
             <Field label="Max. Fahrzeuge *">
               <input
                 required
@@ -585,7 +585,7 @@ export function AdminTourFormPage() {
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-[11px]">
+          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
             <Field label="Min. PS">
               <input
                 type="number"
@@ -649,7 +649,7 @@ export function AdminTourFormPage() {
         </Section>
 
         <Section title="Anmelde- & Check-in-Fenster">
-          <div className="grid grid-cols-2 gap-[11px]">
+          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
             <Field label="Anmeldung ab">
               <input
                 type="datetime-local"
@@ -676,7 +676,7 @@ export function AdminTourFormPage() {
             />
           </Field>
           {form.check_in_enabled && (
-            <div className="grid grid-cols-2 gap-[11px]">
+            <div className="grid min-w-0 grid-cols-2 gap-[11px]">
               <Field label="Check-in ab (min)">
                 <input
                   type="number"

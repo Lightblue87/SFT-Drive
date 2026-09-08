@@ -254,7 +254,7 @@ export function AdminTourStopsPage() {
           />
         </label>
 
-        <div className="grid grid-cols-2 gap-[11px]">
+        <div className="grid min-w-0 grid-cols-2 gap-[11px]">
           <label className="min-w-0">
             <span className={fieldLabel}>UHRZEIT</span>
             <input
