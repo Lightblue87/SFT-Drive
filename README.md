@@ -4,7 +4,7 @@
 
 Produktive App: `https://sft-drive.pages.dev`
 
-Die verbindliche Projekt- und Produktspezifikation steht in [`CLAUDE.md`](./CLAUDE.md). Die ausführliche gewachsene Detail-Spezifikation liegt zusätzlich in [`docs/CLAUDE_SPEC_BASELINE.md`](./docs/CLAUDE_SPEC_BASELINE.md) und wird von `CLAUDE.md` importiert.
+Die vollständige, verbindliche Projekt- und Produktspezifikation steht in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Status
 
