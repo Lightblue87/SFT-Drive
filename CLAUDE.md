@@ -4522,3 +4522,228 @@ Die Erkennung ist reine UX-Verbesserung. Die Berechtigung und Speicherung hänge
 - Keine zusätzlichen laufenden Kosten ohne ausdrückliche Entscheidung.
 - Historische Registrierungs- und Archivdaten müssen erhalten bleiben.
 - Nach jeder Phase Build, Linter und relevante RLS-/RPC-/Regressionstests ausführen.
+
+---
+
+## 35. Geplante Entwicklungsphasen 16–18
+
+Die folgenden Phasen sind **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**. Sie ergänzen die in §34 festgelegte Roadmap additiv und verwenden die bestehenden Tour-, Registrierungs-, Restaurant- und Notification-Strukturen weiter.
+
+Reihenfolge:
+
+```text
+Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen
+Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink
+Phase 18 — Vormerkung vor Öffnung der Touranmeldung
+```
+
+### 35.1 Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen
+
+Die organisatorische Kommunikation erfolgt überwiegend digital, insbesondere per E-Mail, WhatsApp, iMessage und vergleichbaren Diensten. Deshalb liegt der Schwerpunkt nicht auf Druck- oder PDF-Workflows, sondern auf einfach digital weiterverwendbaren Daten.
+
+Ziele:
+
+- Admin kann Teilnehmerdaten einer Tour als **CSV** exportieren.
+- Admin kann Restaurantbestellungen als **CSV** exportieren.
+- Zusätzlich soll eine kompakte Textzusammenfassung über die native Teilen-Funktion des Geräts weitergegeben werden können.
+- Wenn die Web Share API auf dem Gerät nicht verfügbar ist, dient `In Zwischenablage kopieren` als Fallback.
+- SFT Drive integriert dafür keine E-Mail-, WhatsApp- oder iMessage-API; das Betriebssystem bzw. der Browser übergibt den Inhalt an die vom Nutzer gewählte App.
+
+Teilnehmerexport:
+
+- ausschließlich für Admins,
+- standardmäßig nur organisatorisch notwendige Daten,
+- mindestens Username, Fahrzeughersteller, Modell, Leistung, Status und Personenzahl,
+- Klarname und Kennzeichen nur dann in einen Export aufnehmen, wenn der Admin diese Daten für den konkreten organisatorischen Zweck ausdrücklich auswählt,
+- keine Geburtsdaten, Auth-Daten oder sonstigen unnötigen Profildaten exportieren.
+
+Restaurant-Export:
+
+- aggregierte Gesamtmengen je Menüposition,
+- bestätigte Gesamtpersonenzahl,
+- optional fahrzeug-/registrierungsbezogene Detailansicht mit den bereits für Admins sichtbaren Bestelldaten,
+- keine zusätzliche Export-Datenhaltung aufbauen; Export immer aus dem aktuellen autorisierten Datenbestand erzeugen.
+
+Beispiel für teilbaren Text:
+
+```text
+Harz Tour — Teilnehmer
+18 bestätigte Fahrzeuge · 31 Personen
+
+S4shadow · Audi S4 · 440 PS · 2 Personen
+RS3Tom · Audi RS3 · 400 PS · 1 Person
+```
+
+Beispiel Restaurant:
+
+```text
+Restaurant Berggasthof
+31 Personen
+
+12 × Schnitzel
+8 × Burger
+6 × Currywurst
+5 × Veggie Bowl
+```
+
+Die Export-/Share-Funktionen dürfen bestehende RLS- und Admin-Grenzen niemals umgehen.
+
+### 35.2 Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink
+
+Für Ausfahrten wird bereits außerhalb von SFT Drive pro Tour eine WhatsApp-Gruppe für Austausch und Detailfragen genutzt. SFT Drive soll diese Kommunikation **nicht nachbauen**, sondern lediglich den passenden Gruppenlink sicher an die bestätigten Teilnehmer ausliefern.
+
+`tour_participant_details` kann dafür über eine neue Migration ergänzt werden um:
+
+```text
+whatsapp_group_url TEXT NULL
+```
+
+Regeln:
+
+- Feld ist pro Tour optional.
+- Admin kann den WhatsApp-Einladungslink in der Tourverwaltung hinterlegen und ändern.
+- Der Link ist Participant-Inhalt und darf nur an Admins und bestätigte Teilnehmer der jeweiligen Tour ausgeliefert werden.
+- `pending`, `waitlisted`, `rejected`, `cancelled`, normale Mitglieder ohne bestätigte Teilnahme und Visitor erhalten den Link nicht.
+- Der Link darf nicht in einer öffentlich lesbaren `tours`-Zeile gespeichert werden.
+- Externe URL sicher öffnen; bei neuen Fenstern `noopener`/`noreferrer` beachten.
+- Keine WhatsApp API, keine Chat-Synchronisation und kein automatisches Hinzufügen/Entfernen von Gruppenmitgliedern implementieren.
+- Die tatsächliche Gruppenmitgliedschaft wird weiterhin vollständig in WhatsApp verwaltet.
+
+Teilnehmer-UX:
+
+```text
+WhatsApp-Gruppe
+[ WhatsApp-Gruppe öffnen ]
+```
+
+Ist kein Link hinterlegt, wird kein WhatsApp-Button angezeigt.
+
+### 35.3 Phase 18 — Vormerkung vor Öffnung der Touranmeldung
+
+Touren können deutlich vor dem eigentlichen Anmeldestart veröffentlicht werden. Damit frühe Sichtbarkeit nicht dazu führt, dass lange im Voraus unverbindlich belegte Plätze die echte Kapazität blockieren, wird eine **Vormerkung** strikt von der verbindlichen Touranmeldung getrennt.
+
+Grundprinzip:
+
+```text
+Vormerken = Informiere mich, sobald die reguläre Anmeldung geöffnet ist.
+```
+
+Eine Vormerkung:
+
+- reserviert **keinen** Fahrzeugplatz,
+- zählt nicht gegen `max_vehicles`,
+- erzeugt keinen `pending`-, `confirmed`- oder `waitlisted`-Status,
+- verschafft keinen Vorrang und kein Vorbuchungsrecht,
+- wird nicht automatisch in eine Touranmeldung umgewandelt.
+
+Vorgeschlagenes Datenmodell:
+
+```text
+tour_interests
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id)
+user_id UUID REFERENCES auth.users(id)
+created_at TIMESTAMPTZ
+registration_open_notified_at TIMESTAMPTZ NULL
+UNIQUE(tour_id, user_id)
+```
+
+RLS / Aktionen:
+
+- nur eingeloggte User können sich vormerken,
+- User kann ausschließlich die eigene Vormerkung anlegen, lesen und entfernen,
+- Self-Service bevorzugt über kontrollierte RPCs bzw. eng gefasste RLS,
+- Admin darf pro Tour die Anzahl der Vormerkungen sehen,
+- Admin benötigt für die normale Übersicht keine privaten Profildaten der vorgemerkten User,
+- Account-Löschung muss die zugehörigen Vormerkungen sauber entfernen.
+
+Voraussetzung für eine Vormerkung:
+
+- Tour ist für den User sichtbar bzw. veröffentlicht,
+- `registration_open_at` liegt in der Zukunft,
+- die reguläre Anmeldung ist noch nicht geöffnet.
+
+Sobald die Anmeldung geöffnet ist, wird `Vormerken` durch die normale Touranmeldung ersetzt.
+
+Teilnehmer-UX vor dem Anmeldestart:
+
+```text
+Anmeldung öffnet am 01.03.2027 · 18:00 Uhr
+
+[ Für diese Tour vormerken ]
+```
+
+Nach Vormerkung:
+
+```text
+★ Für diese Tour vorgemerkt
+Du wirst benachrichtigt, sobald die Anmeldung öffnet.
+```
+
+Der User kann die Vormerkung vor dem Anmeldestart wieder entfernen.
+
+Admin-UX:
+
+```text
+Vorgemerkt: 27
+Max. Fahrzeuge: 20
+```
+
+Die Zahl dient ausschließlich als Interessensindikator und beeinflusst die spätere Kapazitätslogik nicht.
+
+#### Verbindliche Benachrichtigung beim Anmeldestart
+
+Wenn `registration_open_at` erreicht wird, müssen alle zu diesem Zeitpunkt noch vorgemerkten Nutzer automatisch benachrichtigt werden.
+
+Dafür die bestehende Notification-Infrastruktur verwenden:
+
+```text
+TOUR_REGISTRATION_OPEN
+```
+
+Mindestens immer als In-App-Notification. Zusätzlich als Web Push, sofern der betreffende User Push aktiviert hat.
+
+Beispiel:
+
+```text
+Anmeldung jetzt geöffnet
+
+Die Anmeldung für „Dolomiten Tour 2027“ ist jetzt möglich.
+
+[ Jetzt anmelden ]
+```
+
+Der Deep Link führt direkt zu:
+
+```text
+/tours/:slug
+```
+
+Dort erfolgt ausschließlich die bestehende reguläre Anmeldung. Erst diese Anmeldung entscheidet über `confirmed`, `pending` oder `waitlisted` und belegt gegebenenfalls einen Fahrzeugplatz.
+
+Benachrichtigungsregeln:
+
+- Empfänger werden serverseitig aus `tour_interests` ermittelt.
+- Nur aktuell vorgemerkte User werden benachrichtigt.
+- Eine vor Öffnung entfernte Vormerkung erhält keine Benachrichtigung.
+- `registration_open_notified_at` verhindert Doppelversand.
+- Die Notification darf nicht davon abhängen, dass irgendein Nutzer oder Admin die App gerade geöffnet hat.
+- Wird `registration_open_at` vor dem Versand geändert, gilt der neue tatsächliche Öffnungszeitpunkt.
+- Wird die Anmeldung durch den Admin früher geöffnet, werden die vorgemerkten Nutzer zeitnah beim tatsächlichen Öffnen benachrichtigt.
+- Bei einer abgesagten Tour darf keine Anmeldeöffnungs-Notification versendet werden.
+- Eine bereits versendete Öffnungsbenachrichtigung wird nicht allein wegen einer nachträglichen Zeitänderung automatisch erneut verschickt.
+
+Die bestehende serverseitige zeitgesteuerte Notification-/Push-Architektur ist zu erweitern; keine zweite unabhängige Push-Infrastruktur aufbauen.
+
+### 35.4 Gemeinsame Regeln für Phasen 16–18
+
+- Noch nicht implementierte Punkte niemals als produktiv vorhanden darstellen.
+- Bestehende Migrationen niemals rückwirkend ändern.
+- Neue Felder/Tabellen/RPCs nur über neue versionierte Migrationen ergänzen.
+- Bestehende Auth-, Tour-, Registrierungs-, Restaurant- und Notification-Architektur weiterverwenden.
+- Export- und Share-Funktionen dürfen keine zusätzlichen Leserechte erzeugen.
+- WhatsApp-Gruppenlinks bleiben geschützte Participant-Inhalte.
+- Vormerkungen bleiben strikt von verbindlichen Tourregistrierungen und Fahrzeugkapazität getrennt.
+- Zeitgesteuerte Notifications werden serverseitig ausgelöst und sind gegen Doppelversand abzusichern.
+- Keine kostenpflichtigen Kommunikations-APIs ohne ausdrückliche Zustimmung einführen.
+- Nach jeder Phase Build, Linter sowie relevante RLS-/RPC-/Regressionstests ausführen.
