@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useNotifications } from '@/features/notifications/useNotifications'
 import { PageLoading } from '@/components/PageLoading'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
+import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
 import { formatDate, formatTime } from '@/utils/date'
 import type { AppNotification } from '@/types/notification'
 
@@ -10,6 +12,7 @@ import type { AppNotification } from '@/types/notification'
 export function NotificationsPage() {
   const { notifications, loading, reload } = useNotifications()
   const navigate = useNavigate()
+  const [showRegionSettings, setShowRegionSettings] = useState(false)
 
   async function open(notification: AppNotification) {
     if (!notification.read_at) {
@@ -39,8 +42,39 @@ export function NotificationsPage() {
             <path d="M15 4 7 12l8 8" stroke="#f5f5f5" strokeWidth="2" />
           </svg>
         </button>
-        <div className="text-[22px] font-semibold leading-none">Mitteilungen</div>
+        <div className="flex-1 text-[22px] font-semibold leading-none">Mitteilungen</div>
+        <button
+          onClick={() => setShowRegionSettings((v) => !v)}
+          className={`tap-scale flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] border ${
+            showRegionSettings ? 'border-sft-red/50 bg-sft-red/10' : 'border-white/10 bg-[#131316]'
+          }`}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+              stroke={showRegionSettings ? '#f01a12' : '#c9c9ce'}
+              strokeWidth="1.8"
+            />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+              stroke={showRegionSettings ? '#f01a12' : '#c9c9ce'}
+              strokeWidth="1.8"
+            />
+          </svg>
+        </button>
       </div>
+
+      {showRegionSettings && (
+        <div className="px-[18px] pb-4">
+          <RegionNotificationPreferences />
+          <button
+            onClick={() => setShowRegionSettings(false)}
+            className="tap-scale mt-2.5 w-full rounded-xl border border-white/12 py-2.5 text-[13px] font-medium text-sft-gray"
+          >
+            Fertig
+          </button>
+        </div>
+      )}
 
       {notifications.length === 0 ? (
         <p className="px-[18px] text-sm text-sft-gray">Noch keine Mitteilungen.</p>

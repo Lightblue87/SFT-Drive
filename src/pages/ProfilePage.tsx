@@ -4,7 +4,6 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { useIsAdmin } from '@/features/auth/useIsAdmin'
 import { supabase } from '@/lib/supabase'
 import { usePushSubscription } from '@/features/notifications/usePushSubscription'
-import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
 import type { ArchiveEntry } from '@/types/tour'
 import type { Vehicle } from '@/types/vehicle'
 
@@ -186,10 +185,6 @@ export function ProfilePage() {
           )}
         </div>
       )}
-
-      <div className="mx-3.5 mt-4">
-        <RegionNotificationPreferences />
-      </div>
 
       <div className="mt-6 flex flex-col gap-2 px-3.5">
         {!showPasswordForm ? (
