@@ -105,6 +105,9 @@ export function ProfilePage() {
         <Link to="/profile/friends" className="rounded-md bg-sft-surface px-4 py-3">
           Freunde
         </Link>
+        <Link to="/profile/vehicles" className="rounded-md bg-sft-surface px-4 py-3">
+          Meine Fahrzeuge
+        </Link>
       </div>
 
       {permission !== 'unsupported' && permission !== 'granted' && (

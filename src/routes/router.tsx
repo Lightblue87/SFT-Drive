@@ -13,6 +13,7 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { ProfileToursPage } from '@/pages/ProfileToursPage'
 import { ProfileArchivePage } from '@/pages/ProfileArchivePage'
 import { ProfileFriendsPage } from '@/pages/ProfileFriendsPage'
+import { ProfileVehiclesPage } from '@/pages/ProfileVehiclesPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
 import { ImpressumPage } from '@/pages/ImpressumPage'
 import { DatenschutzPage } from '@/pages/DatenschutzPage'
@@ -78,6 +79,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ProfileFriendsPage />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/profile/vehicles',
+        element: (
+          <RequireAuth>
+            <ProfileVehiclesPage />
           </RequireAuth>
         ),
       },

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import type { Tour, RegistrationResult } from '@/types/tour'
 import { rpcErrorMessage } from '@/types/tour'
+import type { Vehicle } from '@/types/vehicle'
 
 interface Props {
   tour: Tour
@@ -34,6 +35,33 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   // gespeichert, muss es hier ergänzt werden (siehe CLAUDE.md §14.3, §6).
   const [needsDateOfBirth, setNeedsDateOfBirth] = useState(false)
   const [dateOfBirth, setDateOfBirth] = useState('')
+
+  // Persönliche Fahrzeuggarage (§34.2): reine Komfortfunktion zum Vorbefüllen
+  // des Formulars — die Anmeldung speichert weiterhin einen unabhängigen
+  // Snapshot, nie eine Referenz auf vehicles.id.
+  const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([])
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('vehicles')
+      .select('*')
+      .order('is_default', { ascending: false })
+      .order('manufacturer', { ascending: true })
+      .then(({ data }) => {
+        const vehicles = (data as Vehicle[]) ?? []
+        setSavedVehicles(vehicles)
+        const preferred = vehicles.find((v) => v.is_default) ?? vehicles[0]
+        if (preferred) applyVehicle(preferred)
+      })
+  }, [user])
+
+  function applyVehicle(v: Vehicle) {
+    setManufacturer(v.manufacturer)
+    setModel(v.model)
+    setPower(String(v.power_ps))
+    setLicensePlate(v.license_plate ?? '')
+  }
 
   useEffect(() => {
     if (!tour.min_driver_age || !user) return
@@ -107,6 +135,26 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
           Deine vorherige Anfrage für diese Tour wurde abgelehnt. Eine Neuanmeldung muss erneut vom
           Admin bestätigt werden.
         </p>
+      )}
+
+      {savedVehicles.length > 0 && (
+        <label className="flex flex-col gap-1 text-sm">
+          Gespeichertes Fahrzeug verwenden
+          <select
+            defaultValue={savedVehicles.find((v) => v.is_default)?.id ?? savedVehicles[0].id}
+            onChange={(e) => {
+              const v = savedVehicles.find((sv) => sv.id === e.target.value)
+              if (v) applyVehicle(v)
+            }}
+            className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+          >
+            {savedVehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.manufacturer} {v.model} · {v.power_ps} PS
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       <label className="flex flex-col gap-1 text-sm">

@@ -2765,6 +2765,16 @@ Klarnamenfreigabe — kein separater Freigabe-Schalter.
 ---
 
 ```text
+/profile/vehicles
+```
+
+Umgesetzt (Phase 13, §34.2): persönliche Fahrzeuggarage. Reine Komfortfunktion
+zum Vorbefüllen des Anmeldeformulars — die Touranmeldung speichert weiterhin
+einen unabhängigen Fahrzeug-Snapshot.
+
+---
+
+```text
 /profile/tours/:registrationId
 ```
 
@@ -2949,7 +2959,8 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
 ├── /profile
 │   ├── /profile/tours
 │   ├── /profile/archive
-│   └── /profile/friends
+│   ├── /profile/friends
+│   └── /profile/vehicles
 │
 ├── /notifications
 │
@@ -2986,6 +2997,7 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
 | `/profile/tours` | ❌ | ✅ | ✅ | ✅ |
 | `/profile/archive` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ |
 | `/profile/friends` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ |
+| `/profile/vehicles` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ |
 | `/notifications` | ❌ | ✅ eigener Inhalt | ✅ eigener Inhalt | ✅ eigener Inhalt |
 | `/admin` | ❌ | ❌ | ❌ | ✅ |
 | `/admin/tours/*` | ❌ | ❌ | ❌ | ✅ |
@@ -4247,13 +4259,17 @@ Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App 
 
 ## 34. Geplante Entwicklungsphasen 12–15
 
-Die folgenden Phasen sind **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**. Sie bauen additiv auf dem produktiven Stand der Phasen 1–11 auf. Aussagen in §28/§29, die diese vier Themen noch nur als allgemeine spätere Erweiterung aufführen, bleiben als Historienreferenz bestehen; für die konkrete Planung gilt dieser Abschnitt.
+Diese Phasen bauen additiv auf dem produktiven Stand der Phasen 1–11 auf. Aussagen in
+§28/§29, die diese vier Themen noch nur als allgemeine spätere Erweiterung aufführen,
+bleiben als Historienreferenz bestehen; für die konkrete Planung gilt dieser Abschnitt.
+Phase 12 und 13 sind inzwischen umgesetzt (siehe §34.1/§34.2); Phase 14 und 15 sind
+weiterhin **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**.
 
 Reihenfolge:
 
 ```text
-Phase 12 — Freunde und Klarnamenfreigabe
-Phase 13 — Persönliche Fahrzeuggarage
+Phase 12 — Freunde und Klarnamenfreigabe (umgesetzt)
+Phase 13 — Persönliche Fahrzeuggarage (umgesetzt)
 Phase 14 — Zeitgesteuerter Check-in am Treffpunkt
 Phase 15 — Tagesrouten für Mehrtagestouren
 ```
@@ -4369,6 +4385,18 @@ Regeln:
 - Eine spätere Änderung oder Löschung eines Garage-Fahrzeugs darf vergangene Touranmeldungen und das Tourenarchiv nicht verändern.
 - Mindest-/Maximalleistung und Kennzeichenpflicht werden weiterhin serverseitig anhand der in die Registrierung übernommenen Werte geprüft.
 - Bestehende Nutzer und bestehende Registrierungsflows müssen rückwärtskompatibel bleiben; die Garage darf nicht erzwingen, dass historische oder bereits aktive Registrierungen migriert werden.
+
+**Umsetzungsstand:** implementiert (Migration `20260908093000_vehicle_garage.sql`,
+lokal gegen eine echte `authenticated`-Rolle getestet: RLS isoliert fremde
+Fahrzeuge vollständig, ein DB-Trigger sorgt dafür, dass beim Markieren eines
+Fahrzeugs als Standard automatisch genau ein Standardfahrzeug pro User
+bestehen bleibt). Reines Self-Service-CRUD über RLS (kein RPC nötig, analog
+`push_subscriptions`) unter `/profile/vehicles`. Das Anmeldeformular
+(`RegistrationForm`) lädt die gespeicherten Fahrzeuge, wählt das
+Standardfahrzeug vor und befüllt die Formularfelder daraus — die Auswahl
+kopiert die Werte lediglich als Ausgangspunkt in die Formularfelder, die
+RPC `register_for_tour` erhält weiterhin nur die Snapshot-Werte, nie eine
+`vehicles.id`.
 
 ### 34.3 Phase 14 — Zeitgesteuerter Check-in am Treffpunkt
 
