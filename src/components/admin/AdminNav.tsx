@@ -19,14 +19,14 @@ export function AdminNav() {
       <NavLink to="/admin/tours" className={linkClass}>
         Tourenverwaltung
       </NavLink>
-      <NavLink to="/admin/settings" className={linkClass}>
-        Impressum &amp; Datenschutz
+      <NavLink to="/admin/notifications" className={linkClass}>
+        Mitteilungen
       </NavLink>
       <NavLink to="/admin/users" className={linkClass}>
         Nutzer
       </NavLink>
-      <NavLink to="/admin/notifications" className={linkClass}>
-        Mitteilungen
+      <NavLink to="/admin/settings" className={linkClass}>
+        Impressum &amp; Datenschutz
       </NavLink>
     </div>
   )
