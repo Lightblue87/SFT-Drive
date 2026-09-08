@@ -125,8 +125,11 @@ export function AdminDashboardPage() {
         </Link>
       </div>
 
-      <Link to="/admin/tours" className="mt-3.5 block text-center text-sm underline">
-        Zur Tourenverwaltung →
+      <Link
+        to="/admin/tours"
+        className="tap-scale mt-2.5 block rounded-xl border border-white/13 bg-[#17171b] py-3.5 text-center text-[15px] font-medium"
+      >
+        Tourenverwaltung
       </Link>
     </div>
   )
