@@ -54,6 +54,13 @@ input[type='datetime-local'] {
   min-inline-size: 0;
   -webkit-appearance: none;
   appearance: none;
+  /* Ohne -webkit-appearance schrumpft ein LEERES date-/datetime-local-Feld in
+     WebKit auf eine geringere Höhe als dasselbe Feld mit gesetztem Wert (die
+     eigene vertikale Innenabstand-Klasse allein reicht nicht) — als feste
+     Untergrenze auf die übliche Feldhöhe geklemmt, damit leer und befüllt
+     gleich hoch bleiben. */
+  min-height: 3.375rem;
+  line-height: 1.5;
 }
 
 @layer utilities {
