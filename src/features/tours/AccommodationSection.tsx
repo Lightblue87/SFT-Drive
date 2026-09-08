@@ -76,69 +76,73 @@ export function AccommodationSection({
   }
 
   return (
-    <div className="rounded-md bg-sft-surface p-4 text-sm">
-      <h2 className="mb-2 font-medium">Übernachtungen</h2>
-      {error && <p className="mb-2 text-sft-red">{error}</p>}
-      <ul className="flex flex-col gap-3">
+    <div className="mt-3.5 rounded-2xl border border-white/9 bg-sft-card overflow-hidden">
+      <div className="px-4 pt-3.5 pb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+        ÜBERNACHTUNGEN
+      </div>
+      {error && <p className="px-4 pb-2 text-sm text-sft-red">{error}</p>}
+      <div className="flex flex-col">
         {nights.map((night, i) => {
           const suggestions = hotelSuggestions.filter((s) => s.night_date === night)
           const confirmed = confirmedNights.has(night)
 
           return (
-            <li key={night} className="flex flex-col gap-2 rounded-md bg-sft-black p-3">
-              <div className="font-medium">
+            <div key={night} className="border-t border-white/6 px-4 py-3.5">
+              <div className="text-[14px] font-semibold">
                 Nacht {i + 1} · {formatDate(night)}
               </div>
 
               {suggestions.length > 0 && (
-                <ul className="flex flex-col gap-2">
+                <div className="mt-2 flex flex-col gap-2.5">
                   {suggestions.map((s) => (
-                    <li key={s.id}>
-                      <div>{s.name}</div>
-                      {s.address && <div className="text-sft-gray">{s.address}</div>}
-                      {s.note && <div className="text-sft-gray">{s.note}</div>}
+                    <div key={s.id} className="text-[13px]">
+                      <div className="font-medium">{s.name}</div>
+                      {s.address && <div className="mt-0.5 text-sft-gray">{s.address}</div>}
+                      {s.note && <div className="mt-0.5 text-sft-gray">{s.note}</div>}
                       {s.url && (
                         <a
                           href={s.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sft-red underline"
+                          className="mt-1 inline-block font-medium text-sft-red underline"
                         >
                           Hotel öffnen
                         </a>
                       )}
                       {s.booking_deadline && (
-                        <div className="text-sft-gray">Buchung bis {formatDate(s.booking_deadline)}</div>
+                        <div className="mt-0.5 font-mono text-[11px] text-sft-gray-dim">
+                          BUCHUNG BIS {formatDate(s.booking_deadline).toUpperCase()}
+                        </div>
                       )}
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
 
               {confirmed ? (
-                <div className="flex items-center justify-between text-sft-gray">
-                  <span>✓ Übernachtung bestätigt</span>
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-[#5fd3b4]">✓ Übernachtung bestätigt</span>
                   <button
                     onClick={() => toggle(night)}
                     disabled={submittingNight === night}
-                    className="text-xs underline disabled:opacity-60"
+                    className="font-mono text-[11px] text-sft-gray underline disabled:opacity-60"
                   >
-                    zurücknehmen
+                    ZURÜCKNEHMEN
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => toggle(night)}
                   disabled={submittingNight === night}
-                  className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs disabled:opacity-60"
+                  className="tap-scale mt-2.5 rounded-lg border border-white/13 bg-sft-surface2 px-3.5 py-2 text-[12px] font-medium disabled:opacity-60"
                 >
                   Übernachtung bestätigen
                 </button>
               )}
-            </li>
+            </div>
           )
         })}
-      </ul>
+      </div>
     </div>
   )
 }

@@ -109,17 +109,19 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
   const totalSelected = Object.values(quantities).reduce((sum, q) => sum + q, 0)
 
   return (
-    <div className="mt-3 rounded-md bg-sft-black p-3">
-      <p className="font-medium">Essen vorbestellen</p>
-      {settings.restaurant_note && <p className="mt-1 text-sft-gray">{settings.restaurant_note}</p>}
+    <div className="mt-3.5 rounded-2xl border border-sft-amber/25 bg-sft-amber/[0.05] p-3.5">
+      <div className="text-[14px] font-semibold text-sft-amber">Essen vorbestellen</div>
+      {settings.restaurant_note && (
+        <p className="mt-1 text-[12px] text-sft-gray">{settings.restaurant_note}</p>
+      )}
 
       {notYetOpen ? (
-        <p className="mt-2 text-sft-gray">Bestellung ist noch nicht möglich.</p>
+        <p className="mt-2 font-mono text-[11px] text-sft-gray">BESTELLUNG IST NOCH NICHT MÖGLICH</p>
       ) : closed ? (
         <>
-          <p className="mt-2 text-sft-gray">Bestellung geschlossen.</p>
+          <p className="mt-2 font-mono text-[11px] text-sft-gray">BESTELLUNG GESCHLOSSEN</p>
           {existingOrderStatus === 'submitted' && totalSelected > 0 && (
-            <ul className="mt-2 text-sft-gray">
+            <ul className="mt-2 flex flex-col gap-1 text-[13px] text-sft-gray">
               {items
                 .filter((i) => quantities[i.id] > 0)
                 .map((i) => (
@@ -132,48 +134,50 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
         </>
       ) : (
         <>
-          <ul className="mt-2 flex flex-col gap-2">
+          <ul className="mt-2.5 flex flex-col gap-2.5">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-2">
-                <span>{item.name}</span>
-                <div className="flex items-center gap-2">
+              <li key={item.id} className="flex items-center justify-between gap-3">
+                <span className="text-[13px]">{item.name}</span>
+                <div className="flex items-center gap-2.5">
                   <button
                     type="button"
                     onClick={() =>
                       setQuantities((prev) => ({ ...prev, [item.id]: Math.max(0, (prev[item.id] ?? 0) - 1) }))
                     }
-                    className="h-7 w-7 rounded-md border border-sft-surface2"
+                    className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-sft-white"
                   >
                     −
                   </button>
-                  <span className="w-4 text-center">{quantities[item.id] ?? 0}</span>
+                  <span className="w-4 text-center font-mono text-sm font-bold">{quantities[item.id] ?? 0}</span>
                   <button
                     type="button"
                     onClick={() => setQuantities((prev) => ({ ...prev, [item.id]: (prev[item.id] ?? 0) + 1 }))}
-                    className="h-7 w-7 rounded-md border border-sft-surface2"
+                    className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-sft-white"
                   >
                     +
                   </button>
                 </div>
               </li>
             ))}
-            {items.length === 0 && <p className="text-sft-gray">Aktuell keine Gerichte verfügbar.</p>}
+            {items.length === 0 && (
+              <p className="font-mono text-[11px] text-sft-gray">AKTUELL KEINE GERICHTE VERFÜGBAR</p>
+            )}
           </ul>
 
           {totalSelected !== personCount && (
-            <p className="mt-2 text-sft-gray">
+            <p className="mt-2.5 text-[12px] leading-relaxed text-sft-gray">
               Du hast {personCount} {personCount === 1 ? 'Person' : 'Personen'} für diese Tour angegeben, aber
               aktuell {totalSelected} {totalSelected === 1 ? 'Gericht' : 'Gerichte'} ausgewählt.
             </p>
           )}
 
-          {error && <p className="mt-2 text-sft-red">{error}</p>}
-          {saved && <p className="mt-2 text-sft-gray">Bestellung gespeichert.</p>}
+          {error && <p className="mt-2.5 text-sm text-sft-red">{error}</p>}
+          {saved && <p className="mt-2.5 font-mono text-[11px] text-sft-gray">BESTELLUNG GESPEICHERT</p>}
 
           <button
             onClick={submit}
             disabled={saving || items.length === 0}
-            className="mt-3 rounded-md bg-sft-red px-4 py-2 text-sm font-medium disabled:opacity-60"
+            className="tap-scale mt-3.5 w-full rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3 text-[14px] font-semibold text-white disabled:opacity-60"
           >
             {saving ? 'Wird gespeichert…' : existingOrderStatus === 'submitted' ? 'Bestellung ändern' : 'Bestellen'}
           </button>

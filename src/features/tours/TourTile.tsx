@@ -3,70 +3,84 @@ import type { TourWithStats } from '@/features/tours/useTours'
 import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
 
 const OWN_STATUS_LABEL: Record<string, string> = {
-  confirmed: 'Du bist dabei',
-  pending: 'Freigabe ausstehend',
-  waitlisted: 'Warteliste',
-  rejected: 'Anfrage abgelehnt',
+  confirmed: 'DU BIST DABEI',
+  pending: 'FREIGABE OFFEN',
+  waitlisted: 'WARTELISTE',
+  rejected: 'ABGELEHNT',
+}
+
+const OWN_STATUS_CLASS: Record<string, string> = {
+  confirmed: 'bg-sft-red/16 text-[#ff6b63]',
+  pending: 'bg-sft-amber/14 text-sft-amber',
+  waitlisted: 'bg-sft-amber/14 text-sft-amber',
+  rejected: 'bg-white/6 text-sft-gray',
 }
 
 /**
- * Quadratische 1:1-Tourkachel (siehe CLAUDE.md §13.10–§13.14). Die gesamte
- * Kachel ist ein Touch-Ziel, kein separater "Mehr erfahren"-Button.
+ * Tourzeile (siehe CLAUDE.md §13.10–§13.14) — die gesamte Zeile ist ein
+ * Touch-Ziel, kein separater "Mehr erfahren"-Button.
  */
 export function TourTile({ tour, stats, ownStatus }: TourWithStats) {
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
   const dayInfo = multiDay ? currentTourDay(tour.start_date, tour.end_date) : null
 
+  const slotsLabel =
+    ownStatus && OWN_STATUS_LABEL[ownStatus]
+      ? OWN_STATUS_LABEL[ownStatus]
+      : stats
+        ? stats.is_full
+          ? 'AUSGEBUCHT'
+          : `${stats.free_vehicle_slots} PLÄTZE FREI`
+        : null
+
+  const slotsClass =
+    ownStatus && OWN_STATUS_CLASS[ownStatus]
+      ? OWN_STATUS_CLASS[ownStatus]
+      : stats?.is_full
+        ? 'bg-white/6 text-sft-gray'
+        : 'bg-white/6 text-[#c9c9ce]'
+
   return (
-    <Link to={`/tours/${tour.slug}`} className="block">
-      <h3 className="mb-2 text-base font-semibold">{tour.title}</h3>
-
-      <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-sft-surface">
+    <Link
+      to={`/tours/${tour.slug}`}
+      className="tap-scale flex items-center gap-3.5 rounded-2xl border border-white/9 bg-gradient-to-b from-[#141417] to-[#0f0f12] p-2.5 text-left"
+    >
+      <div className="flex h-[74px] w-[74px] flex-none items-center justify-center overflow-hidden rounded-xl border border-white/6 bg-[repeating-linear-gradient(135deg,#1b1b1f_0_6px,#141418_6px_12px)]">
         {tour.cover_image_url ? (
-          <img
-            src={tour.cover_image_url}
-            alt=""
-            className="h-full w-full object-cover"
-          />
+          <img src={tour.cover_image_url} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sft-gray">
-            SFT Drive
-          </div>
-        )}
-
-        {stats && (
-          <span className="absolute left-2 top-2 rounded-full bg-sft-black/80 px-2.5 py-1 text-xs font-medium">
-            {stats.is_full
-              ? 'Ausgebucht'
-              : stats.free_vehicle_slots === 1
-                ? '1 Platz frei'
-                : `${stats.free_vehicle_slots} Plätze frei`}
+          <span className="text-center font-mono text-[8px] leading-tight text-sft-gray-dim">
+            TOUR
+            <br />
+            FOTO
           </span>
         )}
+      </div>
 
-        {ownStatus && OWN_STATUS_LABEL[ownStatus] && (
-          <span className="absolute right-2 top-2 rounded-full bg-sft-red px-2.5 py-1 text-xs font-medium">
-            {OWN_STATUS_LABEL[ownStatus]}
-          </span>
-        )}
-
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-sft-black/90 to-transparent p-3 text-xs text-sft-white">
-          <div>
-            {formatDateRange(tour.start_date, tour.end_date)}
-            {multiDay && ` · ${tourDayCount(tour.start_date, tour.end_date)} Tage`}
-            {dayInfo && ` · Läuft aktuell · Tag ${dayInfo} von ${tourDayCount(tour.start_date, tour.end_date)}`}
-          </div>
-          <div className="text-sft-gray">
-            {tour.region}
-            {tour.route_length_km != null && ` · ${tour.route_length_km} km`}
-          </div>
-          {stats && (
-            <div className="text-sft-gray">
-              {stats.confirmed_vehicles} / {stats.max_vehicles} Fahrzeuge
-            </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+        <div className="truncate text-[15px] font-semibold leading-tight">{tour.title}</div>
+        <div className="font-mono text-xs text-sft-gray">
+          {formatDateRange(tour.start_date, tour.end_date)}
+          {multiDay && ` · ${tourDayCount(tour.start_date, tour.end_date)} Tage`}
+          {dayInfo && ` · läuft`}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {tour.route_length_km != null && (
+            <span className="rounded-md bg-white/6 px-1.5 py-0.5 font-mono text-[10px] font-medium text-[#c9c9ce]">
+              {tour.route_length_km} KM
+            </span>
+          )}
+          {slotsLabel && (
+            <span className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium ${slotsClass}`}>
+              {slotsLabel}
+            </span>
           )}
         </div>
       </div>
+
+      <svg width="8" height="14" viewBox="0 0 8 14" fill="none" className="flex-none">
+        <path d="M1 1l6 6-6 6" stroke="#5e5e66" strokeWidth="1.8" />
+      </svg>
     </Link>
   )
 }

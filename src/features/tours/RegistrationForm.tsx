@@ -16,6 +16,10 @@ interface Props {
   wasRejected?: boolean
 }
 
+const fieldLabel = 'font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim'
+const fieldInput =
+  'mt-2 w-full rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[15px] text-sft-white outline-none focus:border-sft-red/60'
+
 /**
  * Fahrzeugbezogenes Anmeldeformular (siehe CLAUDE.md §14.3). Die eigentliche
  * Kapazitäts-/Anforderungsprüfung passiert ausschließlich serverseitig in
@@ -27,7 +31,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   const [model, setModel] = useState('')
   const [power, setPower] = useState('')
   const [licensePlate, setLicensePlate] = useState('')
-  const [passengerCount, setPassengerCount] = useState('0')
+  const [passengerCount, setPassengerCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -40,6 +44,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   // des Formulars — die Anmeldung speichert weiterhin einen unabhängigen
   // Snapshot, nie eine Referenz auf vehicles.id.
   const [savedVehicles, setSavedVehicles] = useState<Vehicle[]>([])
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -61,6 +66,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
     setModel(v.model)
     setPower(String(v.power_ps))
     setLicensePlate(v.license_plate ?? '')
+    setSelectedVehicleId(v.id)
   }
 
   useEffect(() => {
@@ -106,7 +112,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
       p_vehicle_model: model,
       p_vehicle_power_ps: Number(power),
       p_license_plate: licensePlate || null,
-      p_passenger_count: Number(passengerCount),
+      p_passenger_count: passengerCount,
     })
 
     setSubmitting(false)
@@ -126,101 +132,167 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   }
 
   const submitLabel =
-    !wasRejected && tour.confirmation_mode === 'automatic' ? 'Verbindlich anmelden' : 'Teilnahme anfragen'
+    !wasRejected && tour.confirmation_mode === 'automatic' ? 'Anmeldung senden' : 'Teilnahme anfragen'
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
       {wasRejected && (
-        <p className="rounded-md bg-sft-surface p-3 text-sm text-sft-gray">
+        <div className="rounded-xl border border-white/9 bg-sft-card px-3.5 py-3.5 text-[13px] leading-relaxed text-sft-gray">
           Deine vorherige Anfrage für diese Tour wurde abgelehnt. Eine Neuanmeldung muss erneut vom
           Admin bestätigt werden.
-        </p>
+        </div>
       )}
 
       {savedVehicles.length > 0 && (
-        <label className="flex flex-col gap-1 text-sm">
-          Gespeichertes Fahrzeug verwenden
-          <select
-            defaultValue={savedVehicles.find((v) => v.is_default)?.id ?? savedVehicles[0].id}
-            onChange={(e) => {
-              const v = savedVehicles.find((sv) => sv.id === e.target.value)
-              if (v) applyVehicle(v)
-            }}
-            className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
-          >
-            {savedVehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.manufacturer} {v.model} · {v.power_ps} PS
-              </option>
-            ))}
-          </select>
-        </label>
+        <div>
+          <span className={fieldLabel}>FAHRZEUG AUS DEINER GARAGE</span>
+          <div className="mt-2 flex flex-col gap-2">
+            {savedVehicles.map((v) => {
+              const active = selectedVehicleId === v.id
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => applyVehicle(v)}
+                  className={`tap-scale flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors ${
+                    active ? 'border-sft-red/55 bg-sft-red/8' : 'border-white/9 bg-sft-card'
+                  }`}
+                >
+                  <span
+                    className={`flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full border-2 ${
+                      active ? 'border-sft-red' : 'border-white/22'
+                    }`}
+                  >
+                    {active && <span className="h-2 w-2 rounded-full bg-sft-red" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-semibold">
+                      {v.manufacturer} {v.model}
+                    </span>
+                    <span className="mt-1 block font-mono text-[11px] text-sft-gray">
+                      {v.license_plate ?? '—'}
+                    </span>
+                  </span>
+                  <span className="font-mono text-[16px] font-bold">
+                    {v.power_ps}
+                    <span className="text-[9px] text-sft-gray"> PS</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        Hersteller *
+      <label>
+        <span className={fieldLabel}>HERSTELLER *</span>
         <input
           required
           value={manufacturer}
-          onChange={(e) => setManufacturer(e.target.value)}
-          className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+          onChange={(e) => {
+            setManufacturer(e.target.value)
+            setSelectedVehicleId(null)
+          }}
+          placeholder="Porsche"
+          className={fieldInput}
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Modell *
+      <label>
+        <span className={fieldLabel}>MODELL *</span>
         <input
           required
           value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+          onChange={(e) => {
+            setModel(e.target.value)
+            setSelectedVehicleId(null)
+          }}
+          placeholder="911 Carrera S"
+          className={fieldInput}
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Leistung in PS *
-        <input
-          required
-          type="number"
-          min={1}
-          value={power}
-          onChange={(e) => setPower(e.target.value)}
-          className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
-        />
-      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label>
+          <span className={fieldLabel}>LEISTUNG (PS) *</span>
+          <input
+            required
+            type="number"
+            min={1}
+            inputMode="numeric"
+            value={power}
+            onChange={(e) => {
+              setPower(e.target.value)
+              setSelectedVehicleId(null)
+            }}
+            placeholder="450"
+            className={`${fieldInput} font-mono font-semibold`}
+          />
+        </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Kennzeichen {tour.license_plate_required ? '*' : '(optional)'}
-        <input
-          required={tour.license_plate_required}
-          value={licensePlate}
-          onChange={(e) => setLicensePlate(e.target.value)}
-          className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
-        />
-      </label>
+        <label>
+          <span className={fieldLabel}>
+            KENNZEICHEN {tour.license_plate_required ? '*' : '(OPTIONAL)'}
+          </span>
+          <input
+            required={tour.license_plate_required}
+            value={licensePlate}
+            onChange={(e) => {
+              setLicensePlate(e.target.value.toUpperCase())
+              setSelectedVehicleId(null)
+            }}
+            placeholder="KA-SF 911"
+            className={`${fieldInput} font-mono font-semibold tracking-wide`}
+          />
+        </label>
+      </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Anzahl Beifahrer / zusätzliche Personen
-        <input
-          type="number"
-          min={0}
-          value={passengerCount}
-          onChange={(e) => setPassengerCount(e.target.value)}
-          className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
-        />
-      </label>
+      <div className="flex items-center justify-between rounded-xl border border-white/9 bg-sft-card px-3.5 py-3.5">
+        <div>
+          <div className="text-[14px] font-medium">Personen im Fahrzeug</div>
+          <div className="mt-1 font-mono text-[11px] text-sft-gray">FAHRER + BEIFAHRER</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPassengerCount((n) => Math.max(0, n - 1))}
+            className="tap-scale h-9 w-9 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-lg text-sft-white"
+          >
+            −
+          </button>
+          <span className="min-w-[20px] text-center font-mono text-lg font-bold">{passengerCount}</span>
+          <button
+            type="button"
+            onClick={() => setPassengerCount((n) => Math.min(4, n + 1))}
+            className="tap-scale h-9 w-9 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-lg text-sft-white"
+          >
+            +
+          </button>
+        </div>
+      </div>
 
       {needsDateOfBirth && (
-        <label className="flex flex-col gap-1 text-sm">
-          Geburtsdatum * (für die Mindestaltersprüfung dieser Tour erforderlich)
+        <label>
+          <span className={fieldLabel}>GEBURTSDATUM * · FÜR MINDESTALTER</span>
           <input
             required
             type="date"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+            className={`${fieldInput} font-mono`}
           />
         </label>
+      )}
+
+      {(tour.min_power_ps != null || tour.min_driver_age != null) && (
+        <div className="rounded-xl border border-sft-amber/30 bg-sft-amber/[0.07] px-3.5 py-3.5 text-xs leading-relaxed text-[#e6c07a]">
+          {tour.min_power_ps != null && `Mindestleistung ${tour.min_power_ps} PS`}
+          {tour.min_driver_age != null && ` · Mindestalter ${tour.min_driver_age}`}
+          {' · '}
+          {!wasRejected && tour.confirmation_mode === 'automatic'
+            ? 'Bestätigung erfolgt automatisch, solange Plätze frei sind.'
+            : 'Die Tourleitung prüft deine Anfrage manuell.'}
+        </div>
       )}
 
       {error && <p className="text-sm text-sft-red">{error}</p>}
@@ -228,7 +300,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
       <button
         type="submit"
         disabled={submitting}
-        className="mt-2 rounded-md bg-sft-red px-4 py-2.5 font-medium text-sft-white disabled:opacity-60"
+        className="tap-scale mt-1 rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-4 text-[16px] font-semibold text-white shadow-[0_12px_26px_-12px_#e10600] disabled:opacity-60"
       >
         {submitting ? 'Wird gesendet…' : submitLabel}
       </button>

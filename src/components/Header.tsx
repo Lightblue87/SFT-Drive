@@ -7,12 +7,14 @@ export function Header() {
 
   return (
     <header
-      className="sticky top-0 z-10 flex items-center justify-between border-b border-sft-surface2 bg-sft-black/95 px-4 backdrop-blur"
-      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.625rem)', paddingBottom: '0.625rem' }}
+      className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/8 bg-sft-black/95 px-4 backdrop-blur-md"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <span className="text-sft-red">SFT</span>
-        <span>Drive</span>
+      <Link to="/" className="flex items-center gap-2.5">
+        <img src="/icons/icon-192.png" alt="" className="h-7 w-7 rounded-lg" />
+        <span className="font-sans text-[15px] font-bold tracking-[0.14em]">
+          SFT<span className="text-sft-red"> DRIVE</span>
+        </span>
       </Link>
 
       {user ? (
@@ -20,7 +22,7 @@ export function Header() {
           <NotificationBell />
           <Link
             to="/profile"
-            className="rounded-full bg-sft-surface px-3 py-1.5 text-sm text-sft-white"
+            className="tap-scale rounded-xl border border-white/10 bg-gradient-to-b from-[#17171a] to-[#101013] px-3.5 py-2 text-sm font-medium text-sft-white"
           >
             Profil
           </Link>
@@ -28,7 +30,7 @@ export function Header() {
       ) : (
         <Link
           to="/login"
-          className="rounded-full bg-sft-red px-3 py-1.5 text-sm font-medium text-sft-white"
+          className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_-10px_#e10600]"
         >
           Login
         </Link>

@@ -6,6 +6,10 @@ html {
   color-scheme: dark;
 }
 
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Verhindert automatisches Hineinzoomen von iOS Safari beim Fokussieren von
    Formularfeldern — passiert, sobald die effektive Schriftgröße unter 16px
    liegt (unsere Inputs erben sonst text-sm/14px von umschließenden Labels). */
@@ -13,4 +17,39 @@ input,
 textarea,
 select {
   font-size: 16px;
+}
+
+@layer utilities {
+  .tap-scale {
+    transition: transform 120ms ease;
+  }
+  .tap-scale:active {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.animate-fade-in {
+  animation: fade-in 160ms ease;
 }

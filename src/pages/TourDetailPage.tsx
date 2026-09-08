@@ -3,6 +3,7 @@ import { useTourDetail } from '@/features/tours/useTourDetail'
 import { RegistrationForm } from '@/features/tours/RegistrationForm'
 import { PassengerCountForm } from '@/features/tours/PassengerCountForm'
 import { PageLoading } from '@/components/PageLoading'
+import { BottomSheet } from '@/components/BottomSheet'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useIsAdmin } from '@/features/auth/useIsAdmin'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +23,15 @@ const STATUS_MESSAGE: Record<string, string> = {
   rejected: 'Deine Anfrage wurde leider abgelehnt.',
 }
 
+const factLabel = 'font-mono text-[9px] tracking-[0.16em] text-sft-gray-dim'
+const factValue = 'mt-1.5 font-mono text-[15px] font-semibold leading-tight text-sft-white'
+const sectionLabel = 'px-4 pt-3.5 pb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim'
+const card = 'mt-3.5 rounded-2xl border border-white/9 bg-sft-card overflow-hidden'
+const linkButton =
+  'tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3 text-center text-[13px] font-semibold text-white'
+const linkButtonGhost =
+  'tap-scale rounded-xl border border-white/12 bg-[#17171b] py-3 text-center text-[13px] font-medium text-sft-white'
+
 /**
  * Öffentliche Tourdetailseite mit zustandsabhängiger Erweiterung
  * (Visitor / Member / Confirmed Participant / Admin, siehe CLAUDE.md §14).
@@ -33,6 +43,7 @@ export function TourDetailPage() {
   const { data, loading, notFound, reload } = useTourDetail(slug)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null)
+  const [regSheetOpen, setRegSheetOpen] = useState(false)
 
   useEffect(() => {
     if (data?.ownRegistration?.status !== 'waitlisted') {
@@ -68,8 +79,7 @@ export function TourDetailPage() {
     stages,
     hotelSuggestions,
     ownAccommodationConfirmations,
-  } =
-    data
+  } = data
   // Cancelled/rejected sind keine aktiven Anmeldungen — die RPC erlaubt eine
   // Neuanmeldung in diesem Fall ausdrücklich (kontrollierte Reaktivierung,
   // siehe CLAUDE.md §8.7), das Formular muss dafür also wieder sichtbar sein.
@@ -77,9 +87,14 @@ export function TourDetailPage() {
     ownRegistration && ownRegistration.status !== 'cancelled' && ownRegistration.status !== 'rejected'
       ? ownRegistration
       : null
+  const confirmed = activeRegistration?.status === 'confirmed'
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
   const dayInfo = multiDay ? currentTourDay(tour.start_date, tour.end_date) : null
   const returnTo = encodeURIComponent(`/tours/${tour.slug}`)
+  const registrationNotYetOpen = Boolean(
+    tour.registration_open_at && new Date(tour.registration_open_at) > new Date(),
+  )
+  const canRegister = Boolean(user && memberDetails && !activeRegistration && !registrationNotYetOpen)
 
   async function handleCancel() {
     setCancelError(null)
@@ -99,97 +114,128 @@ export function TourDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="text-xl font-semibold">{tour.title}</h1>
-
-      <div className="mt-3 aspect-square w-full overflow-hidden rounded-lg bg-sft-surface">
-        {tour.cover_image_url ? (
+    <div className="pb-8">
+      <div className="relative h-[220px] bg-[repeating-linear-gradient(115deg,#1e1e23_0_10px,#15151a_10px_20px)]">
+        {tour.cover_image_url && (
           <img src={tour.cover_image_url} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sft-gray">SFT Drive</div>
         )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-sft-black" />
+        <div className="absolute inset-x-0 bottom-0 px-[18px] pb-3.5">
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            <span
+              className={`rounded-md px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.1em] ${
+                confirmed ? 'bg-sft-red text-white' : 'bg-white/12 text-sft-white'
+              }`}
+            >
+              {confirmed
+                ? 'DU BIST DABEI'
+                : stats
+                  ? stats.is_full
+                    ? 'AUSGEBUCHT'
+                    : `${stats.free_vehicle_slots} PLÄTZE FREI`
+                  : ''}
+            </span>
+            {multiDay && (
+              <span className="rounded-md bg-white/12 px-2.5 py-1 font-mono text-[10px] font-medium tracking-[0.1em] text-sft-white backdrop-blur">
+                {tourDayCount(tour.start_date, tour.end_date)} TAGE
+              </span>
+            )}
+            {dayInfo && (
+              <span className="rounded-md bg-sft-red/90 px-2.5 py-1 font-mono text-[10px] font-medium tracking-[0.1em] text-white">
+                LÄUFT · TAG {dayInfo}
+              </span>
+            )}
+          </div>
+          <h1 className="text-balance text-[27px] font-semibold leading-[1.06] tracking-tight">
+            {tour.title}
+          </h1>
+        </div>
       </div>
 
-      <div className="mt-4 space-y-1 text-sm">
-        <div>
-          {formatDateRange(tour.start_date, tour.end_date)}
-          {multiDay && ` · ${tourDayCount(tour.start_date, tour.end_date)} Tage`}
-        </div>
-        {dayInfo && (
-          <div className="text-sft-red">
-            Läuft aktuell · Tag {dayInfo} von {tourDayCount(tour.start_date, tour.end_date)}
+      <div className="mx-3.5">
+        <div className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/9 bg-white/6">
+          <div className="bg-sft-card px-3.5 py-3">
+            <div className={factLabel}>DATUM</div>
+            <div className={factValue}>{formatDateRange(tour.start_date, tour.end_date)}</div>
           </div>
-        )}
-        <div className="text-sft-gray">
-          {tour.region}
-          {tour.route_length_km != null && ` · ${tour.route_length_km} km`}
-        </div>
-        {stats && (
-          <div className="text-sft-gray">
-            {stats.is_full ? 'Ausgebucht' : `${stats.free_vehicle_slots} von ${stats.max_vehicles} Fahrzeugplätzen frei`}
+          <div className="bg-sft-card px-3.5 py-3">
+            <div className={factLabel}>REGION</div>
+            <div className={factValue}>{tour.region}</div>
           </div>
-        )}
-        <div className="text-sft-gray">
-          {tour.min_power_ps != null && `Mindestleistung ${tour.min_power_ps} PS`}
-          {tour.max_power_ps != null && ` · Maximal ${tour.max_power_ps} PS`}
-          {tour.min_driver_age != null && ` · Mindestalter ${tour.min_driver_age}`}
+          <div className="bg-sft-card px-3.5 py-3">
+            <div className={factLabel}>STRECKE</div>
+            <div className={factValue}>{tour.route_length_km != null ? `${tour.route_length_km} km` : '—'}</div>
+          </div>
+          <div className="bg-sft-card px-3.5 py-3">
+            <div className={factLabel}>FAHRZEUGE</div>
+            <div className={factValue}>
+              {stats ? `${stats.confirmed_vehicles}/${stats.max_vehicles}` : '—'}
+            </div>
+          </div>
+          {(tour.min_power_ps != null || tour.max_power_ps != null) && (
+            <div className="bg-sft-card px-3.5 py-3">
+              <div className={factLabel}>LEISTUNG</div>
+              <div className={factValue}>
+                {tour.min_power_ps != null && `ab ${tour.min_power_ps} PS`}
+                {tour.max_power_ps != null && ` · max ${tour.max_power_ps} PS`}
+              </div>
+            </div>
+          )}
+          {tour.min_driver_age != null && (
+            <div className="bg-sft-card px-3.5 py-3">
+              <div className={factLabel}>MINDESTALTER</div>
+              <div className={factValue}>{tour.min_driver_age} Jahre</div>
+            </div>
+          )}
+          {tour.license_plate_required && (
+            <div className="bg-sft-card px-3.5 py-3">
+              <div className={factLabel}>KENNZEICHEN</div>
+              <div className={factValue}>Pflicht</div>
+            </div>
+          )}
         </div>
-        {tour.license_plate_required && (
-          <div className="text-sft-gray">Kennzeichen bei Anmeldung erforderlich</div>
+
+        {tour.public_description && (
+          <p className="mt-4 px-1 text-[14px] leading-relaxed text-[#b9b9c0]">{tour.public_description}</p>
         )}
-      </div>
 
-      {tour.public_description && (
-        <p className="mt-4 text-sm text-sft-gray">{tour.public_description}</p>
-      )}
-
-      {isAdmin && (
-        <Link
-          to={`/admin/tours/${tour.id}/edit`}
-          className="mt-4 inline-block rounded-md bg-sft-surface px-3 py-1.5 text-sm"
-        >
-          Tour bearbeiten
-        </Link>
-      )}
-
-      <div className="mt-6 border-t border-sft-surface2 pt-6">
-        {!user && (
+        {isAdmin && (
           <Link
-            to={`/login?returnTo=${returnTo}`}
-            className="block rounded-md bg-sft-red px-4 py-2.5 text-center font-medium"
+            to={`/admin/tours/${tour.id}/edit`}
+            className="tap-scale mt-3.5 inline-block rounded-lg border border-white/12 bg-sft-surface2 px-3.5 py-2 text-sm"
           >
-            Für diese Tour anmelden
+            Tour bearbeiten
           </Link>
         )}
 
-        {user &&
-          memberDetails &&
-          !activeRegistration &&
-          (tour.registration_open_at && new Date(tour.registration_open_at) > new Date() ? (
-            <TourInterestButton tourId={tour.id} registrationOpenAt={tour.registration_open_at} />
-          ) : (
-            <RegistrationForm
-              tour={tour}
-              onRegistered={reload}
-              wasRejected={ownRegistration?.status === 'rejected'}
-            />
-          ))}
+        {!user && (
+          <div className="mt-3.5 rounded-2xl border border-dashed border-white/14 px-4 py-3.5 text-xs leading-relaxed text-[#8e8e96]">
+            Treffpunkt-Adresse, Route und Teilnehmerliste werden nach bestätigter Anmeldung sichtbar.
+          </div>
+        )}
 
-        {user && activeRegistration && (
-          <div className="flex flex-col gap-4">
+        {user && memberDetails && !activeRegistration && registrationNotYetOpen && (
+          <div className="mt-3.5">
+            <TourInterestButton tourId={tour.id} registrationOpenAt={tour.registration_open_at!} />
+          </div>
+        )}
+
+        {activeRegistration && (
+          <>
             {STATUS_MESSAGE[activeRegistration.status] && (
-              <p className="text-sm">{STATUS_MESSAGE[activeRegistration.status]}</p>
+              <div className={card}>
+                <div className="px-4 py-3.5 text-[14px] font-medium">
+                  {STATUS_MESSAGE[activeRegistration.status]}
+                </div>
+              </div>
             )}
             {activeRegistration.status === 'waitlisted' && (
-              <p className="text-sm">
+              <div className="mt-3.5 rounded-2xl border border-sft-amber/30 bg-sft-amber/[0.07] px-4 py-3.5 text-[14px] font-medium text-sft-amber">
                 {waitlistPosition != null ? `Warteliste · Position ${waitlistPosition}` : 'Warteliste'}
-              </p>
-            )}
-            {activeRegistration.status === 'confirmed' && (
-              <p className="text-sm text-sft-red">Du bist dabei</p>
+              </div>
             )}
 
-            {activeRegistration.status === 'confirmed' && (
+            {confirmed && (
               <CheckInButton
                 tour={tour}
                 checkedInAt={activeRegistration.checked_in_at}
@@ -197,94 +243,62 @@ export function TourDetailPage() {
               />
             )}
 
-            <div className="rounded-md bg-sft-surface p-4 text-sm">
-              <div>
-                {activeRegistration.vehicle_manufacturer} {activeRegistration.vehicle_model} ·{' '}
-                {activeRegistration.vehicle_power_ps} PS
-              </div>
-            </div>
-
-            {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) &&
-              tour.passenger_edit_deadline_at &&
-              new Date(tour.passenger_edit_deadline_at) > new Date() && (
-                <PassengerCountForm
-                  tourId={tour.id}
-                  initialCount={activeRegistration.passenger_count}
-                  onUpdated={reload}
-                />
-              )}
-
             {participantDetails && (
-              <div className="flex flex-col gap-3 rounded-md bg-sft-surface p-4 text-sm">
-                {participantDetails.meeting_point_private && (
-                  <div>Treffpunkt: {participantDetails.meeting_point_private}</div>
-                )}
-                {participantDetails.kurviger_url && (
-                  <a
-                    href={participantDetails.kurviger_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-md bg-sft-red px-4 py-2.5 text-center font-medium"
-                  >
-                    Route in Kurviger öffnen
-                  </a>
-                )}
-                {participantDetails.whatsapp_group_url && (
-                  <a
-                    href={participantDetails.whatsapp_group_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-md bg-sft-surface2 px-4 py-2.5 text-center"
-                  >
-                    WhatsApp-Gruppe öffnen
-                  </a>
-                )}
-                {participantDetails.zello_url ? (
-                  <a
-                    href={participantDetails.zello_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-md bg-sft-surface2 px-4 py-2.5 text-center"
-                  >
-                    Zello-Kanal öffnen
-                  </a>
-                ) : (
-                  <div className="text-sft-gray">
-                    Zello-Zugang: Der QR-Code für den Tourkanal wird am Treffpunkt bereitgestellt.
-                  </div>
-                )}
+              <div className={card}>
+                <div className={sectionLabel}>TREFFPUNKT (INTERN)</div>
+                <div className="px-4 pb-3.5 text-[14px] font-medium leading-relaxed">
+                  {participantDetails.meeting_point_private ?? '—'}
+                </div>
+                <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+                  {participantDetails.kurviger_url && (
+                    <a href={participantDetails.kurviger_url} target="_blank" rel="noopener noreferrer" className={linkButton}>
+                      {routeButtonLabel(participantDetails.kurviger_url)}
+                    </a>
+                  )}
+                  {participantDetails.whatsapp_group_url && (
+                    <a href={participantDetails.whatsapp_group_url} target="_blank" rel="noopener noreferrer" className={linkButtonGhost}>
+                      WhatsApp-Gruppe
+                    </a>
+                  )}
+                  {participantDetails.zello_url ? (
+                    <a href={participantDetails.zello_url} target="_blank" rel="noopener noreferrer" className={linkButtonGhost}>
+                      Zello-Kanal
+                    </a>
+                  ) : (
+                    <div className="col-span-2 text-xs leading-relaxed text-sft-gray">
+                      Zello-Zugang: Der QR-Code für den Tourkanal wird am Treffpunkt bereitgestellt.
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
             {multiDay && stages.some((s) => s.route_url || s.kurviger_url) && (
-              <div className="rounded-md bg-sft-surface p-4 text-sm">
-                <h2 className="mb-2 font-medium">Tagesrouten</h2>
-                <ul className="flex flex-col gap-2">
+              <div className={card}>
+                <div className={sectionLabel}>TAGESROUTEN</div>
+                <div className="flex flex-col">
                   {stages.map((stage) => {
                     const url = stage.route_url ?? stage.kurviger_url
                     if (!url) return null
                     return (
-                      <li key={stage.id} className="flex flex-col gap-1">
-                        <div className="text-sft-gray">
-                          Tag {stage.stage_number} ·{' '}
-                          {new Date(stage.stage_date).toLocaleDateString('de-DE', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                          })}
+                      <div key={stage.id} className="border-t border-white/6 px-4 py-3.5">
+                        <div className="font-mono text-[11px] text-sft-gray">
+                          TAG {stage.stage_number} ·{' '}
+                          {new Date(stage.stage_date)
+                            .toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                         </div>
                         <a
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-md bg-sft-surface2 px-4 py-2 text-center"
+                          className="tap-scale mt-2 block rounded-xl border border-white/12 bg-[#17171b] py-2.5 text-center text-[13px] font-medium"
                         >
                           {routeButtonLabel(url)}
                         </a>
-                      </li>
+                      </div>
                     )
                   })}
-                </ul>
+                </div>
               </div>
             )}
 
@@ -300,69 +314,196 @@ export function TourDetailPage() {
             )}
 
             {stops.length > 0 && (
-              <div className="rounded-md bg-sft-surface p-4 text-sm">
-                <h2 className="mb-2 font-medium">Stopps</h2>
-                <ul className="flex flex-col gap-3">
+              <div className={card}>
+                <div className={sectionLabel}>STOPPS</div>
+                <div className="flex flex-col">
                   {stops.map((stop) => (
-                    <li key={stop.id}>
-                      <div className="font-medium">
-                        {TOUR_STOP_TYPE_LABELS[stop.type]} · {stop.title}
-                      </div>
-                      {stop.starts_at && (
-                        <div className="text-sft-gray">
-                          {new Date(stop.starts_at).toLocaleString('de-DE', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                    <div key={stop.id} className="border-t border-white/6 px-4 py-3.5">
+                      <div className="flex items-start gap-3">
+                        {stop.starts_at && (
+                          <div className="w-11 flex-none font-mono text-[13px] font-bold text-[#c9c9ce]">
+                            {new Date(stop.starts_at).toLocaleTimeString('de-DE', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[14px] font-semibold">
+                            {TOUR_STOP_TYPE_LABELS[stop.type]} · {stop.title}
+                          </div>
+                          {stop.location_name && (
+                            <div className="mt-1 text-[12px] text-sft-gray">{stop.location_name}</div>
+                          )}
+                          {stop.address && <div className="mt-0.5 text-[12px] text-sft-gray">{stop.address}</div>}
+                          {stop.description && (
+                            <div className="mt-1 text-[12px] leading-relaxed text-sft-gray">{stop.description}</div>
+                          )}
                         </div>
-                      )}
-                      {stop.location_name && <div className="text-sft-gray">{stop.location_name}</div>}
-                      {stop.address && <div className="text-sft-gray">{stop.address}</div>}
-                      {stop.description && <div className="text-sft-gray">{stop.description}</div>}
+                      </div>
                       {stop.type === 'restaurant' && (
                         <MealOrderForm
                           restaurantStopId={stop.id}
                           personCount={1 + activeRegistration.passenger_count}
                         />
                       )}
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
 
             {confirmedVehicles.length > 0 && (
-              <div className="rounded-md bg-sft-surface p-4 text-sm">
-                <h2 className="mb-2 font-medium">Bestätigte Fahrzeuge</h2>
-                <ul className="flex flex-col gap-1">
-                  {confirmedVehicles.map((v) => (
-                    <li
-                      key={v.registration_id}
-                      className={v.is_self ? 'font-medium text-sft-red' : ''}
+              <div className={card}>
+                <div className="flex items-baseline justify-between px-4 pb-2.5 pt-3.5">
+                  <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+                    BESTÄTIGTE FAHRZEUGE
+                  </div>
+                  <div className="font-mono text-[11px] text-sft-gray">
+                    {stats ? `${stats.confirmed_vehicles}/${stats.max_vehicles}` : confirmedVehicles.length}
+                  </div>
+                </div>
+                {confirmedVehicles.map((v) => (
+                  <div
+                    key={v.registration_id}
+                    className={`flex items-center gap-2.5 border-t border-white/6 px-4 py-2.5 ${
+                      v.is_self ? 'bg-sft-red/7' : ''
+                    }`}
+                  >
+                    <div
+                      className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg font-mono text-[11px] font-bold ${
+                        v.is_self ? 'bg-sft-red text-white' : 'bg-white/6 text-[#c9c9ce]'
+                      }`}
                     >
-                      {v.first_name && v.last_name ? `${v.first_name} · ${v.username}` : v.username} ·{' '}
-                      {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
-                    </li>
-                  ))}
-                </ul>
+                      {initials(v.first_name ?? v.username)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-[13px] font-semibold ${v.is_self ? 'text-white' : 'text-sft-white'}`}>
+                        {v.first_name && v.last_name ? `${v.first_name} · ${v.username}` : v.username}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[11px] text-sft-gray">
+                        {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
+                      </div>
+                    </div>
+                    {v.is_self && <span className="font-mono text-[9px] tracking-[0.12em] text-sft-red">DU</span>}
+                  </div>
+                ))}
               </div>
             )}
 
-            {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) && (
-              <button
-                onClick={handleCancel}
-                className="rounded-md border border-sft-surface2 px-4 py-2.5 text-sm text-sft-gray"
-              >
-                Teilnahme stornieren
-              </button>
-            )}
-            {cancelError && <p className="text-sm text-sft-red">{cancelError}</p>}
+            <div className="mt-3.5 rounded-2xl border border-white/9 bg-sft-card px-4 py-3.5">
+              <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">DEINE ANMELDUNG</div>
+              <div className="mt-2.5 text-[14px] font-medium">
+                {activeRegistration.vehicle_manufacturer} {activeRegistration.vehicle_model} ·{' '}
+                {activeRegistration.vehicle_power_ps} PS
+              </div>
+              <div className="mt-1 font-mono text-[12px] text-sft-gray">
+                {activeRegistration.license_plate ?? '—'} · {activeRegistration.passenger_count}{' '}
+                {activeRegistration.passenger_count === 1 ? 'PERSON' : 'PERSONEN'}
+              </div>
+
+              {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) &&
+                tour.passenger_edit_deadline_at &&
+                new Date(tour.passenger_edit_deadline_at) > new Date() && (
+                  <div className="mt-3">
+                    <PassengerCountForm
+                      tourId={tour.id}
+                      initialCount={activeRegistration.passenger_count}
+                      onUpdated={reload}
+                    />
+                  </div>
+                )}
+
+              {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) && (
+                <button
+                  onClick={handleCancel}
+                  className="tap-scale mt-3.5 w-full rounded-xl border border-white/12 py-2.5 text-[13px] font-medium text-sft-gray"
+                >
+                  Teilnahme stornieren
+                </button>
+              )}
+              {cancelError && <p className="mt-2 text-sm text-sft-red">{cancelError}</p>}
+            </div>
+          </>
+        )}
+
+        {!activeRegistration && !registrationNotYetOpen && user && memberDetails && (
+          <div className={card}>
+            <div className={sectionLabel}>VORAUSSETZUNGEN</div>
+            <div className="flex flex-col gap-2.5 px-4 pb-4">
+              {requirements(tour).map((r) => (
+                <div key={r} className="flex items-center gap-2.5 text-[13px] text-[#d3d3d9]">
+                  <span className="h-1.5 w-1.5 flex-none rounded-sm bg-sft-red" />
+                  {r}
+                </div>
+              ))}
+              {requirements(tour).length === 0 && (
+                <div className="text-[13px] text-sft-gray">Keine besonderen Voraussetzungen.</div>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {!user && (
+        <div className="fixed inset-x-0 bottom-[92px] z-10 bg-gradient-to-t from-sft-black via-sft-black/90 to-transparent px-3.5 pb-2.5 pt-6">
+          <Link
+            to={`/login?returnTo=${returnTo}`}
+            className="tap-scale block w-full rounded-2xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-4 text-center text-[16px] font-semibold text-white shadow-[0_12px_26px_-12px_#e10600]"
+          >
+            Für diese Tour anmelden
+          </Link>
+        </div>
+      )}
+
+      {canRegister && (
+        <div className="fixed inset-x-0 bottom-[92px] z-10 bg-gradient-to-t from-sft-black via-sft-black/90 to-transparent px-3.5 pb-2.5 pt-6">
+          <button
+            onClick={() => setRegSheetOpen(true)}
+            className="tap-scale block w-full rounded-2xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-4 text-center text-[16px] font-semibold text-white shadow-[0_12px_26px_-12px_#e10600]"
+          >
+            {ownRegistration?.status === 'rejected' ? 'Erneut anfragen' : 'Für diese Tour anmelden'}
+          </button>
+          {stats && (
+            <div className="mt-1.5 text-center font-mono text-[10px] tracking-[0.1em] text-sft-gray-dim">
+              {stats.free_vehicle_slots} VON {stats.max_vehicles} PLÄTZEN FREI
+            </div>
+          )}
+        </div>
+      )}
+
+      {regSheetOpen && (
+        <BottomSheet
+          title="Anmeldung"
+          subtitle={`${tour.title.toUpperCase()} · ${formatDateRange(tour.start_date, tour.end_date)}`}
+          onClose={() => setRegSheetOpen(false)}
+        >
+          <RegistrationForm
+            tour={tour}
+            wasRejected={ownRegistration?.status === 'rejected'}
+            onRegistered={() => {
+              setRegSheetOpen(false)
+              reload()
+            }}
+          />
+        </BottomSheet>
+      )}
     </div>
   )
+}
+
+function requirements(tour: {
+  min_power_ps: number | null
+  min_driver_age: number | null
+  license_plate_required: boolean
+}): string[] {
+  const list: string[] = []
+  if (tour.min_power_ps != null) list.push(`Mindestleistung ${tour.min_power_ps} PS`)
+  if (tour.min_driver_age != null) list.push(`Mindestalter ${tour.min_driver_age} Jahre`)
+  if (tour.license_plate_required) list.push('Kennzeichen bei Anmeldung erforderlich')
+  return list
+}
+
+function initials(name: string): string {
+  return name.replace('@', '').slice(0, 2).toUpperCase()
 }

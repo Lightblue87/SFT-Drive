@@ -29,10 +29,14 @@ export function CheckInButton({ tour, checkedInAt, onCheckedIn }: Props) {
 
   if (checkedInAt) {
     return (
-      <p className="text-sm text-sft-red">
-        ✓ Angekommen ·{' '}
-        {new Date(checkedInAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-      </p>
+      <div className="mt-3.5 rounded-2xl border border-[#2fa88a]/35 bg-[#2fa88a]/[0.08] px-4 py-3.5">
+        <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">CHECK-IN</div>
+        <div className="mt-1.5 text-[15px] font-semibold text-[#5fd3b4]">✓ Eingecheckt</div>
+        <div className="mt-1 font-mono text-[11px] text-sft-gray">
+          BESTÄTIGT UM{' '}
+          {new Date(checkedInAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} UHR
+        </div>
+      </div>
     )
   }
 
@@ -63,15 +67,24 @@ export function CheckInButton({ tour, checkedInAt, onCheckedIn }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="mt-3.5 overflow-hidden rounded-2xl border border-sft-red/35 bg-gradient-to-b from-[#1a1215] to-[#0f0e11]">
+      <div className="px-4 py-3.5">
+        <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">CHECK-IN</div>
+        <div className="mt-1.5 text-[15px] font-semibold">Am Treffpunkt einchecken</div>
+        <div className="mt-1 font-mono text-[11px] text-sft-gray">
+          FENSTER OFFEN BIS{' '}
+          {closesAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} UHR
+        </div>
+      </div>
       <button
         onClick={handleClick}
         disabled={submitting}
-        className="rounded-md bg-sft-red px-4 py-3 text-base font-medium disabled:opacity-60"
+        className="tap-scale w-full border-t border-white/8 py-3.5 text-[15px] font-semibold text-white disabled:opacity-60"
+        style={{ background: 'linear-gradient(#f01a12,#c00500)' }}
       >
-        ✓ Am Treffpunkt angekommen
+        {submitting ? 'Wird gesendet…' : '✓ Am Treffpunkt angekommen'}
       </button>
-      {error && <p className="text-sm text-sft-red">{error}</p>}
+      {error && <p className="px-4 pb-3 text-sm text-sft-red">{error}</p>}
     </div>
   )
 }

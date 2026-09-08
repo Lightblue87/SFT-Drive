@@ -6,8 +6,12 @@ export function NotificationBell() {
   const { unreadCount } = useNotifications()
 
   return (
-    <Link to="/notifications" className="relative rounded-full bg-sft-surface p-2" aria-label="Mitteilungen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+    <Link
+      to="/notifications"
+      className="tap-scale relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-b from-[#17171a] to-[#101013]"
+      aria-label="Mitteilungen"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-[18px] w-[18px]">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -15,7 +19,7 @@ export function NotificationBell() {
         />
       </svg>
       {unreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sft-red px-1 text-[10px] font-medium text-sft-white">
+        <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-md bg-sft-red px-1 font-mono text-[9px] font-bold text-white ring-2 ring-sft-black">
           {unreadCount > 9 ? '9+' : unreadCount}
         </span>
       )}

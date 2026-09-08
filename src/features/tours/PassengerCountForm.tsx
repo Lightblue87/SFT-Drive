@@ -45,26 +45,39 @@ export function PassengerCountForm({ tourId, initialCount, onUpdated }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2">
-      <label className="flex flex-col gap-1 text-sm">
-        Beifahrer / zusätzliche Personen
-        <input
-          type="number"
-          min={0}
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-          className="w-24 rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded-md bg-sft-surface2 px-3 py-2 text-sm disabled:opacity-60"
-      >
-        Speichern
-      </button>
-      {saved && <span className="text-sm text-sft-gray">Gespeichert.</span>}
-      {error && <span className="text-sm text-sft-red">{error}</span>}
+    <form
+      onSubmit={handleSubmit}
+      className="flex items-center justify-between rounded-xl border border-white/9 bg-sft-card px-3.5 py-3.5"
+    >
+      <div>
+        <div className="text-[13px] font-medium">Personen im Fahrzeug</div>
+        {saved && <div className="mt-1 font-mono text-[10px] text-sft-gray">GESPEICHERT</div>}
+        {error && <div className="mt-1 font-mono text-[10px] text-sft-red">{error}</div>}
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setCount((n) => String(Math.max(0, Number(n) - 1)))}
+          className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-base text-sft-white"
+        >
+          −
+        </button>
+        <span className="min-w-[16px] text-center font-mono text-base font-bold">{count}</span>
+        <button
+          type="button"
+          onClick={() => setCount((n) => String(Math.min(4, Number(n) + 1)))}
+          className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-base text-sft-white"
+        >
+          +
+        </button>
+        <button
+          type="submit"
+          disabled={submitting || count === String(initialCount)}
+          className="tap-scale rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium text-sft-white disabled:opacity-40"
+        >
+          Speichern
+        </button>
+      </div>
     </form>
   )
 }
