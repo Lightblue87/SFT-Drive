@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -67,6 +67,15 @@ const EMPTY: FormState = {
   kurviger_url: '',
   zello_url: '',
   whatsapp_group_url: '',
+}
+
+const STATUS_HINT: Record<TourStatus, string> = {
+  draft: 'Nur für Admins sichtbar, keine Anmeldung möglich.',
+  published: 'Öffentlich sichtbar, Anmeldung nach Anmeldefenster.',
+  registration_closed: 'Sichtbar, aber keine neuen Anmeldungen.',
+  cancelled: 'Teilnehmer werden informiert, Anmeldungen storniert.',
+  completed: 'Wandert ins persönliche Tourenarchiv.',
+  archived: 'In Übersicht und Tourenverwaltung ausgeblendet.',
 }
 
 // `<input type="datetime-local">` liefert/erwartet Werte ohne Zeitzone
@@ -392,97 +401,306 @@ export function AdminTourFormPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">{id ? 'Tour bearbeiten' : 'Neue Tour'}</h1>
+    <div className="pt-3">
+      <div className="mb-3.5 text-[19px] font-semibold">{id ? 'Tour bearbeiten' : 'Neue Tour'}</div>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-        <h2 className="text-sm font-medium text-sft-gray">Basisdaten</h2>
-        <Field label="Titel *">
-          <input required value={form.title} onChange={(e) => set('title', e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Region *">
-          <input required value={form.region} onChange={(e) => set('region', e.target.value)} className={inputClass} />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Startdatum *">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <Section title="Grunddaten">
+          <Field label="TITEL *">
+            <input required value={form.title} onChange={(e) => set('title', e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Region *">
+            <input required value={form.region} onChange={(e) => set('region', e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Kurzbeschreibung">
             <input
-              required
-              type="date"
-              value={form.start_date}
-              onChange={(e) => set('start_date', e.target.value)}
+              value={form.short_description}
+              onChange={(e) => set('short_description', e.target.value)}
               className={inputClass}
             />
           </Field>
-          <Field label="Enddatum *">
-            <input
-              required
-              type="date"
-              value={form.end_date}
-              onChange={(e) => set('end_date', e.target.value)}
-              className={inputClass}
+          <Field label="Öffentliche Beschreibung">
+            <textarea
+              value={form.public_description}
+              onChange={(e) => set('public_description', e.target.value)}
+              className={`${inputClass} resize-none leading-relaxed`}
+              rows={3}
             />
           </Field>
-        </div>
-        <Field label="Streckenlänge (km)">
-          <input
-            type="number"
-            min={0}
-            value={form.route_length_km}
-            onChange={(e) => set('route_length_km', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Coverbild (quadratisch, z. B. Tourlogo, Fahrzeugfoto, Routen-Screenshot)">
-          <div className="flex flex-col gap-2">
-            {form.cover_image_url && (
-              <img
-                src={form.cover_image_url}
-                alt=""
-                className="aspect-square w-32 rounded-md object-cover"
-              />
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="cursor-pointer rounded-md bg-sft-surface2 px-3 py-2 text-sm">
-                {uploading ? 'Wird hochgeladen…' : form.cover_image_url ? 'Bild ändern' : 'Bild hochladen'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCoverImageUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={openGallery}
-                className="rounded-md border border-sft-surface2 px-3 py-2 text-sm"
-              >
-                Vorhandenes Bild wählen
-              </button>
+          <Field label="Mitgliedertext (nur für eingeloggte User)">
+            <textarea
+              value={form.member_description}
+              onChange={(e) => set('member_description', e.target.value)}
+              className={`${inputClass} resize-none leading-relaxed`}
+              rows={2}
+            />
+          </Field>
+          <Field label="Titelbild">
+            <div className="flex flex-col gap-2">
               {form.cover_image_url && (
+                <img
+                  src={form.cover_image_url}
+                  alt=""
+                  className="aspect-square w-24 rounded-xl border border-white/8 object-cover"
+                />
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="tap-scale cursor-pointer rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium">
+                  {uploading ? 'Wird hochgeladen…' : form.cover_image_url ? 'Bild ändern' : 'Bild hochladen'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCoverImageUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
                 <button
                   type="button"
-                  onClick={() => set('cover_image_url', '')}
-                  className="rounded-md border border-sft-surface2 px-3 py-2 text-sm text-sft-gray"
+                  onClick={openGallery}
+                  className="tap-scale rounded-lg border border-white/13 px-3 py-2 text-xs font-medium"
                 >
-                  Entfernen
+                  Vorhandenes Bild wählen
                 </button>
-              )}
+                {form.cover_image_url && (
+                  <button
+                    type="button"
+                    onClick={() => set('cover_image_url', '')}
+                    className="rounded-lg border border-white/13 px-3 py-2 text-xs text-sft-gray"
+                  >
+                    Entfernen
+                  </button>
+                )}
+              </div>
+              {uploadError && <p className="text-sm text-sft-red">{uploadError}</p>}
+              <details className="text-xs text-sft-gray">
+                <summary className="cursor-pointer">Stattdessen Bild-URL eintragen</summary>
+                <input
+                  value={form.cover_image_url}
+                  onChange={(e) => set('cover_image_url', e.target.value)}
+                  placeholder="https://…"
+                  className={`${inputClass} mt-2`}
+                />
+              </details>
             </div>
-            {uploadError && <p className="text-sm text-sft-red">{uploadError}</p>}
-            <details className="text-sm text-sft-gray">
-              <summary className="cursor-pointer">Stattdessen Bild-URL eintragen</summary>
+          </Field>
+        </Section>
+
+        <Section title="Zeitraum & Treffpunkt">
+          <div className="grid grid-cols-2 gap-[11px]">
+            <Field label="Start">
               <input
-                value={form.cover_image_url}
-                onChange={(e) => set('cover_image_url', e.target.value)}
-                placeholder="https://…"
-                className={`${inputClass} mt-2`}
+                required
+                type="date"
+                value={form.start_date}
+                onChange={(e) => set('start_date', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
               />
-            </details>
+            </Field>
+            <Field label="Ende">
+              <input
+                required
+                type="date"
+                value={form.end_date}
+                onChange={(e) => set('end_date', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
           </div>
-        </Field>
-        <Field label="Status">
-          <select value={form.status} onChange={(e) => set('status', e.target.value as TourStatus)} className={inputClass}>
+          <Field label="Streckenlänge (km)">
+            <input
+              type="number"
+              min={0}
+              value={form.route_length_km}
+              onChange={(e) => set('route_length_km', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          <Field label="Treffen">
+            <input
+              type="datetime-local"
+              value={form.meeting_at}
+              onChange={(e) => set('meeting_at', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          <Field label="Treffpunkt öffentlich">
+            <input
+              value={form.meeting_point_public}
+              onChange={(e) => set('meeting_point_public', e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Treffpunkt intern">
+            <input
+              value={form.meeting_point_private}
+              onChange={(e) => set('meeting_point_private', e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Kurviger-URL">
+            <input
+              value={form.kurviger_url}
+              onChange={(e) => set('kurviger_url', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-[11px]">
+            <Field label="WhatsApp">
+              <input
+                value={form.whatsapp_group_url}
+                onChange={(e) => set('whatsapp_group_url', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+            <Field label="Zello">
+              <input
+                value={form.zello_url}
+                onChange={(e) => set('zello_url', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="Teilnahme & Grenzen">
+          <div className="grid grid-cols-2 gap-[11px]">
+            <Field label="Max. Fahrzeuge *">
+              <input
+                required
+                type="number"
+                min={1}
+                value={form.max_vehicles}
+                onChange={(e) => set('max_vehicles', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+            <Field label="Mindestalter">
+              <input
+                type="number"
+                min={18}
+                value={form.min_driver_age}
+                onChange={(e) => set('min_driver_age', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-[11px]">
+            <Field label="Min. PS">
+              <input
+                type="number"
+                min={1}
+                value={form.min_power_ps}
+                onChange={(e) => set('min_power_ps', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+            <Field label="Max. PS">
+              <input
+                type="number"
+                min={1}
+                value={form.max_power_ps}
+                onChange={(e) => set('max_power_ps', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+          </div>
+
+          <div>
+            <div className="mb-2 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">BESTÄTIGUNG</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => set('confirmation_mode', 'automatic')}
+                className={`rounded-xl border px-3 py-3 text-[13px] font-medium ${
+                  form.confirmation_mode === 'automatic'
+                    ? 'border-sft-red bg-sft-red text-white'
+                    : 'border-white/12 text-[#c9c9ce]'
+                }`}
+              >
+                Automatisch
+              </button>
+              <button
+                type="button"
+                onClick={() => set('confirmation_mode', 'manual')}
+                className={`rounded-xl border px-3 py-3 text-[13px] font-medium ${
+                  form.confirmation_mode === 'manual'
+                    ? 'border-sft-red bg-sft-red text-white'
+                    : 'border-white/12 text-[#c9c9ce]'
+                }`}
+              >
+                Manuell freigeben
+              </button>
+            </div>
+          </div>
+
+          <Toggle
+            label="Kennzeichen erforderlich"
+            hint="Nur für die Tourleitung sichtbar"
+            checked={form.license_plate_required}
+            onChange={(v) => set('license_plate_required', v)}
+          />
+          <Toggle
+            label="Check-in aktiviert"
+            hint="Fenster relativ zur Treffpunktzeit"
+            checked={form.check_in_enabled}
+            onChange={(v) => set('check_in_enabled', v)}
+          />
+        </Section>
+
+        <Section title="Anmelde- & Check-in-Fenster">
+          <div className="grid grid-cols-2 gap-[11px]">
+            <Field label="Anmeldung ab">
+              <input
+                type="datetime-local"
+                value={form.registration_open_at}
+                onChange={(e) => set('registration_open_at', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+            <Field label="Anmeldung bis">
+              <input
+                type="datetime-local"
+                value={form.registration_close_at}
+                onChange={(e) => set('registration_close_at', e.target.value)}
+                className={`${inputClass} font-mono font-medium`}
+              />
+            </Field>
+          </div>
+          <Field label="Personenzahl änderbar bis">
+            <input
+              type="datetime-local"
+              value={form.passenger_edit_deadline_at}
+              onChange={(e) => set('passenger_edit_deadline_at', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          {form.check_in_enabled && (
+            <div className="grid grid-cols-2 gap-[11px]">
+              <Field label="Check-in ab (min)">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.check_in_open_minutes_before}
+                  onChange={(e) => set('check_in_open_minutes_before', e.target.value)}
+                  className={`${inputClass} font-mono font-medium`}
+                />
+              </Field>
+              <Field label="Check-in bis (min)">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.check_in_close_minutes_after}
+                  onChange={(e) => set('check_in_close_minutes_after', e.target.value)}
+                  className={`${inputClass} font-mono font-medium`}
+                />
+              </Field>
+            </div>
+          )}
+        </Section>
+
+        <Section title="Status">
+          <select value={form.status} onChange={(e) => set('status', e.target.value as TourStatus)} className={selectClass}>
             <option value="draft">Entwurf</option>
             <option value="published">Veröffentlicht</option>
             <option value="registration_closed">Anmeldung geschlossen</option>
@@ -490,188 +708,27 @@ export function AdminTourFormPage() {
             <option value="completed">Abgeschlossen</option>
             <option value="archived">Archiviert</option>
           </select>
-        </Field>
-
-        <h2 className="mt-2 text-sm font-medium text-sft-gray">Beschreibungen</h2>
-        <Field label="Kurzbeschreibung">
-          <input value={form.short_description} onChange={(e) => set('short_description', e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Öffentliche Beschreibung">
-          <textarea
-            value={form.public_description}
-            onChange={(e) => set('public_description', e.target.value)}
-            className={inputClass}
-            rows={3}
-          />
-        </Field>
-        <Field label="Mitgliedertext (nur für eingeloggte User)">
-          <textarea
-            value={form.member_description}
-            onChange={(e) => set('member_description', e.target.value)}
-            className={inputClass}
-            rows={2}
-          />
-        </Field>
-
-        <h2 className="mt-2 text-sm font-medium text-sft-gray">Treffpunkt</h2>
-        <Field label="Treffpunktzeit">
-          <input
-            type="datetime-local"
-            value={form.meeting_at}
-            onChange={(e) => set('meeting_at', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Öffentlicher Treffpunkt (nur ungefähr)">
-          <input value={form.meeting_point_public} onChange={(e) => set('meeting_point_public', e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Genauer Treffpunkt (nur bestätigte Teilnehmer)">
-          <input value={form.meeting_point_private} onChange={(e) => set('meeting_point_private', e.target.value)} className={inputClass} />
-        </Field>
-
-        <h2 className="mt-2 text-sm font-medium text-sft-gray">Check-in am Treffpunkt</h2>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.check_in_enabled}
-            onChange={(e) => set('check_in_enabled', e.target.checked)}
-          />
-          Check-in aktivieren (benötigt Treffpunktzeit)
-        </label>
-        {form.check_in_enabled && (
-          <div className="flex gap-3">
-            <Field label="Öffnet X Minuten vorher">
-              <input
-                type="number"
-                min={0}
-                value={form.check_in_open_minutes_before}
-                onChange={(e) => set('check_in_open_minutes_before', e.target.value)}
-                className={`${inputClass} w-24`}
-              />
-            </Field>
-            <Field label="Schließt X Minuten danach">
-              <input
-                type="number"
-                min={0}
-                value={form.check_in_close_minutes_after}
-                onChange={(e) => set('check_in_close_minutes_after', e.target.value)}
-                className={`${inputClass} w-24`}
-              />
-            </Field>
-          </div>
-        )}
-
-        <h2 className="mt-2 text-sm font-medium text-sft-gray">Kurviger &amp; Zello</h2>
-        <Field label="Kurviger-Link (nur bestätigte Teilnehmer)">
-          <input value={form.kurviger_url} onChange={(e) => set('kurviger_url', e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Zello-Link (nur bestätigte Teilnehmer)">
-          <input value={form.zello_url} onChange={(e) => set('zello_url', e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="WhatsApp-Gruppenlink (nur bestätigte Teilnehmer)">
-          <input
-            value={form.whatsapp_group_url}
-            onChange={(e) => set('whatsapp_group_url', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
-
-        <h2 className="mt-2 text-sm font-medium text-sft-gray">Fahrzeug- &amp; Fahreranforderungen</h2>
-        <Field label="Maximale Fahrzeugzahl *">
-          <input
-            required
-            type="number"
-            min={1}
-            value={form.max_vehicles}
-            onChange={(e) => set('max_vehicles', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Bestätigungsmodus">
-          <select
-            value={form.confirmation_mode}
-            onChange={(e) => set('confirmation_mode', e.target.value as ConfirmationMode)}
-            className={inputClass}
-          >
-            <option value="automatic">Automatisch</option>
-            <option value="manual">Manuell</option>
-          </select>
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.license_plate_required}
-            onChange={(e) => set('license_plate_required', e.target.checked)}
-          />
-          Kennzeichen bei Anmeldung verpflichtend
-        </label>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Mindestleistung (PS)">
-            <input
-              type="number"
-              min={1}
-              value={form.min_power_ps}
-              onChange={(e) => set('min_power_ps', e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Maximalleistung (PS)">
-            <input
-              type="number"
-              min={1}
-              value={form.max_power_ps}
-              onChange={(e) => set('max_power_ps', e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-        <Field label="Mindestalter des Fahrers">
-          <input
-            type="number"
-            min={18}
-            value={form.min_driver_age}
-            onChange={(e) => set('min_driver_age', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
-
-        <h2 className="mt-2 text-sm font-medium text-sft-gray">Zeitfenster</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Anmeldung öffnet">
-            <input
-              type="datetime-local"
-              value={form.registration_open_at}
-              onChange={(e) => set('registration_open_at', e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Anmeldung schließt">
-            <input
-              type="datetime-local"
-              value={form.registration_close_at}
-              onChange={(e) => set('registration_close_at', e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-        <Field label="Deadline Änderung Personenzahl">
-          <input
-            type="datetime-local"
-            value={form.passenger_edit_deadline_at}
-            onChange={(e) => set('passenger_edit_deadline_at', e.target.value)}
-            className={inputClass}
-          />
-        </Field>
+          <p className="text-[11px] leading-relaxed text-[#8e8e96]">{STATUS_HINT[form.status]}</p>
+        </Section>
 
         {error && <p className="text-sm text-sft-red">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="mt-4 rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
-        >
-          {submitting ? 'Wird gespeichert…' : 'Speichern'}
-        </button>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60"
+          >
+            {submitting ? 'Wird gespeichert…' : 'Speichern'}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/tours')}
+            className="tap-scale rounded-xl border border-white/13 bg-[#17171b] py-3.5 text-[15px] font-medium"
+          >
+            Abbrechen
+          </button>
+        </div>
       </form>
 
       {showGallery && (
@@ -680,7 +737,7 @@ export function AdminTourFormPage() {
           onClick={() => setShowGallery(false)}
         >
           <div
-            className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-t-lg bg-sft-surface p-4 sm:rounded-lg"
+            className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl border-t border-white/12 bg-[#111114] p-4 sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
@@ -706,7 +763,7 @@ export function AdminTourFormPage() {
                       set('cover_image_url', img.url)
                       setShowGallery(false)
                     }}
-                    className="aspect-square overflow-hidden rounded-md border border-sft-surface2"
+                    className="aspect-square overflow-hidden rounded-xl border border-white/9"
                   >
                     <img src={img.url} alt="" className="h-full w-full object-cover" />
                   </button>
@@ -720,13 +777,59 @@ export function AdminTourFormPage() {
   )
 }
 
-const inputClass = 'rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white'
+const inputClass =
+  'w-full rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[16px] text-sft-white outline-none focus:border-sft-red/60'
+const selectClass =
+  'w-full appearance-none rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[15px] font-medium text-sft-white outline-none focus:border-sft-red/60'
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      {label}
+    <div className="rounded-2xl border border-white/9 bg-sft-card p-3.5">
+      <div className="mb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">{title.toUpperCase()}</div>
+      <div className="flex flex-col gap-3.5">{children}</div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim">
+        {label.toUpperCase()}
+      </span>
       {children}
     </label>
+  )
+}
+
+function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string
+  hint: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-between gap-3 rounded-xl border border-white/9 bg-[#0f0f12] px-3.5 py-3 text-left"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium leading-relaxed">{label}</span>
+        <span className="mt-1 block text-[11px] leading-relaxed text-sft-gray">{hint}</span>
+      </span>
+      <span className={`relative h-7 w-[46px] flex-none rounded-full ${checked ? 'bg-sft-red' : 'bg-white/14'}`}>
+        <span
+          className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white transition-[left] ${
+            checked ? 'left-[21px]' : 'left-[3px]'
+          }`}
+        />
+      </span>
+    </button>
   )
 }

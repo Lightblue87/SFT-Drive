@@ -59,42 +59,75 @@ export function AdminDashboardPage() {
 
   if (loading) return <PageLoading />
 
-  return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Admin Dashboard</h1>
+  const totalPending = summaries.reduce((sum, s) => sum + s.pendingCount, 0)
 
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-md bg-sft-surface p-3">
-          <div className="text-sft-gray">Geplante Touren</div>
-          <div className="text-lg font-semibold">{summaries.length}</div>
+  return (
+    <div className="pt-3">
+      <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#17171b] to-[#0f0f12]">
+        <div className="border-r border-white/7 px-3.5 py-3">
+          <div className="font-mono text-[9px] tracking-[0.2em] text-[#8a8a92]">TOUREN</div>
+          <div className="mt-1.5 font-mono text-[21px] font-bold leading-none">{summaries.length}</div>
         </div>
-        <div className="rounded-md bg-sft-surface p-3">
-          <div className="text-sft-gray">Entwürfe</div>
-          <div className="text-lg font-semibold">{draftCount}</div>
+        <div className="border-r border-white/7 px-3.5 py-3">
+          <div className="font-mono text-[9px] tracking-[0.2em] text-[#8a8a92]">ENTWÜRFE</div>
+          <div className="mt-1.5 font-mono text-[21px] font-bold leading-none">{draftCount}</div>
+        </div>
+        <div className="px-3.5 py-3">
+          <div className="font-mono text-[9px] tracking-[0.2em] text-[#8a8a92]">OFFEN</div>
+          <div className="mt-1.5 font-mono text-[21px] font-bold leading-none text-sft-amber">{totalPending}</div>
         </div>
       </div>
 
-      <div className="mt-6 flex flex-col gap-2">
+      <div className="mt-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-[#8a8a92]">
+          VERÖFFENTLICHTE TOUREN
+        </div>
         {summaries.map((s) => (
           <Link
             key={s.tour.id}
             to={`/admin/tours/${s.tour.id}/registrations`}
-            className="rounded-md bg-sft-surface p-3 text-sm"
+            className="tap-scale flex items-center gap-3 border-t border-white/6 px-4 py-3.5 text-left"
           >
-            <div className="font-medium">{s.tour.title}</div>
-            <div className="text-sft-gray">
-              {formatDateRange(s.tour.start_date, s.tour.end_date)} · {s.confirmedVehicles} /{' '}
-              {s.tour.max_vehicles} Fahrzeuge · {s.confirmedPersons} Personen
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-semibold leading-tight">{s.tour.title}</div>
+              <div className="mt-1.5 font-mono text-[10px] leading-relaxed text-sft-gray">
+                {formatDateRange(s.tour.start_date, s.tour.end_date).toUpperCase()} ·{' '}
+                {s.confirmedVehicles} FZG · {s.confirmedPersons} PERSONEN
+              </div>
+              <div
+                className={`mt-1 font-mono text-[10px] ${s.pendingCount === 0 ? 'text-[#8a8a92]' : 'text-sft-amber'}`}
+              >
+                OFFEN {s.pendingCount} · WARTELISTE {s.waitlistCount}
+              </div>
             </div>
-            <div className="text-sft-gray">
-              Pending: {s.pendingCount} · Warteliste: {s.waitlistCount}
-            </div>
+            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" className="flex-none">
+              <path d="M1 1l6 6-6 6" stroke="#5e5e66" strokeWidth="1.8" />
+            </svg>
           </Link>
         ))}
         {summaries.length === 0 && (
-          <p className="text-sm text-sft-gray">Noch keine veröffentlichten Touren.</p>
+          <p className="px-4 pb-4 text-sm text-sft-gray">Noch keine veröffentlichten Touren.</p>
         )}
       </div>
+
+      <div className="mt-3.5 grid grid-cols-2 gap-2.5">
+        <Link
+          to="/admin/tours/new"
+          className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-center text-[15px] font-semibold text-white"
+        >
+          Neue Tour
+        </Link>
+        <Link
+          to="/admin/notifications"
+          className="tap-scale rounded-xl border border-white/13 bg-[#17171b] py-3.5 text-center text-[15px] font-medium"
+        >
+          Mitteilung senden
+        </Link>
+      </div>
+
+      <Link to="/admin/tours" className="mt-3.5 block text-center text-sm underline">
+        Zur Tourenverwaltung →
+      </Link>
     </div>
   )
 }

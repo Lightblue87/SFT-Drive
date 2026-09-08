@@ -21,6 +21,10 @@ interface AdminRegistrationRow {
   profiles: { username: string; first_name: string; last_name: string } | null
 }
 
+function initials(name: string): string {
+  return name.replace('@', '').slice(0, 2).toUpperCase()
+}
+
 /** Admin darf die Personenzahl unabhängig von der Deadline korrigieren (§9.8). */
 function PassengerCountEditor({
   registrationId,
@@ -37,14 +41,14 @@ function PassengerCountEditor({
   const changed = Number(value) !== passengerCount
 
   return (
-    <div className="flex items-center gap-2 text-sft-gray">
-      <span>Personen:</span>
+    <div className="mt-1.5 flex items-center gap-2 font-mono text-[11px] text-sft-gray">
+      <span>PERSONEN:</span>
       <input
         type="number"
         min={0}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="w-14 rounded border border-sft-surface2 bg-sft-black px-1.5 py-0.5 text-sft-white"
+        className="w-12 rounded border border-white/12 bg-sft-black px-1.5 py-0.5 text-sft-white"
       />
       {changed && (
         <button
@@ -55,7 +59,7 @@ function PassengerCountEditor({
             await onSave(registrationId, Number(value))
             setSaving(false)
           }}
-          className="text-xs text-sft-red underline disabled:opacity-60"
+          className="text-sft-red underline disabled:opacity-60"
         >
           Speichern
         </button>
@@ -63,14 +67,6 @@ function PassengerCountEditor({
     </div>
   )
 }
-
-const GROUPS: { status: RegistrationStatus; label: string }[] = [
-  { status: 'confirmed', label: 'Confirmed' },
-  { status: 'pending', label: 'Pending' },
-  { status: 'waitlisted', label: 'Waitlist' },
-  { status: 'rejected', label: 'Rejected' },
-  { status: 'cancelled', label: 'Cancelled' },
-]
 
 /** Teilnehmerverwaltung je Tour (siehe CLAUDE.md §12, §21.3). */
 export function AdminTourRegistrationsPage() {
@@ -213,176 +209,241 @@ export function AdminTourRegistrationsPage() {
 
   if (loading) return <PageLoading />
 
+  const pendingRows = rows.filter((r) => r.status === 'pending')
+  const waitlistRows = rows.filter((r) => r.status === 'waitlisted')
   const confirmedRows = rows.filter((r) => r.status === 'confirmed')
+  const rejectedRows = rows.filter((r) => r.status === 'rejected')
+  const cancelledRows = rows.filter((r) => r.status === 'cancelled')
   const confirmedCount = confirmedRows.length
   const confirmedPersons = confirmedRows.reduce((sum, r) => sum + 1 + r.passenger_count, 0)
   const checkedInCount = confirmedRows.filter((r) => r.checked_in_at).length
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Teilnehmer</h1>
+    <div className="pt-3">
+      <div className="mb-1 text-[19px] font-semibold">Teilnehmer</div>
+      <div className="mb-3.5 font-mono text-[11px] text-sft-gray-dim">{tourTitle.toUpperCase()}</div>
 
-      <div className="mt-3 rounded-md bg-sft-surface p-4 text-sm">
-        <div>Bestätigte Fahrzeuge: {confirmedCount}</div>
-        <div>Bestätigte Personen: {confirmedPersons}</div>
-        {confirmedCount > 0 && (
-          <div>
-            Eingecheckt: {checkedInCount} / {confirmedCount}
+      <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="border-r border-white/7 px-3 py-3">
+          <div className="font-mono text-[9px] tracking-[0.16em] text-sft-gray-dim">FAHRZEUGE</div>
+          <div className="mt-1.5 font-mono text-lg font-bold">{confirmedCount}</div>
+        </div>
+        <div className="border-r border-white/7 px-3 py-3">
+          <div className="font-mono text-[9px] tracking-[0.16em] text-sft-gray-dim">PERSONEN</div>
+          <div className="mt-1.5 font-mono text-lg font-bold">{confirmedPersons}</div>
+        </div>
+        <div className="px-3 py-3">
+          <div className="font-mono text-[9px] tracking-[0.16em] text-sft-gray-dim">CHECK-IN</div>
+          <div className="mt-1.5 font-mono text-lg font-bold">
+            {checkedInCount}
+            <span className="text-[10px] text-sft-gray">/{confirmedCount}</span>
+          </div>
+        </div>
+        {interestCount > 0 && (
+          <div className="col-span-3 border-t border-white/7 px-3 py-2 font-mono text-[11px] text-sft-gray">
+            VORGEMERKT: {interestCount}
           </div>
         )}
-        {interestCount > 0 && <div>Vorgemerkt: {interestCount}</div>}
-      </div>
-
-      <div className="mt-3 flex flex-col gap-1">
-        <Link to="/admin/notifications" className="inline-block text-sm underline">
-          Mitteilung an diese Tour senden →
-        </Link>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2 rounded-md bg-sft-surface p-4 text-sm">
-        <p className="font-medium">Exportieren</p>
-        <label className="flex items-center gap-2 text-sft-gray">
-          <input
-            type="checkbox"
-            checked={includePrivateExportFields}
-            onChange={(e) => setIncludePrivateExportFields(e.target.checked)}
-          />
-          Klarname &amp; Kennzeichen einschließen
-        </label>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={exportCsv} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
-            CSV exportieren
-          </button>
-          <button onClick={shareSummary} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
-            Zusammenfassung teilen
-          </button>
-        </div>
-        {shareStatus && <p className="text-xs text-sft-gray">{shareStatus}</p>}
       </div>
 
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
 
-      {GROUPS.map((group) => {
-        const groupRows = rows.filter((r) => r.status === group.status)
-        if (groupRows.length === 0) return null
-
-        return (
-          <div key={group.status} className="mt-6">
-            <h2 className="mb-2 text-sm font-medium text-sft-gray">
-              {group.label} ({groupRows.length})
-            </h2>
-            <ul className="flex flex-col gap-2">
-              {groupRows.map((r) => (
-                <li key={r.id} className="rounded-md bg-sft-surface p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">
-                        {r.profiles?.username ?? '—'}{' '}
-                        <span className="text-sft-gray">
-                          ({r.profiles?.first_name} {r.profiles?.last_name})
-                        </span>
-                      </div>
-                      <div className="text-sft-gray">
-                        {r.vehicle_manufacturer} {r.vehicle_model} · {r.vehicle_power_ps} PS
-                        {r.license_plate && ` · ${r.license_plate}`}
-                      </div>
-                      <div className="text-sft-gray">Personen gesamt: {1 + r.passenger_count}</div>
-                      {['pending', 'confirmed', 'waitlisted'].includes(r.status) && (
-                        <PassengerCountEditor
-                          registrationId={r.id}
-                          passengerCount={r.passenger_count}
-                          onSave={savePassengerCount}
-                        />
-                      )}
-                      {r.status === 'confirmed' && (
-                        <div className="flex items-center gap-2 text-sft-gray">
-                          {r.checked_in_at ? (
-                            <span>
-                              ✓ Angekommen ·{' '}
-                              {new Date(r.checked_in_at).toLocaleTimeString('de-DE', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          ) : (
-                            <span>Noch nicht eingecheckt</span>
-                          )}
-                          <button
-                            onClick={() => toggleCheckedIn(r.id, !r.checked_in_at)}
-                            className="text-xs underline"
-                          >
-                            {r.checked_in_at ? 'Check-in zurücksetzen' : 'Als angekommen markieren'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {group.status === 'pending' && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() =>
-                            runAction(() => supabase.rpc('approve_tour_registration', { p_registration_id: r.id }))
-                          }
-                          className="rounded-md bg-sft-red px-3 py-1.5 text-xs"
-                        >
-                          Bestätigen
-                        </button>
-                        <button
-                          onClick={() =>
-                            runAction(() =>
-                              supabase.rpc('reject_tour_registration', {
-                                p_registration_id: r.id,
-                                p_reason: null,
-                              }),
-                            )
-                          }
-                          className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs"
-                        >
-                          Ablehnen
-                        </button>
-                      </div>
-                    )}
-                    {(group.status === 'confirmed' || group.status === 'waitlisted') && (
-                      <div className="flex flex-col items-end gap-1">
-                        <button
-                          onClick={() =>
-                            runAction(() =>
-                              supabase.rpc('admin_remove_registration', {
-                                p_registration_id: r.id,
-                                p_reason: null,
-                              }),
-                            )
-                          }
-                          className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs text-sft-gray"
-                        >
-                          Entfernen
-                        </button>
-                        <button
-                          onClick={() =>
-                            runAction(() =>
-                              supabase.rpc('reject_tour_registration', {
-                                p_registration_id: r.id,
-                                p_reason: null,
-                              }),
-                            )
-                          }
-                          className="rounded-md border border-sft-red/50 px-3 py-1.5 text-xs text-sft-red"
-                        >
-                          Ablehnen
-                        </button>
-                        <p className="max-w-[9rem] text-right text-[11px] leading-tight text-sft-gray">
-                          Ablehnen verhindert eine spätere automatische Neubestätigung für diese Tour.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+      {pendingRows.length > 0 && (
+        <div className="mt-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+          <div className="flex items-baseline justify-between px-4 pb-2.5 pt-3.5">
+            <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">ANMELDUNGEN FREIGEBEN</div>
+            <div className="font-mono text-[11px] font-bold text-sft-amber">{pendingRows.length}</div>
           </div>
-        )
-      })}
+          {pendingRows.map((r) => (
+            <div key={r.id} className="flex items-center gap-2.5 border-t border-white/6 px-4 py-3">
+              <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-white/7 font-mono text-xs font-bold text-[#c9c9ce]">
+                {initials(r.profiles?.username ?? '—')}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold">{r.profiles?.username ?? '—'}</div>
+                <div className="mt-1 font-mono text-[10px] leading-relaxed text-sft-gray">
+                  {r.vehicle_manufacturer} {r.vehicle_model} · {r.vehicle_power_ps} PS
+                  <br />
+                  {r.license_plate ?? '—'} · {1 + r.passenger_count} PERSONEN
+                </div>
+                <PassengerCountEditor
+                  registrationId={r.id}
+                  passengerCount={r.passenger_count}
+                  onSave={savePassengerCount}
+                />
+              </div>
+              <button
+                onClick={() => runAction(() => supabase.rpc('approve_tour_registration', { p_registration_id: r.id }))}
+                className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-sft-red"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 12.5 9.5 18 20 6" stroke="#fff" strokeWidth="2.2" />
+                </svg>
+              </button>
+              <button
+                onClick={() =>
+                  runAction(() => supabase.rpc('reject_tour_registration', { p_registration_id: r.id, p_reason: null }))
+                }
+                className="tap-scale flex h-9 w-9 flex-none items-center justify-center rounded-[10px] border border-white/14"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 5l14 14M19 5 5 19" stroke="#9a9a9a" strokeWidth="2" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {waitlistRows.length > 0 && (
+        <div className="mt-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+          <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">WARTELISTE</div>
+          {waitlistRows.map((r, i) => (
+            <div key={r.id} className="flex items-center gap-2.5 border-t border-white/6 px-4 py-3">
+              <div className="w-6 flex-none text-center font-mono text-[15px] font-bold text-sft-amber">{i + 1}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold">{r.profiles?.username ?? '—'}</div>
+                <div className="mt-1 font-mono text-[10px] text-sft-gray">
+                  {r.vehicle_manufacturer} {r.vehicle_model} · {r.vehicle_power_ps} PS
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  runAction(() => supabase.rpc('reject_tour_registration', { p_registration_id: r.id, p_reason: null }))
+                }
+                className="tap-scale flex-none rounded-[11px] border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium"
+              >
+                Ablehnen
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {confirmedRows.length > 0 && (
+        <div className="mt-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+          <div className="flex items-baseline justify-between px-4 pb-2.5 pt-3.5">
+            <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">BESTÄTIGTE TEILNEHMER</div>
+            <div className="font-mono text-[11px] text-sft-gray">
+              {confirmedCount} FZG · {confirmedPersons} PERS.
+            </div>
+          </div>
+          {confirmedRows.map((r) => (
+            <div key={r.id} className="border-t border-white/6 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-white/6 font-mono text-[11px] font-bold text-[#c9c9ce]">
+                  {initials(r.profiles?.username ?? '—')}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold">{r.profiles?.username ?? '—'}</div>
+                  <div className="mt-1 font-mono text-[10px] text-sft-gray">
+                    {r.vehicle_manufacturer} {r.vehicle_model} · {r.license_plate ?? '—'}
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    runAction(() =>
+                      supabase.rpc('reject_tour_registration', { p_registration_id: r.id, p_reason: null }),
+                    )
+                  }
+                  className="flex-none rounded-[9px] border border-sft-red/40 px-2.5 py-2 text-[11px] font-medium text-[#ff6b63]"
+                >
+                  Ablehnen
+                </button>
+              </div>
+              <PassengerCountEditor
+                registrationId={r.id}
+                passengerCount={r.passenger_count}
+                onSave={savePassengerCount}
+              />
+              <div className="mt-2 flex items-center gap-2 font-mono text-[11px] text-sft-gray">
+                {r.checked_in_at ? (
+                  <span className="text-[#5fd3b4]">
+                    ✓ ANGEKOMMEN ·{' '}
+                    {new Date(r.checked_in_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                ) : (
+                  <span>NOCH NICHT EINGECHECKT</span>
+                )}
+                <button onClick={() => toggleCheckedIn(r.id, !r.checked_in_at)} className="underline">
+                  {r.checked_in_at ? 'ZURÜCKSETZEN' : 'MARKIEREN'}
+                </button>
+              </div>
+              <button
+                onClick={() =>
+                  runAction(() =>
+                    supabase.rpc('admin_remove_registration', { p_registration_id: r.id, p_reason: null }),
+                  )
+                }
+                className="mt-2 font-mono text-[10px] text-sft-gray underline"
+              >
+                TEILNAHME ENTFERNEN
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {[
+        { rows: rejectedRows, label: 'Abgelehnt' },
+        { rows: cancelledRows, label: 'Storniert' },
+      ].map(
+        (group) =>
+          group.rows.length > 0 && (
+            <div key={group.label} className="mt-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+              <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+                {group.label.toUpperCase()} ({group.rows.length})
+              </div>
+              {group.rows.map((r) => (
+                <div key={r.id} className="border-t border-white/6 px-4 py-3 text-[13px]">
+                  <span className="font-semibold">{r.profiles?.username ?? '—'}</span>
+                  <span className="ml-2 font-mono text-[11px] text-sft-gray">
+                    {r.vehicle_manufacturer} {r.vehicle_model}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ),
+      )}
 
       {rows.length === 0 && <p className="mt-4 text-sm text-sft-gray">Noch keine Anmeldungen.</p>}
+
+      <div className="mt-3.5 rounded-2xl border border-white/9 bg-sft-card p-3.5">
+        <p className="mb-2.5 text-[13px] font-medium">Exportieren</p>
+        <button
+          onClick={() => setIncludePrivateExportFields((v) => !v)}
+          className="flex items-center gap-2.5 text-left text-[12px] text-sft-gray"
+        >
+          <span
+            className={`flex h-[16px] w-[16px] flex-none items-center justify-center rounded-[4px] border ${
+              includePrivateExportFields ? 'border-sft-red bg-sft-red' : 'border-white/22'
+            }`}
+          >
+            {includePrivateExportFields && (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none">
+                <path d="M4 12.5 9.5 18 20 6" stroke="#fff" strokeWidth="3" />
+              </svg>
+            )}
+          </span>
+          Klarname &amp; Kennzeichen einschließen
+        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={exportCsv} className="tap-scale rounded-lg border border-white/13 px-3 py-2 text-xs font-medium">
+            CSV exportieren
+          </button>
+          <button onClick={shareSummary} className="tap-scale rounded-lg border border-white/13 px-3 py-2 text-xs font-medium">
+            Zusammenfassung teilen
+          </button>
+        </div>
+        {shareStatus && <p className="mt-2 text-xs text-sft-gray">{shareStatus}</p>}
+      </div>
+
+      <Link
+        to="/admin/notifications"
+        className="tap-scale mt-3.5 block rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-center text-[15px] font-semibold text-white"
+      >
+        Mitteilung an diese Tour
+      </Link>
     </div>
   )
 }

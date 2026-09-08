@@ -126,47 +126,42 @@ export function AdminTourStagesPage() {
   if (error && !tour) return <p className="py-6 text-sm text-sft-red">{error}</p>
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Tagesrouten</h1>
-      <p className="mt-1 text-sm text-sft-gray">
-        Pro Tag ein optionaler Routen-Link (Kurviger, Google Maps, Apple Karten o. Ä.). Nur für
-        bestätigte Teilnehmer sichtbar. Kein Link hinterlegt → kein Button auf der Tourdetailseite.
-      </p>
+    <div className="pt-3">
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+          TAGESROUTEN · MEHRTAGESTOUR
+        </div>
 
-      {error && <p className="mt-3 text-sm text-sft-red">{error}</p>}
+        {error && <p className="px-4 pb-2 text-sm text-sft-red">{error}</p>}
 
-      <ul className="mt-4 flex flex-col gap-3">
         {days.map((day) => (
-          <li key={day.stageNumber} className="rounded-md bg-sft-surface p-3 text-sm">
-            <div className="mb-2 font-medium">
-              Tag {day.stageNumber} ·{' '}
-              {new Date(day.stageDate).toLocaleDateString('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })}
-              {day.title && day.title !== `Tag ${day.stageNumber}` && (
-                <span className="text-sft-gray"> · {day.title}</span>
-              )}
+          <div key={day.stageNumber} className="border-t border-white/6 px-4 py-3.5">
+            <div className="flex items-baseline justify-between">
+              <div className="text-[14px] font-semibold">Tag {day.stageNumber}</div>
+              <div className="font-mono text-[11px] text-sft-gray">
+                {new Date(day.stageDate).toLocaleDateString('de-DE', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <input
-                value={day.routeUrl}
-                onChange={(e) => setRouteUrl(day.stageNumber, e.target.value)}
-                placeholder="https://…"
-                className="flex-1 rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-              />
-              <button
-                onClick={() => save(day)}
-                disabled={savingDay === day.stageNumber}
-                className="rounded-md bg-sft-red px-4 py-2 font-medium disabled:opacity-60"
-              >
-                {savingDay === day.stageNumber ? 'Speichert…' : 'Speichern'}
-              </button>
-            </div>
-          </li>
+            <input
+              value={day.routeUrl}
+              onChange={(e) => setRouteUrl(day.stageNumber, e.target.value)}
+              placeholder="https://…"
+              className="mt-2 w-full rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 font-mono text-[15px] text-sft-white outline-none focus:border-sft-red/60"
+            />
+            <button
+              onClick={() => save(day)}
+              disabled={savingDay === day.stageNumber}
+              className="tap-scale mt-2.5 rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              {savingDay === day.stageNumber ? 'Speichert…' : 'Speichern'}
+            </button>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   )
 }

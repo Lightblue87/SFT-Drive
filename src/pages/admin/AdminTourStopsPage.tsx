@@ -26,6 +26,10 @@ const EMPTY_FORM: FormState = {
   sort_order: '0',
 }
 
+const fieldLabel = 'font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim'
+const fieldInput =
+  'mt-2 w-full rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white outline-none focus:border-sft-red/60'
+
 /** Datetime-local korrekt lokal statt über UTC-Stringparsing (§19). */
 function toDatetimeLocal(iso: string | null): string {
   if (!iso) return ''
@@ -164,64 +168,54 @@ export function AdminTourStopsPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Tour-Stopps</h1>
-      <p className="mt-1 text-sm text-sft-gray">
-        Nur für bestätigte Teilnehmer dieser Tour sichtbar (Restaurant, Treffpunkt, Tanken, Pause,
-        Hotel, Aussichtspunkt).
-      </p>
-
-      <ul className="mt-4 flex flex-col gap-2">
+    <div className="pt-3">
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+          STOPPS DIESER TOUR
+        </div>
         {stops.map((stop) => (
-          <li key={stop.id} className="rounded-md bg-sft-surface p-3 text-sm">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-medium">
-                  {TOUR_STOP_TYPE_LABELS[stop.type]} · {stop.title}
-                </div>
-                {stop.location_name && <div className="text-sft-gray">{stop.location_name}</div>}
-                {stop.starts_at && (
-                  <div className="text-sft-gray">
-                    {new Date(stop.starts_at).toLocaleString('de-DE', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                {stop.type === 'restaurant' && (
-                  <Link to={`/admin/tours/${id}/stops/${stop.id}`} className="text-xs underline">
-                    Speisekarte & Bestellung
-                  </Link>
-                )}
-                <div className="flex gap-2">
-                  <button onClick={() => startEdit(stop)} className="text-xs underline">
-                    Bearbeiten
-                  </button>
-                  <button onClick={() => remove(stop.id)} className="text-xs text-sft-red underline">
-                    Löschen
-                  </button>
-                </div>
+          <div key={stop.id} className="flex items-center gap-3 border-t border-white/6 px-4 py-3.5">
+            <span className="flex-none rounded-md bg-white/6 px-[7px] py-[4px] font-mono text-[9px] font-bold tracking-[0.1em] text-[#c9c9ce]">
+              {TOUR_STOP_TYPE_LABELS[stop.type].toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold">{stop.title}</div>
+              <div className="mt-1 font-mono text-[10px] text-sft-gray">
+                {stop.starts_at &&
+                  new Date(stop.starts_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                {stop.starts_at && stop.location_name && ' · '}
+                {stop.location_name}
               </div>
             </div>
-          </li>
+            {stop.type === 'restaurant' ? (
+              <Link
+                to={`/admin/tours/${id}/stops/${stop.id}`}
+                className="tap-scale flex-none rounded-[11px] border border-white/13 bg-[#17171b] px-2.5 py-2 text-[11px] font-medium"
+              >
+                Speisekarte
+              </Link>
+            ) : (
+              <button
+                onClick={() => startEdit(stop)}
+                className="tap-scale flex-none rounded-[11px] border border-white/13 bg-[#17171b] px-2.5 py-2 text-[11px] font-medium"
+              >
+                Bearbeiten
+              </button>
+            )}
+          </div>
         ))}
-        {stops.length === 0 && <p className="text-sm text-sft-gray">Noch keine Stopps angelegt.</p>}
-      </ul>
+        {stops.length === 0 && <p className="px-4 pb-4 text-sm text-sft-gray">Noch keine Stopps angelegt.</p>}
+      </div>
 
-      <div className="mt-6 flex flex-col gap-3 rounded-md bg-sft-surface p-4 text-sm">
-        <p className="font-medium">{editingId ? 'Stopp bearbeiten' : 'Neuen Stopp anlegen'}</p>
+      <div className="mt-3.5 flex flex-col gap-3.5 rounded-2xl border border-white/9 bg-sft-card p-3.5">
+        <p className="text-[13px] font-medium">{editingId ? 'Stopp bearbeiten' : 'Neuen Stopp anlegen'}</p>
 
-        <label className="flex flex-col gap-1">
-          Typ
+        <label>
+          <span className={fieldLabel}>TYP</span>
           <select
             value={form.type}
             onChange={(e) => set('type', e.target.value as TourStopType)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+            className={`${fieldInput} appearance-none font-medium`}
           >
             {STOP_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -231,82 +225,83 @@ export function AdminTourStopsPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1">
-          Titel *
-          <input
-            value={form.title}
-            onChange={(e) => set('title', e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-          />
+        <label>
+          <span className={fieldLabel}>TITEL *</span>
+          <input value={form.title} onChange={(e) => set('title', e.target.value)} className={fieldInput} />
         </label>
 
-        <label className="flex flex-col gap-1">
-          Ortsname
+        <label>
+          <span className={fieldLabel}>ORTSNAME</span>
           <input
             value={form.location_name}
             onChange={(e) => set('location_name', e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+            className={fieldInput}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          Adresse
-          <input
-            value={form.address}
-            onChange={(e) => set('address', e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-          />
+        <label>
+          <span className={fieldLabel}>ADRESSE</span>
+          <input value={form.address} onChange={(e) => set('address', e.target.value)} className={fieldInput} />
         </label>
 
-        <label className="flex flex-col gap-1">
-          Beschreibung
+        <label>
+          <span className={fieldLabel}>BESCHREIBUNG</span>
           <textarea
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
             rows={2}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+            className={`${fieldInput} resize-none leading-relaxed`}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          Uhrzeit
-          <input
-            type="datetime-local"
-            value={form.starts_at}
-            onChange={(e) => set('starts_at', e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-[11px]">
+          <label>
+            <span className={fieldLabel}>UHRZEIT</span>
+            <input
+              type="datetime-local"
+              value={form.starts_at}
+              onChange={(e) => set('starts_at', e.target.value)}
+              className={`${fieldInput} font-mono`}
+            />
+          </label>
+          <label>
+            <span className={fieldLabel}>REIHENFOLGE</span>
+            <input
+              type="number"
+              value={form.sort_order}
+              onChange={(e) => set('sort_order', e.target.value)}
+              className={`${fieldInput} font-mono`}
+            />
+          </label>
+        </div>
 
-        <label className="flex flex-col gap-1">
-          Reihenfolge
-          <input
-            type="number"
-            value={form.sort_order}
-            onChange={(e) => set('sort_order', e.target.value)}
-            className="w-24 rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-          />
-        </label>
-
-        {error && <p className="text-sft-red">{error}</p>}
+        {error && <p className="text-sm text-sft-red">{error}</p>}
 
         <div className="flex gap-2">
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-md bg-sft-red px-4 py-2 font-medium disabled:opacity-60"
+            className="tap-scale flex-1 rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3 text-[14px] font-semibold text-white disabled:opacity-60"
           >
             {saving ? 'Wird gespeichert…' : editingId ? 'Speichern' : 'Anlegen'}
           </button>
           {editingId && (
             <button
               onClick={resetForm}
-              className="rounded-md border border-sft-surface2 px-4 py-2 text-sft-gray"
+              className="rounded-xl border border-white/13 px-4 py-3 text-sft-gray"
             >
               Abbrechen
             </button>
           )}
         </div>
+        {editingId && (
+          <button
+            onClick={() => remove(editingId)}
+            className="rounded-xl border border-sft-red/40 py-2.5 text-[13px] font-medium text-[#ff6b63]"
+          >
+            Stopp löschen
+          </button>
+        )}
       </div>
     </div>
   )

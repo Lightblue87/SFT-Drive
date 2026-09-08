@@ -6,12 +6,21 @@ import { PageLoading } from '@/components/PageLoading'
 import { formatDateRange } from '@/utils/date'
 
 const STATUS_LABEL: Record<string, string> = {
-  draft: 'Entwurf',
-  published: 'Veröffentlicht',
-  registration_closed: 'Anmeldung geschlossen',
-  cancelled: 'Abgesagt',
-  completed: 'Abgeschlossen',
-  archived: 'Archiviert',
+  draft: 'ENTWURF',
+  published: 'VERÖFFENTLICHT',
+  registration_closed: 'ANMELDUNG ZU',
+  cancelled: 'ABGESAGT',
+  completed: 'ABGESCHLOSSEN',
+  archived: 'ARCHIVIERT',
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  draft: 'bg-sft-amber/14 text-sft-amber',
+  published: 'bg-sft-red/16 text-[#ff6b63]',
+  registration_closed: 'bg-white/6 text-[#c9c9ce]',
+  cancelled: 'bg-white/6 text-sft-gray',
+  completed: 'bg-white/6 text-sft-gray',
+  archived: 'bg-white/6 text-sft-gray',
 }
 
 export function AdminToursPage() {
@@ -39,70 +48,102 @@ export function AdminToursPage() {
   const archivedCount = tours.length - tours.filter((tour) => tour.status !== 'archived').length
 
   return (
-    <div className="py-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tourenverwaltung</h1>
-        <Link to="/admin/tours/new" className="rounded-md bg-sft-red px-3 py-1.5 text-sm">
-          Neue Tour
-        </Link>
-      </div>
+    <div className="pt-3">
+      <Link
+        to="/admin/tours/new"
+        className="tap-scale block w-full rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-center text-[15px] font-semibold text-white"
+      >
+        + Neue Tour anlegen
+      </Link>
 
       {archivedCount > 0 && (
-        <label className="mt-4 flex items-center gap-2 text-sm text-sft-gray">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-          />
-          Archivierte Touren einblenden ({archivedCount})
-        </label>
+        <button
+          onClick={() => setShowArchived((v) => !v)}
+          className="tap-scale mt-3.5 flex w-full items-center gap-2.5 rounded-xl border border-white/9 bg-[#0f0f12] px-3.5 py-2.5 text-left"
+        >
+          <span
+            className={`flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[5px] border ${
+              showArchived ? 'border-sft-red bg-sft-red' : 'border-white/20'
+            }`}
+          >
+            {showArchived && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                <path d="M4 12.5 9.5 18 20 6" stroke="#fff" strokeWidth="2.6" />
+              </svg>
+            )}
+          </span>
+          <span className="text-[13px] text-[#c9c9ce]">
+            Archivierte Touren einblenden ({archivedCount})
+          </span>
+        </button>
       )}
 
       {visibleTours.length === 0 ? (
         <p className="mt-4 text-sm text-sft-gray">Noch keine Touren vorhanden.</p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {visibleTours.map((tour) => (
-            <li key={tour.id}>
-              <Link
-                to={`/admin/tours/${tour.id}/edit`}
-                className="flex items-center justify-between rounded-md bg-sft-surface px-4 py-3 text-sm"
-              >
-                <div>
-                  <div className="font-medium">{tour.title}</div>
-                  <div className="text-sft-gray">
-                    {formatDateRange(tour.start_date, tour.end_date)} · {tour.region}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sft-gray">{STATUS_LABEL[tour.status] ?? tour.status}</span>
-                  <span className="text-sft-red">→</span>
-                </div>
-              </Link>
-              <div className="mt-1 flex gap-3">
+        <div className="mt-3.5 flex flex-col gap-2.5">
+          {visibleTours.map((tour) => {
+            const multiDay = tour.end_date > tour.start_date
+            return (
+              <div key={tour.id} className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
                 <Link
-                  to={`/admin/tours/${tour.id}/registrations`}
-                  className="text-xs text-sft-gray underline"
+                  to={`/admin/tours/${tour.id}/edit`}
+                  className="tap-scale flex items-center gap-3 px-[15px] py-3.5"
                 >
-                  Teilnehmer verwalten
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-semibold leading-tight">{tour.title}</div>
+                    <div className="mt-1.5 font-mono text-[10px] text-sft-gray">
+                      {formatDateRange(tour.start_date, tour.end_date).toUpperCase()} · {tour.region.toUpperCase()}
+                    </div>
+                  </div>
+                  <span
+                    className={`flex-none rounded-md px-2 py-1 font-mono text-[9px] font-bold tracking-[0.1em] ${STATUS_STYLE[tour.status] ?? 'bg-white/6 text-sft-gray'}`}
+                  >
+                    {STATUS_LABEL[tour.status] ?? tour.status}
+                  </span>
                 </Link>
-                <Link to={`/admin/tours/${tour.id}/stops`} className="text-xs text-sft-gray underline">
-                  Tour-Stopps verwalten
-                </Link>
-                {tour.end_date > tour.start_date && (
-                  <Link to={`/admin/tours/${tour.id}/stages`} className="text-xs text-sft-gray underline">
-                    Tagesrouten verwalten
+                <div className="grid grid-cols-2 gap-px bg-white/6 border-t border-white/6">
+                  <Link
+                    to={`/admin/tours/${tour.id}/registrations`}
+                    className="tap-scale bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-[#c9c9ce]"
+                  >
+                    Teilnehmer
                   </Link>
-                )}
-                {tour.end_date > tour.start_date && (
-                  <Link to={`/admin/tours/${tour.id}/hotels`} className="text-xs text-sft-gray underline">
-                    Übernachtungen verwalten
+                  <Link
+                    to={`/admin/tours/${tour.id}/stops`}
+                    className="tap-scale bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-[#c9c9ce]"
+                  >
+                    Stopps
                   </Link>
-                )}
+                  {multiDay ? (
+                    <Link
+                      to={`/admin/tours/${tour.id}/stages`}
+                      className="tap-scale bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-[#c9c9ce]"
+                    >
+                      Tagesrouten
+                    </Link>
+                  ) : (
+                    <span className="bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-sft-gray-faint">
+                      Tagesrouten
+                    </span>
+                  )}
+                  {multiDay ? (
+                    <Link
+                      to={`/admin/tours/${tour.id}/hotels`}
+                      className="tap-scale bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-[#c9c9ce]"
+                    >
+                      Übernachtungen
+                    </Link>
+                  ) : (
+                    <span className="bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-sft-gray-faint">
+                      Übernachtungen
+                    </span>
+                  )}
+                </div>
               </div>
-            </li>
-          ))}
-        </ul>
+            )
+          })}
+        </div>
       )}
     </div>
   )

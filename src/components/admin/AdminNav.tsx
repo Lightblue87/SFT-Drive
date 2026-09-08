@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
-  `shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm ${
-    isActive ? 'bg-sft-red text-sft-white' : 'border border-sft-surface2 text-sft-white'
+  `flex-none rounded-[10px] border px-[13px] py-2.5 font-sans text-xs font-medium ${
+    isActive ? 'border-sft-red bg-sft-red text-white' : 'border-white/12 bg-transparent text-[#c9c9ce]'
   }`
 
 /**
@@ -12,7 +12,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
  */
 export function AdminNav() {
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto border-b border-sft-surface2 px-4 py-3">
+    <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 pt-0.5 [scrollbar-width:none]">
       <NavLink to="/admin" end className={linkClass}>
         Dashboard
       </NavLink>
