@@ -10,6 +10,7 @@ import type {
 } from '@/types/tour'
 import type { TourStop } from '@/types/tourStop'
 import type { TourStage } from '@/types/tourStage'
+import type { HotelSuggestion, AccommodationConfirmation } from '@/types/accommodation'
 
 export interface TourDetailData {
   tour: Tour
@@ -20,6 +21,8 @@ export interface TourDetailData {
   ownRegistration: TourRegistration | null
   stops: TourStop[]
   stages: TourStage[]
+  hotelSuggestions: HotelSuggestion[]
+  ownAccommodationConfirmations: AccommodationConfirmation[]
 }
 
 /**
@@ -68,6 +71,8 @@ export function useTourDetail(slug: string | undefined) {
     let confirmedVehicles: ConfirmedVehicle[] = []
     let stops: TourStop[] = []
     let stages: TourStage[] = []
+    let hotelSuggestions: HotelSuggestion[] = []
+    let ownAccommodationConfirmations: AccommodationConfirmation[] = []
 
     if (userId) {
       const { data: reg } = await supabase
@@ -79,20 +84,33 @@ export function useTourDetail(slug: string | undefined) {
       ownRegistration = (reg as TourRegistration) ?? null
 
       if (ownRegistration?.status === 'confirmed') {
-        const [{ data: pd }, { data: vehicles }, { data: stopRows }, { data: stageRows }] = await Promise.all([
-          supabase.from('tour_participant_details').select('*').eq('tour_id', tour.id).maybeSingle(),
-          supabase.rpc('get_confirmed_tour_vehicles', { p_tour_id: tour.id }),
-          supabase.from('tour_stops').select('*').eq('tour_id', tour.id).order('sort_order', { ascending: true }),
-          supabase
-            .from('tour_stages')
-            .select('*')
-            .eq('tour_id', tour.id)
-            .order('stage_number', { ascending: true }),
-        ])
+        const [{ data: pd }, { data: vehicles }, { data: stopRows }, { data: stageRows }, { data: hotelRows }, { data: confirmationRows }] =
+          await Promise.all([
+            supabase.from('tour_participant_details').select('*').eq('tour_id', tour.id).maybeSingle(),
+            supabase.rpc('get_confirmed_tour_vehicles', { p_tour_id: tour.id }),
+            supabase.from('tour_stops').select('*').eq('tour_id', tour.id).order('sort_order', { ascending: true }),
+            supabase
+              .from('tour_stages')
+              .select('*')
+              .eq('tour_id', tour.id)
+              .order('stage_number', { ascending: true }),
+            supabase
+              .from('tour_hotel_suggestions')
+              .select('*')
+              .eq('tour_id', tour.id)
+              .order('sort_order', { ascending: true }),
+            supabase
+              .from('tour_accommodation_confirmations')
+              .select('*')
+              .eq('tour_id', tour.id)
+              .eq('user_id', userId),
+          ])
         participantDetails = (pd as TourParticipantDetails) ?? null
         confirmedVehicles = (vehicles as ConfirmedVehicle[]) ?? []
         stops = (stopRows as TourStop[]) ?? []
         stages = (stageRows as TourStage[]) ?? []
+        hotelSuggestions = (hotelRows as HotelSuggestion[]) ?? []
+        ownAccommodationConfirmations = (confirmationRows as AccommodationConfirmation[]) ?? []
       }
     }
 
@@ -105,6 +123,8 @@ export function useTourDetail(slug: string | undefined) {
       ownRegistration,
       stops,
       stages,
+      hotelSuggestions,
+      ownAccommodationConfirmations,
     })
     setLoading(false)
   }, [slug])

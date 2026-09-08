@@ -94,6 +94,11 @@ export function AdminToursPage() {
                     Tagesrouten verwalten
                   </Link>
                 )}
+                {tour.end_date > tour.start_date && (
+                  <Link to={`/admin/tours/${tour.id}/hotels`} className="text-xs text-sft-gray underline">
+                    Übernachtungen verwalten
+                  </Link>
+                )}
               </div>
             </li>
           ))}

@@ -14,6 +14,7 @@ import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
 import { MealOrderForm } from '@/features/tours/MealOrderForm'
 import { CheckInButton } from '@/features/tours/CheckInButton'
 import { TourInterestButton } from '@/features/tours/TourInterestButton'
+import { AccommodationSection } from '@/features/tours/AccommodationSection'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -56,7 +57,18 @@ export function TourDetailPage() {
     )
   }
 
-  const { tour, stats, memberDetails, participantDetails, confirmedVehicles, ownRegistration, stops, stages } =
+  const {
+    tour,
+    stats,
+    memberDetails,
+    participantDetails,
+    confirmedVehicles,
+    ownRegistration,
+    stops,
+    stages,
+    hotelSuggestions,
+    ownAccommodationConfirmations,
+  } =
     data
   // Cancelled/rejected sind keine aktiven Anmeldungen — die RPC erlaubt eine
   // Neuanmeldung in diesem Fall ausdrücklich (kontrollierte Reaktivierung,
@@ -274,6 +286,17 @@ export function TourDetailPage() {
                   })}
                 </ul>
               </div>
+            )}
+
+            {multiDay && (
+              <AccommodationSection
+                tourId={tour.id}
+                startDate={tour.start_date}
+                endDate={tour.end_date}
+                hotelSuggestions={hotelSuggestions}
+                ownConfirmations={ownAccommodationConfirmations}
+                onChanged={reload}
+              />
             )}
 
             {stops.length > 0 && (

@@ -140,6 +140,8 @@ export type RpcResultCode =
   | 'ORDERING_NOT_OPEN'
   | 'ORDERING_CLOSED'
   | 'MENU_ITEM_INVALID'
+  | 'NOT_MULTIDAY_TOUR'
+  | 'INVALID_NIGHT_DATE'
 
 export interface RegistrationResult {
   code: RpcResultCode
@@ -181,6 +183,8 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   ALREADY_CHECKED_IN: 'Du bist bereits eingecheckt.',
   CHECK_IN_NOT_OPEN: 'Der Check-in hat noch nicht begonnen.',
   CHECK_IN_CLOSED: 'Der Check-in-Zeitraum ist bereits abgelaufen.',
+  NOT_MULTIDAY_TOUR: 'Übernachtungen sind nur bei Mehrtagestouren relevant.',
+  INVALID_NIGHT_DATE: 'Diese Nacht liegt nicht im Zeitraum dieser Tour.',
 }
 
 export function rpcErrorMessage(code: string): string {

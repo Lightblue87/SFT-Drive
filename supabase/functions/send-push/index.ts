@@ -21,11 +21,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
 
-// Entweder an die bestätigten Teilnehmer einer bestimmten Tour (tour_id) oder
-// als Broadcast an alle Nutzer mit einer gespeicherten Push-Subscription.
+// Entweder an die bestätigten Teilnehmer einer bestimmten Tour (tour_id), als
+// Broadcast an alle Nutzer mit gespeicherter Push-Subscription, oder gezielt an
+// eine Auswahl von user_ids innerhalb einer Tour (z. B. Phase 19 Übernachtungs-
+// Erinnerung, siehe CLAUDE.md §36.10) — dort IMMER zusammen mit tour_id, damit
+// serverseitig auf tatsächlich bestätigte Teilnehmer dieser Tour eingeschränkt
+// werden kann statt der Client-Liste blind zu vertrauen (§8.12).
 interface RequestBody {
   tour_id?: string
   broadcast?: boolean
+  user_ids?: string[]
   title: string
   body: string
 }
@@ -48,6 +53,9 @@ Deno.serve(async (req: Request) => {
   }
 
   if ((!payload.tour_id && !payload.broadcast) || !payload.title || !payload.body) {
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+  }
+  if (payload.user_ids && !payload.tour_id) {
     return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
   }
 
@@ -95,7 +103,11 @@ Deno.serve(async (req: Request) => {
       .eq('tour_id', payload.tour_id!)
       .eq('status', 'confirmed')
 
-    const userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
+    let userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
+    if (payload.user_ids && payload.user_ids.length > 0) {
+      const requested = new Set(payload.user_ids)
+      userIds = userIds.filter((uid) => requested.has(uid))
+    }
     if (userIds.length === 0) {
       return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200 })
     }

@@ -5303,8 +5303,46 @@ Mindestens testen:
 
 ### 36.14 Umsetzungsstand
 
-Umsetzungsstand: geplant, noch nicht implementiert.
+**Umsetzungsstand:** implementiert (Migration `20260908120000_accommodation.sql`,
+lokal gegen eine echte, nicht-privilegierte Postgres-Rolle auf RLS und die
+serverseitigen Vorbedingungen aus §36.6 getestet, nicht nur als Superuser).
 
-Keine Punkte dieses Abschnitts als produktiv vorhanden darstellen, bevor
-Datenbank, RLS/RPC, Admin-UI, Teilnehmer-UI und relevante Tests tatsächlich
-umgesetzt wurden.
+- `tour_hotel_suggestions` (Hotelvorschläge, Participant-Inhalt, gleiches
+  RLS-Muster wie `tour_stops`/`tour_stages`: bestätigte Teilnehmer und Admins
+  lesen, nur Admins schreiben) und `tour_accommodation_confirmations`
+  (bewusst ohne direkte Insert/Update/Delete-Policies — jede Statusänderung
+  läuft ausschließlich über die RPC unten).
+- `set_accommodation_confirmation(p_tour_id, p_night_date, p_confirmed)` prüft
+  serverseitig Authentifizierung, Existenz und Mehrtägigkeit der Tour
+  (`NOT_MULTIDAY_TOUR`), Gültigkeit der Nacht innerhalb `[start_date,
+  end_date)` (`INVALID_NIGHT_DATE`) sowie eine aktuell bestätigte Registrierung
+  des Callers (`REGISTRATION_NOT_FOUND`), bevor die Bestätigung gesetzt bzw.
+  bei `p_confirmed = false` die Zeile gelöscht wird.
+- `admin_send_accommodation_reminder(p_tour_id, p_user_ids, p_night_date)`
+  leitet den tatsächlichen Empfängerkreis serverseitig aus aktuell
+  bestätigten Registrierungen dieser Tour ab (Schnittmenge mit `p_user_ids`)
+  statt der Client-Liste zu vertrauen, und legt `ACCOMMODATION_REMINDER`-
+  Mitteilungen über die bestehende `notifications`-Tabelle an — kein neues
+  Nachrichtensystem.
+- `send-push` wurde um ein optionales `user_ids`-Feld erweitert (nur
+  zusammen mit `tour_id` zulässig), damit die gezielte Erinnerung aus §36.10
+  tatsächlich nur an die ausgewählten offenen Teilnehmer pushen kann, statt
+  nur an alle bestätigten Teilnehmer der Tour oder per Broadcast.
+- Admin-UI unter `/admin/tours/:id/hotels` (verlinkt aus `/admin/tours` neben
+  „Tagesrouten verwalten“, nur bei Mehrtagestouren): pro automatisch aus dem
+  Tourzeitraum abgeleiteter Nacht Hotelvorschläge pflegen, bestätigten/offenen
+  Status je Teilnehmer mit dem Wortlaut „Übernachtung noch nicht bestätigt“
+  (nicht „hat kein Hotel“) sowie gezielter Erinnerungs-Button für die noch
+  offenen Teilnehmer dieser Nacht.
+- Teilnehmer-UI auf der Tourdetailseite (`AccommodationSection`, nur für
+  bestätigte Teilnehmer von Mehrtagestouren): Hotelvorschläge pro Nacht sowie
+  Bestätigen/Zurücknehmen-Button je Nacht.
+- Lokal als `authenticated`-Rolle getestet: erfolgreiche Bestätigung einer
+  gültigen Nacht, Ablehnung bei eintägiger Tour, Ablehnung bei nachtdatum
+  außerhalb des Tourzeitraums (Starttag vor Beginn und letzter Tag als
+  „Nacht“), Ablehnung für nicht bestätigte Caller, RLS-Isolation auf
+  `tour_accommodation_confirmations` (fremde Bestätigungen nicht lesbar,
+  Admin sieht sie), RLS auf `tour_hotel_suggestions` (nicht bestätigte
+  Teilnehmer sehen und schreiben nichts), sowie korrekte Empfänger-Filterung
+  der Erinnerungs-RPC (nur tatsächlich bestätigte Teilnehmer, sonst
+  `USER_NOT_FOUND`).
