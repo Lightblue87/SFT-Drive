@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import type { RestaurantStopSettings, MenuItem } from '@/types/mealOrder'
+import { downloadCsv } from '@/utils/csv'
+import { shareOrCopyText } from '@/utils/share'
 
 interface OrderRow {
   order_id: string
@@ -161,6 +163,33 @@ export function AdminRestaurantStopPage() {
   }
   const totalDishes = [...totals.values()].reduce((sum, n) => sum + n, 0)
 
+  // Restaurant-Export (siehe CLAUDE.md §35.1): aggregierte Mengen je
+  // Menüposition sowie fahrzeugbezogene Detailansicht, immer aus dem
+  // aktuellen autorisierten Datenbestand — keine separate Export-Datenhaltung.
+  function exportCsv() {
+    const header = ['Username', 'Fahrzeug', 'Gericht', 'Menge', 'Notiz']
+    const dataRows = orders.flatMap((o) =>
+      o.items.map((i) => [
+        o.username,
+        `${o.vehicle_manufacturer} ${o.vehicle_model}`,
+        i.name,
+        i.quantity,
+        i.note ?? '',
+      ]),
+    )
+    downloadCsv('restaurant-bestellung.csv', [header, ...dataRows])
+  }
+
+  async function shareSummary() {
+    const lines = [
+      'Restaurant-Bestellung',
+      ...[...totals.entries()].map(([name, qty]) => `${qty} × ${name}`),
+      '',
+      `Gesamt: ${totalDishes} Gerichte`,
+    ]
+    await shareOrCopyText('Restaurant-Bestellung', lines.join('\n'))
+  }
+
   return (
     <div className="py-6">
       <h1 className="text-xl font-semibold">Restaurant-Bestellung</h1>
@@ -251,6 +280,14 @@ export function AdminRestaurantStopPage() {
               ))}
             </ul>
             <p className="mt-2 text-sft-gray">Gesamt: {totalDishes} Gerichte</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button onClick={exportCsv} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
+                CSV exportieren
+              </button>
+              <button onClick={shareSummary} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
+                Zusammenfassung teilen
+              </button>
+            </div>
           </>
         )}
       </div>

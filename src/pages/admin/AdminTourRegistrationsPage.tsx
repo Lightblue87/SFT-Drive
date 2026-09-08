@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import type { RegistrationStatus, RegistrationResult } from '@/types/tour'
 import { rpcErrorMessage } from '@/types/tour'
+import { downloadCsv } from '@/utils/csv'
+import { shareOrCopyText } from '@/utils/share'
 
 interface AdminRegistrationRow {
   id: string
@@ -73,13 +75,30 @@ const GROUPS: { status: RegistrationStatus; label: string }[] = [
 /** Teilnehmerverwaltung je Tour (siehe CLAUDE.md §12, §21.3). */
 export function AdminTourRegistrationsPage() {
   const { id } = useParams<{ id: string }>()
+  const [tourTitle, setTourTitle] = useState('')
   const [rows, setRows] = useState<AdminRegistrationRow[]>([])
+  const [interestCount, setInterestCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [includePrivateExportFields, setIncludePrivateExportFields] = useState(false)
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
+
+    supabase
+      .from('tours')
+      .select('title')
+      .eq('id', id)
+      .single()
+      .then(({ data }) => setTourTitle(data?.title ?? ''))
+
+    supabase
+      .from('tour_interests')
+      .select('id', { count: 'exact', head: true })
+      .eq('tour_id', id)
+      .then(({ count }) => setInterestCount(count ?? 0))
 
     // Kein direkter FK zwischen tour_registrations und profiles für PostgREST-
     // Embedding (beide referenzieren nur auth.users) — deshalb zwei Abfragen
@@ -145,6 +164,53 @@ export function AdminTourRegistrationsPage() {
     )
   }
 
+  // Teilnehmerexport (siehe CLAUDE.md §35.1): Klarname und Kennzeichen nur,
+  // wenn der Admin sie für den konkreten Zweck ausdrücklich auswählt.
+  function exportCsv() {
+    const header = [
+      'Username',
+      'Status',
+      'Hersteller',
+      'Modell',
+      'PS',
+      'Personen',
+      ...(includePrivateExportFields ? ['Vorname', 'Nachname', 'Kennzeichen'] : []),
+    ]
+    const dataRows = rows.map((r) => [
+      r.profiles?.username ?? '',
+      r.status,
+      r.vehicle_manufacturer,
+      r.vehicle_model,
+      r.vehicle_power_ps,
+      1 + r.passenger_count,
+      ...(includePrivateExportFields
+        ? [r.profiles?.first_name ?? '', r.profiles?.last_name ?? '', r.license_plate ?? '']
+        : []),
+    ])
+    downloadCsv(`${tourTitle || 'tour'}-teilnehmer.csv`, [header, ...dataRows])
+  }
+
+  async function shareSummary() {
+    setShareStatus(null)
+    const lines = [
+      `${tourTitle} — Teilnehmer`,
+      `${confirmedCount} bestätigte Fahrzeuge · ${confirmedPersons} Personen`,
+      '',
+      ...confirmedRows.map(
+        (r) =>
+          `${r.profiles?.username ?? '—'} · ${r.vehicle_manufacturer} ${r.vehicle_model} · ${r.vehicle_power_ps} PS · ${1 + r.passenger_count} Person${1 + r.passenger_count === 1 ? '' : 'en'}`,
+      ),
+    ]
+    const result = await shareOrCopyText(`${tourTitle} — Teilnehmer`, lines.join('\n'))
+    setShareStatus(
+      result === 'shared'
+        ? null
+        : result === 'copied'
+          ? 'In die Zwischenablage kopiert.'
+          : 'Teilen nicht möglich.',
+    )
+  }
+
   if (loading) return <PageLoading />
 
   const confirmedRows = rows.filter((r) => r.status === 'confirmed')
@@ -164,12 +230,34 @@ export function AdminTourRegistrationsPage() {
             Eingecheckt: {checkedInCount} / {confirmedCount}
           </div>
         )}
+        {interestCount > 0 && <div>Vorgemerkt: {interestCount}</div>}
       </div>
 
       <div className="mt-3 flex flex-col gap-1">
         <Link to="/admin/notifications" className="inline-block text-sm underline">
           Mitteilung an diese Tour senden →
         </Link>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 rounded-md bg-sft-surface p-4 text-sm">
+        <p className="font-medium">Exportieren</p>
+        <label className="flex items-center gap-2 text-sft-gray">
+          <input
+            type="checkbox"
+            checked={includePrivateExportFields}
+            onChange={(e) => setIncludePrivateExportFields(e.target.checked)}
+          />
+          Klarname &amp; Kennzeichen einschließen
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportCsv} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
+            CSV exportieren
+          </button>
+          <button onClick={shareSummary} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
+            Zusammenfassung teilen
+          </button>
+        </div>
+        {shareStatus && <p className="text-xs text-sft-gray">{shareStatus}</p>}
       </div>
 
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
