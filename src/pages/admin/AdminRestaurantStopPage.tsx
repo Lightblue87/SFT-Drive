@@ -215,7 +215,7 @@ export function AdminRestaurantStopPage() {
           </span>
         </button>
         <div className="grid grid-cols-2 gap-[11px]">
-          <label>
+          <label className="min-w-0">
             <span className={fieldLabel}>ÖFFNET</span>
             <input
               type="datetime-local"
@@ -224,7 +224,7 @@ export function AdminRestaurantStopPage() {
               className={`${fieldInput} font-mono`}
             />
           </label>
-          <label>
+          <label className="min-w-0">
             <span className={fieldLabel}>SCHLIESST</span>
             <input
               type="datetime-local"

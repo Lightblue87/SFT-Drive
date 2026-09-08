@@ -778,7 +778,7 @@ export function AdminTourFormPage() {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[16px] text-sft-white outline-none focus:border-sft-red/60'
+  'w-full min-w-0 rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[16px] text-sft-white outline-none focus:border-sft-red/60'
 const selectClass =
   'w-full appearance-none rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[15px] font-medium text-sft-white outline-none focus:border-sft-red/60'
 
@@ -793,7 +793,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-2">
+    <label className="flex min-w-0 flex-col gap-2">
       <span className="font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim">
         {label.toUpperCase()}
       </span>

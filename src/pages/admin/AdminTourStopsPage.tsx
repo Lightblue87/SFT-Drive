@@ -255,7 +255,7 @@ export function AdminTourStopsPage() {
         </label>
 
         <div className="grid grid-cols-2 gap-[11px]">
-          <label>
+          <label className="min-w-0">
             <span className={fieldLabel}>UHRZEIT</span>
             <input
               type="datetime-local"
@@ -264,7 +264,7 @@ export function AdminTourStopsPage() {
               className={`${fieldInput} font-mono`}
             />
           </label>
-          <label>
+          <label className="min-w-0">
             <span className={fieldLabel}>REIHENFOLGE</span>
             <input
               type="number"
