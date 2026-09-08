@@ -852,6 +852,14 @@ ODER
 Caller besitzt für diese Tour status = confirmed
 ```
 
+**Phase-12-Ausnahme (§34.1):** Besteht zwischen dem Caller und dem
+betreffenden Teilnehmer eine akzeptierte Freundschaft (`friendships.status
+= 'accepted'`), darf die Funktion für genau diesen Teilnehmer zusätzlich
+`first_name`/`last_name` ausgeben. Ohne akzeptierte Freundschaft bleibt die
+Ausgabe wie oben beschrieben — `first_name`/`last_name` werden weiterhin
+nicht ausgegeben. Bis Phase 12 implementiert ist, gibt die Funktion keine
+Klarnamen aus.
+
 ---
 
 ### 8.10 Öffentliche Kapazitätsdaten
@@ -1292,13 +1300,14 @@ Die eigene Zeile darf hervorgehoben werden.
 
 Das Datenmodell und die UI sollen eine spätere gegenseitige Freundesfreigabe nicht unnötig blockieren.
 
-Geplantes Prinzip:
+Geplantes Prinzip (siehe §34.1 für die verbindliche Ausarbeitung):
 
 - User A sendet User B eine Freundesanfrage.
-- User B bestätigt.
-- Erst bei bestätigter gegenseitiger Verbindung dürfen beide den Klarnamen des jeweils anderen sehen.
-- Die Freigabe gilt beidseitig.
-- Eine Freundschaft kann wieder beendet werden.
+- Solange die Anfrage `pending` ist, wird kein Klarname freigegeben.
+- User B nimmt die Anfrage an.
+- Die Annahme der Freundschaftsanfrage **ist** die gegenseitige Zustimmung zur Klarnamenfreigabe — es gibt keinen separaten Freigabe-Schalter und keine einseitige/gerichtete Freigabe.
+- Bei `friendships.status = accepted` dürfen beide Nutzer gegenseitig Vor- und Nachnamen sehen.
+- Wird die Freundschaft beendet, entfällt die Klarnamenfreigabe sofort für beide Seiten.
 
 Diese Funktion ist **nicht Bestandteil des ersten MVP**.
 
@@ -3241,7 +3250,7 @@ Vor jedem Release prüfen:
 - [ ] Participant-Inhalte sind nur für `confirmed` erreichbar
 - [ ] `pending` erhält keine Participant-Inhalte
 - [ ] `waitlisted` erhält keine Participant-Inhalte
-- [ ] Fahrzeugliste gibt keine Klarnamen aus
+- [ ] Fahrzeugliste gibt keine unberechtigt freigegebenen Klarnamen aus (vor Umsetzung von Phase 12, §34.1: weiterhin keine Klarnamen)
 - [ ] Fahrzeugliste gibt keine Kennzeichen aus
 - [ ] Fahrzeugliste gibt keine fremde Personenzahl aus
 - [ ] öffentliche Kapazitätsabfrage gibt keine Userdaten aus
@@ -4123,7 +4132,7 @@ Das MVP gilt erst als fertig, wenn:
 35. nur bestätigte Fahrer Participant-Inhalte sehen
 36. nur bestätigte Fahrer die Liste der bestätigten mitfahrenden Fahrzeuge sehen
 37. in dieser Liste Username, Hersteller, Modell und PS sichtbar sind
-38. dort keine Klarnamen oder Kennzeichen anderer User sichtbar sind
+38. dort keine unberechtigt freigegebenen Klarnamen und keine Kennzeichen anderer User sichtbar sind (vor Umsetzung von Phase 12, §34.1: weiterhin keine Klarnamen)
 39. normale User keinen Adminzugriff erhalten
 40. RLS getestet wurde
 41. andere User fremde Profile nicht direkt auslesen können
@@ -4225,3 +4234,523 @@ Keine unnötige Enterprise-Architektur für ein kleines Community-Projekt aufbau
 ## 33. Aktuelle Kernanforderung in einem Satz
 
 Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
+
+---
+
+## 34. Geplante Entwicklungsphasen 12–15
+
+Die folgenden Phasen sind **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**. Sie bauen additiv auf dem produktiven Stand der Phasen 1–11 auf. Aussagen in §28/§29, die diese vier Themen noch nur als allgemeine spätere Erweiterung aufführen, bleiben als Historienreferenz bestehen; für die konkrete Planung gilt dieser Abschnitt.
+
+Reihenfolge:
+
+```text
+Phase 12 — Freunde und Klarnamenfreigabe
+Phase 13 — Persönliche Fahrzeuggarage
+Phase 14 — Zeitgesteuerter Check-in am Treffpunkt
+Phase 15 — Tagesrouten für Mehrtagestouren
+```
+
+### 34.1 Phase 12 — Freunde und Klarnamenfreigabe
+
+Die Freundschaftsfunktion hat aktuell genau einen Zweck: gegenseitige
+Klarnamenfreigabe. Sie besitzt aktuell keine weiteren Social-Funktionen —
+keine Posts, Activity Feeds, Direktnachrichten oder ähnliche Funktionen.
+
+Ablauf:
+
+1. User A sucht User B über den Username.
+2. User A sendet eine Freundschaftsanfrage.
+3. Solange die Anfrage `pending` ist, werden keine Klarnamen freigegeben.
+4. User B nimmt die Anfrage an.
+5. Mit der Annahme stimmen beide Seiten der gegenseitigen Klarnamenfreigabe zu.
+6. Bei `friendships.status = accepted` dürfen beide Nutzer gegenseitig Vor- und Nachnamen sehen.
+7. Wird die Freundschaft beendet, entfällt die Klarnamenfreigabe sofort für beide Seiten.
+
+Grundregeln:
+
+- User sollen andere Mitglieder primär über den **Username** finden können.
+- Die Suche darf keine E-Mail-Adressen, Geburtsdaten oder andere privaten Profildaten offenlegen.
+- Der Empfänger kann die Anfrage annehmen oder ablehnen.
+- Eine bestehende Freundschaft kann von beiden Seiten beendet werden.
+- Es gibt **keinen** separaten Schalter „Meinen Klarnamen freigeben“ — die akzeptierte Freundschaft selbst ist die gegenseitige Klarnamenfreigabe.
+- Es gibt **keine** gerichtete/einseitige Klarnamenfreigabe.
+- Bis Phase 12 implementiert ist, bleibt das aktuelle Produktionsverhalten: Teilnehmer sehen keine Klarnamen.
+
+Datenmodell — nur eine `friendships`-Beziehung, keine zusätzliche Tabelle für gerichtete Freigaben (insbesondere **keine** `friend_name_shares`):
+
+```text
+friendships
+id UUID PRIMARY KEY
+requester_id UUID REFERENCES auth.users(id)
+addressee_id UUID REFERENCES auth.users(id)
+status TEXT                 -- pending | accepted | rejected
+created_at TIMESTAMPTZ
+accepted_at TIMESTAMPTZ NULL
+updated_at TIMESTAMPTZ
+```
+
+Regeln zum Datenmodell:
+
+- Selbst-Freundschaften (`requester_id = addressee_id`) verhindern.
+- Eine akzeptierte Freundschaft muss eindeutig zwischen genau zwei Usern bestehen; inverse Doppelbeziehungen (A→B und B→A gleichzeitig) verhindern.
+
+Sicherheitsregeln:
+
+- Ein User darf ausschließlich über seinen eigenen Account (`auth.uid()`, serverseitig bestimmt) Freundesanfragen senden und eigene Anfragen/Freundschaften bearbeiten.
+- Keine breite SELECT-Policy auf `profiles` einführen.
+- Die Ausgabe der Klarnamen erfolgt ausschließlich über kontrollierte RPCs/Views oder durch eine gezielte, sichere Erweiterung bestehender Teilnehmer-RPCs (siehe §8.9 Phase-12-Ausnahme).
+- `first_name`/`last_name` dürfen nur an einen Caller ausgegeben werden, der mit dem betreffenden User eine akzeptierte Freundschaft besitzt, oder an Admins im bereits erlaubten administrativen Kontext.
+- E-Mail, Kennzeichen, Geburtsdatum und sonstige private Daten werden durch die Freundschaft **niemals** freigegeben.
+
+Teilnehmerliste einer Tour:
+
+Standard ohne akzeptierte Freundschaft:
+
+```text
+S4shadow
+Audi S4 · 440 PS
+```
+
+Bei akzeptierter Freundschaft zwischen Caller und Fahrer:
+
+```text
+Mirko · S4shadow
+Audi S4 · 440 PS
+```
+
+Die bestehende Teilnehmer-Fahrzeugliste darf also optional den durch eine akzeptierte Freundschaft freigegebenen Klarnamen ergänzen, aber niemals die bisherigen Datenschutzgrenzen für andere Teilnehmer lockern.
+
+UI mindestens:
+
+- Freunde
+- Eingehende Anfragen
+- Ausgehende Anfragen
+- Freund hinzufügen / Anfrage senden
+- Anfrage annehmen / ablehnen
+- Freundschaft beenden
+
+### 34.2 Phase 13 — Persönliche Fahrzeuggarage
+
+Ziel ist, wiederkehrende Touranmeldungen zu vereinfachen, ohne die bereits bewährten historischen Fahrzeug-Snapshots in `tour_registrations` aufzugeben.
+
+Mögliches Datenmodell:
+
+```text
+vehicles
+id UUID PRIMARY KEY
+user_id UUID REFERENCES auth.users(id)
+manufacturer TEXT NOT NULL
+model TEXT NOT NULL
+power_ps INTEGER NOT NULL
+license_plate TEXT NULL
+is_default BOOLEAN DEFAULT FALSE
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Regeln:
+
+- Ein User kann mehrere eigene Fahrzeuge speichern.
+- Ein Fahrzeug kann als Standardfahrzeug markiert werden.
+- User dürfen ausschließlich eigene Fahrzeuge lesen, anlegen, ändern und löschen.
+- Kennzeichen bleiben privat und unterliegen denselben Sichtbarkeitsregeln wie bisher.
+- Die Garage ist eine Komfortfunktion und darf die bestehende sichere Touranmeldung nicht schwächen.
+- Bei einer Touranmeldung kann ein gespeichertes Fahrzeug ausgewählt werden.
+- Hersteller, Modell, Leistung und ggf. Kennzeichen werden beim Anmelden weiterhin als **Snapshot** in `tour_registrations` kopiert.
+- `tour_registrations` darf nicht nur auf `vehicles.id` verweisen und die historischen Daten dynamisch aus der Garage lesen.
+- Eine spätere Änderung oder Löschung eines Garage-Fahrzeugs darf vergangene Touranmeldungen und das Tourenarchiv nicht verändern.
+- Mindest-/Maximalleistung und Kennzeichenpflicht werden weiterhin serverseitig anhand der in die Registrierung übernommenen Werte geprüft.
+- Bestehende Nutzer und bestehende Registrierungsflows müssen rückwärtskompatibel bleiben; die Garage darf nicht erzwingen, dass historische oder bereits aktive Registrierungen migriert werden.
+
+### 34.3 Phase 14 — Zeitgesteuerter Check-in am Treffpunkt
+
+Ziel ist ein sehr leicht erreichbarer Self-Check-in für bestätigte Teilnehmer rund um die in der Tour vorhandene Treffpunktzeit `meeting_at`.
+
+Pro Tour konfigurierbar:
+
+```text
+check_in_enabled BOOLEAN DEFAULT FALSE
+check_in_open_minutes_before INTEGER DEFAULT 30
+check_in_close_minutes_after INTEGER DEFAULT 15
+```
+
+Verbindliche Standardwerte:
+
+```text
+Öffnung: 30 Minuten vor meeting_at
+Schließung: 15 Minuten nach meeting_at
+```
+
+Diese Werte werden bei Aktivierung als Standard verwendet und müssen vom Admin nicht bei jeder Tour neu eingegeben werden. Der Admin kann sie pro Tour individuell ändern.
+
+Regeln für die Konfiguration:
+
+- `meeting_at` ist Voraussetzung für den zeitgesteuerten Check-in.
+- Vor- und Nachlauf müssen `>= 0` sein.
+- `0` ist erlaubt, z. B. um den Check-in exakt zur Treffpunktzeit zu schließen.
+- Check-in-Fenster wird aus `meeting_at` und den beiden konfigurierten Minutenwerten berechnet.
+- Das Ende des Check-in-Fensters bedeutet **nicht**, dass die Gruppe bis zu diesem Zeitpunkt warten muss.
+- Ein verpasster Check-in storniert eine bestätigte Teilnahme nicht automatisch.
+
+Registrierung mindestens ergänzen um:
+
+```text
+checked_in_at TIMESTAMPTZ NULL
+checked_in_by UUID NULL
+```
+
+Self-Check-in bevorzugt über eine kontrollierte RPC, beispielsweise:
+
+```text
+check_in_to_tour(tour_id)
+```
+
+Die Funktion prüft serverseitig mindestens:
+
+1. Caller ist authentifiziert.
+2. Caller besitzt für die Tour eine eigene Registrierung mit `status = confirmed`.
+3. Check-in ist für die Tour aktiviert.
+4. `meeting_at` ist gesetzt.
+5. aktuelle **Serverzeit** liegt innerhalb des gültigen Check-in-Fensters.
+6. Registrierung ist noch nicht eingecheckt.
+7. Tour ist nicht abgesagt/archiviert bzw. fachlich nicht für Check-in gesperrt.
+8. `checked_in_at` wird ausschließlich serverseitig mit `now()` gesetzt.
+
+Teilnehmer-UX:
+
+Während des Check-in-Fensters muss auf der Touransicht ein sehr leicht erreichbarer, prominenter Button erscheinen:
+
+```text
+✓ Am Treffpunkt angekommen
+```
+
+Nach erfolgreichem Check-in:
+
+```text
+✓ Angekommen · 09:18
+```
+
+Außerhalb des Fensters darf der Self-Check-in nicht mehr möglich sein.
+
+Admin-UX:
+
+- Anzahl bestätigter Fahrzeuge
+- Anzahl eingecheckter Fahrzeuge
+- Anzahl noch nicht eingecheckter Fahrzeuge
+- Check-in-Zeit je Teilnehmer
+- Admin darf einen bestätigten Teilnehmer auch außerhalb des Self-Check-in-Fensters manuell als angekommen markieren bzw. organisatorisch korrigieren.
+
+Benachrichtigung:
+
+- Beim Öffnen des Check-in-Fensters kann die bestehende Notification-Infrastruktur für eine In-App-Mitteilung und optional Push genutzt werden.
+- Keine zweite Push-Infrastruktur bauen.
+- Ein eigener Typ wie `CHECK_IN_OPEN` ist zulässig.
+- Deep Link führt direkt zur Tourdetailseite, auf der der Check-in-Button sichtbar ist.
+
+Tourarchiv:
+
+- `checked_in_at` kann künftig genutzt werden, um tatsächliche Anwesenheit von einer lediglich bestätigten Registrierung zu unterscheiden.
+- Bestehende historische Touren ohne Check-in-Daten dürfen dadurch nicht aus dem Archiv verschwinden oder rückwirkend als "nicht teilgenommen" bewertet werden.
+
+### 34.4 Phase 15 — Tagesrouten für Mehrtagestouren
+
+SFT Drive soll **kein eigenes Roadbook und keine doppelte Routen-/Stoppplanung** aufbauen. Die eigentliche Tourenplanung bleibt in Kurviger, Google Maps oder Apple Karten.
+
+Für Mehrtagestouren (`end_date > start_date`) wird pro Kalendertag genau **ein optionales Routen-Linkfeld** bereitgestellt.
+
+Beispiel im Admin-Formular:
+
+```text
+Tag 1 · 18.06.2027
+Routen-Link: [________________]
+
+Tag 2 · 19.06.2027
+Routen-Link: [________________]
+
+Tag 3 · 20.06.2027
+Routen-Link: [________________]
+```
+
+Regeln:
+
+- Die Tage werden automatisch aus `start_date` bis einschließlich `end_date` abgeleitet.
+- Der Admin muss die einzelnen Daten nicht manuell anlegen.
+- Pro Tag gibt es genau ein Feld `route_url`.
+- Das Feld ist optional.
+- Der Link darf auf Kurviger, Google Maps, Apple Karten oder eine andere sinnvolle Routen-URL zeigen.
+- Es gibt **keine separate Anbieter-Auswahl** im Admin-Formular.
+- Ist kein Link hinterlegt, wird für diesen Tag kein Routen-Button angezeigt.
+- Die App speichert keine duplizierten Zwischenstopps, Tankstellen, Restaurantdaten oder Roadbook-Informationen aus der externen Routenplanung.
+- Eintägige Touren verwenden weiterhin den bestehenden Routen-Link auf Tour-Ebene und benötigen keine Tagesetappe nur für diesen Zweck.
+- Tagesrouten sind Participant-Inhalte: nur bestätigte Teilnehmer der jeweiligen Tour und Admins dürfen sie abrufen.
+
+Vorhandenes Datenmodell `tour_stages` weiterverwenden. Zielzustand mindestens:
+
+```text
+tour_stages
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id)
+stage_date DATE
+stage_number INTEGER
+route_url TEXT NULL
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Die bestehende produktive Historie enthält bereits ein früher vorgesehenes Feld `kurviger_url`. Dieses nicht durch rückwirkendes Umschreiben einer alten Migration entfernen oder umbenennen. Bei Umsetzung von Phase 15:
+
+- `route_url` über eine **neue Migration** ergänzen,
+- vorhandene `kurviger_url`-Werte, falls welche existieren, sicher übernehmen oder als Fallback berücksichtigen,
+- anschließend für neue UI-Flows `route_url` als anbieterneutrales Feld verwenden.
+
+Optionale Anbieter-Erkennung:
+
+Die App darf anhand bekannter URL-/Host-Muster automatisch die Button-Beschriftung anpassen, ohne dass der Admin den Anbieter auswählen muss.
+
+Beispiele:
+
+```text
+Kurviger-URL       → Route in Kurviger öffnen
+Google-Maps-URL    → Route in Google Maps öffnen
+Apple-Maps-URL     → Route in Apple Karten öffnen
+sonstige URL       → Route öffnen
+```
+
+Die Erkennung ist reine UX-Verbesserung. Die Berechtigung und Speicherung hängen nicht vom erkannten Anbieter ab.
+
+### 34.5 Gemeinsame Regeln für Phasen 12–15
+
+- Noch nicht implementierte Punkte niemals als produktiv vorhanden darstellen.
+- Bestehende Migrationen nicht rückwirkend ändern.
+- Neue Tabellen/Felder/RPCs ausschließlich über neue versionierte Migrationen ergänzen.
+- RLS und serverseitige Berechtigungsprüfung sind Bestandteil jeder Phase.
+- Bestehende Auth-, Tour-, Registrierungs-, Notification- und Archivlogik weiterverwenden statt parallele Systeme aufzubauen.
+- Kein `service_role` im Client.
+- Keine zusätzlichen laufenden Kosten ohne ausdrückliche Entscheidung.
+- Historische Registrierungs- und Archivdaten müssen erhalten bleiben.
+- Nach jeder Phase Build, Linter und relevante RLS-/RPC-/Regressionstests ausführen.
+
+---
+
+## 35. Geplante Entwicklungsphasen 16–18
+
+Die folgenden Phasen sind **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**. Sie ergänzen die in §34 festgelegte Roadmap additiv und verwenden die bestehenden Tour-, Registrierungs-, Restaurant- und Notification-Strukturen weiter.
+
+Reihenfolge:
+
+```text
+Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen
+Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink
+Phase 18 — Vormerkung vor Öffnung der Touranmeldung
+```
+
+### 35.1 Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen
+
+Die organisatorische Kommunikation erfolgt überwiegend digital, insbesondere per E-Mail, WhatsApp, iMessage und vergleichbaren Diensten. Deshalb liegt der Schwerpunkt nicht auf Druck- oder PDF-Workflows, sondern auf einfach digital weiterverwendbaren Daten.
+
+Ziele:
+
+- Admin kann Teilnehmerdaten einer Tour als **CSV** exportieren.
+- Admin kann Restaurantbestellungen als **CSV** exportieren.
+- Zusätzlich soll eine kompakte Textzusammenfassung über die native Teilen-Funktion des Geräts weitergegeben werden können.
+- Wenn die Web Share API auf dem Gerät nicht verfügbar ist, dient `In Zwischenablage kopieren` als Fallback.
+- SFT Drive integriert dafür keine E-Mail-, WhatsApp- oder iMessage-API; das Betriebssystem bzw. der Browser übergibt den Inhalt an die vom Nutzer gewählte App.
+
+Teilnehmerexport:
+
+- ausschließlich für Admins,
+- standardmäßig nur organisatorisch notwendige Daten,
+- mindestens Username, Fahrzeughersteller, Modell, Leistung, Status und Personenzahl,
+- Klarname und Kennzeichen nur dann in einen Export aufnehmen, wenn der Admin diese Daten für den konkreten organisatorischen Zweck ausdrücklich auswählt,
+- keine Geburtsdaten, Auth-Daten oder sonstigen unnötigen Profildaten exportieren.
+
+Restaurant-Export:
+
+- aggregierte Gesamtmengen je Menüposition,
+- bestätigte Gesamtpersonenzahl,
+- optional fahrzeug-/registrierungsbezogene Detailansicht mit den bereits für Admins sichtbaren Bestelldaten,
+- keine zusätzliche Export-Datenhaltung aufbauen; Export immer aus dem aktuellen autorisierten Datenbestand erzeugen.
+
+Beispiel für teilbaren Text:
+
+```text
+Harz Tour — Teilnehmer
+18 bestätigte Fahrzeuge · 31 Personen
+
+S4shadow · Audi S4 · 440 PS · 2 Personen
+RS3Tom · Audi RS3 · 400 PS · 1 Person
+```
+
+Beispiel Restaurant:
+
+```text
+Restaurant Berggasthof
+31 Personen
+
+12 × Schnitzel
+8 × Burger
+6 × Currywurst
+5 × Veggie Bowl
+```
+
+Die Export-/Share-Funktionen dürfen bestehende RLS- und Admin-Grenzen niemals umgehen.
+
+### 35.2 Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink
+
+Für Ausfahrten wird bereits außerhalb von SFT Drive pro Tour eine WhatsApp-Gruppe für Austausch und Detailfragen genutzt. SFT Drive soll diese Kommunikation **nicht nachbauen**, sondern lediglich den passenden Gruppenlink sicher an die bestätigten Teilnehmer ausliefern.
+
+`tour_participant_details` kann dafür über eine neue Migration ergänzt werden um:
+
+```text
+whatsapp_group_url TEXT NULL
+```
+
+Regeln:
+
+- Feld ist pro Tour optional.
+- Admin kann den WhatsApp-Einladungslink in der Tourverwaltung hinterlegen und ändern.
+- Der Link ist Participant-Inhalt und darf nur an Admins und bestätigte Teilnehmer der jeweiligen Tour ausgeliefert werden.
+- `pending`, `waitlisted`, `rejected`, `cancelled`, normale Mitglieder ohne bestätigte Teilnahme und Visitor erhalten den Link nicht.
+- Der Link darf nicht in einer öffentlich lesbaren `tours`-Zeile gespeichert werden.
+- Externe URL sicher öffnen; bei neuen Fenstern `noopener`/`noreferrer` beachten.
+- Keine WhatsApp API, keine Chat-Synchronisation und kein automatisches Hinzufügen/Entfernen von Gruppenmitgliedern implementieren.
+- Die tatsächliche Gruppenmitgliedschaft wird weiterhin vollständig in WhatsApp verwaltet.
+
+Teilnehmer-UX:
+
+```text
+WhatsApp-Gruppe
+[ WhatsApp-Gruppe öffnen ]
+```
+
+Ist kein Link hinterlegt, wird kein WhatsApp-Button angezeigt.
+
+### 35.3 Phase 18 — Vormerkung vor Öffnung der Touranmeldung
+
+Touren können deutlich vor dem eigentlichen Anmeldestart veröffentlicht werden. Damit frühe Sichtbarkeit nicht dazu führt, dass lange im Voraus unverbindlich belegte Plätze die echte Kapazität blockieren, wird eine **Vormerkung** strikt von der verbindlichen Touranmeldung getrennt.
+
+Grundprinzip:
+
+```text
+Vormerken = Informiere mich, sobald die reguläre Anmeldung geöffnet ist.
+```
+
+Eine Vormerkung:
+
+- reserviert **keinen** Fahrzeugplatz,
+- zählt nicht gegen `max_vehicles`,
+- erzeugt keinen `pending`-, `confirmed`- oder `waitlisted`-Status,
+- verschafft keinen Vorrang und kein Vorbuchungsrecht,
+- wird nicht automatisch in eine Touranmeldung umgewandelt.
+
+Vorgeschlagenes Datenmodell:
+
+```text
+tour_interests
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id)
+user_id UUID REFERENCES auth.users(id)
+created_at TIMESTAMPTZ
+registration_open_notified_at TIMESTAMPTZ NULL
+UNIQUE(tour_id, user_id)
+```
+
+RLS / Aktionen:
+
+- nur eingeloggte User können sich vormerken,
+- User kann ausschließlich die eigene Vormerkung anlegen, lesen und entfernen,
+- Self-Service bevorzugt über kontrollierte RPCs bzw. eng gefasste RLS,
+- Admin darf pro Tour die Anzahl der Vormerkungen sehen,
+- Admin benötigt für die normale Übersicht keine privaten Profildaten der vorgemerkten User,
+- Account-Löschung muss die zugehörigen Vormerkungen sauber entfernen.
+
+Voraussetzung für eine Vormerkung:
+
+- Tour ist für den User sichtbar bzw. veröffentlicht,
+- `registration_open_at` liegt in der Zukunft,
+- die reguläre Anmeldung ist noch nicht geöffnet.
+
+Sobald die Anmeldung geöffnet ist, wird `Vormerken` durch die normale Touranmeldung ersetzt.
+
+Teilnehmer-UX vor dem Anmeldestart:
+
+```text
+Anmeldung öffnet am 01.03.2027 · 18:00 Uhr
+
+[ Für diese Tour vormerken ]
+```
+
+Nach Vormerkung:
+
+```text
+★ Für diese Tour vorgemerkt
+Du wirst benachrichtigt, sobald die Anmeldung öffnet.
+```
+
+Der User kann die Vormerkung vor dem Anmeldestart wieder entfernen.
+
+Admin-UX:
+
+```text
+Vorgemerkt: 27
+Max. Fahrzeuge: 20
+```
+
+Die Zahl dient ausschließlich als Interessensindikator und beeinflusst die spätere Kapazitätslogik nicht.
+
+#### Verbindliche Benachrichtigung beim Anmeldestart
+
+Wenn `registration_open_at` erreicht wird, müssen alle zu diesem Zeitpunkt noch vorgemerkten Nutzer automatisch benachrichtigt werden.
+
+Dafür die bestehende Notification-Infrastruktur verwenden:
+
+```text
+TOUR_REGISTRATION_OPEN
+```
+
+Mindestens immer als In-App-Notification. Zusätzlich als Web Push, sofern der betreffende User Push aktiviert hat.
+
+Beispiel:
+
+```text
+Anmeldung jetzt geöffnet
+
+Die Anmeldung für „Dolomiten Tour 2027“ ist jetzt möglich.
+
+[ Jetzt anmelden ]
+```
+
+Der Deep Link führt direkt zu:
+
+```text
+/tours/:slug
+```
+
+Dort erfolgt ausschließlich die bestehende reguläre Anmeldung. Erst diese Anmeldung entscheidet über `confirmed`, `pending` oder `waitlisted` und belegt gegebenenfalls einen Fahrzeugplatz.
+
+Benachrichtigungsregeln:
+
+- Empfänger werden serverseitig aus `tour_interests` ermittelt.
+- Nur aktuell vorgemerkte User werden benachrichtigt.
+- Eine vor Öffnung entfernte Vormerkung erhält keine Benachrichtigung.
+- `registration_open_notified_at` verhindert Doppelversand.
+- Die Notification darf nicht davon abhängen, dass irgendein Nutzer oder Admin die App gerade geöffnet hat.
+- Wird `registration_open_at` vor dem Versand geändert, gilt der neue tatsächliche Öffnungszeitpunkt.
+- Wird die Anmeldung durch den Admin früher geöffnet, werden die vorgemerkten Nutzer zeitnah beim tatsächlichen Öffnen benachrichtigt.
+- Bei einer abgesagten Tour darf keine Anmeldeöffnungs-Notification versendet werden.
+- Eine bereits versendete Öffnungsbenachrichtigung wird nicht allein wegen einer nachträglichen Zeitänderung automatisch erneut verschickt.
+
+Die bestehende serverseitige zeitgesteuerte Notification-/Push-Architektur ist zu erweitern; keine zweite unabhängige Push-Infrastruktur aufbauen.
+
+### 35.4 Gemeinsame Regeln für Phasen 16–18
+
+- Noch nicht implementierte Punkte niemals als produktiv vorhanden darstellen.
+- Bestehende Migrationen niemals rückwirkend ändern.
+- Neue Felder/Tabellen/RPCs nur über neue versionierte Migrationen ergänzen.
+- Bestehende Auth-, Tour-, Registrierungs-, Restaurant- und Notification-Architektur weiterverwenden.
+- Export- und Share-Funktionen dürfen keine zusätzlichen Leserechte erzeugen.
+- WhatsApp-Gruppenlinks bleiben geschützte Participant-Inhalte.
+- Vormerkungen bleiben strikt von verbindlichen Tourregistrierungen und Fahrzeugkapazität getrennt.
+- Zeitgesteuerte Notifications werden serverseitig ausgelöst und sind gegen Doppelversand abzusichern.
+- Keine kostenpflichtigen Kommunikations-APIs ohne ausdrückliche Zustimmung einführen.
+- Nach jeder Phase Build, Linter sowie relevante RLS-/RPC-/Regressionstests ausführen.
