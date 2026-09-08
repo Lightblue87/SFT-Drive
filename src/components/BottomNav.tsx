@@ -59,7 +59,7 @@ function GarageIcon() {
  * Kompakte Bottom-Navigation. Archiv und Freunde sind bewusst nicht als
  * eigener Punkt geführt, sondern über /profile erreichbar (siehe CLAUDE.md
  * §21.6) — die Garage wurde auf ausdrücklichen Wunsch als eigenes primäres
- * Ziel ergänzt.
+ * Ziel ergänzt. Admin steht bewusst ganz rechts als letzter Punkt.
  */
 export function BottomNav() {
   const { user } = useAuth()
@@ -81,6 +81,10 @@ export function BottomNav() {
             <MyToursIcon />
             Meine Touren
           </NavLink>
+          <NavLink to="/profile/vehicles" className={itemClass}>
+            <GarageIcon />
+            Garage
+          </NavLink>
           <NavLink to="/profile" end className={itemClass}>
             <ProfileIcon />
             Profil
@@ -91,10 +95,6 @@ export function BottomNav() {
               Admin
             </NavLink>
           )}
-          <NavLink to="/profile/vehicles" className={itemClass}>
-            <GarageIcon />
-            Garage
-          </NavLink>
         </>
       ) : (
         <NavLink to="/login" className={itemClass}>
