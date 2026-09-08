@@ -287,7 +287,10 @@ export function RegisterPage() {
 
       {error && <p className="mt-3 px-[18px] text-sm text-sft-red">{error}</p>}
 
-      <div className="fixed inset-x-0 bottom-0 bg-gradient-to-t from-sft-black via-sft-black/90 to-transparent px-[18px] pb-[30px] pt-6">
+      <div
+        className="fixed inset-x-0 z-20 bg-gradient-to-t from-sft-black via-sft-black/90 to-transparent px-[18px] pb-3.5 pt-6"
+        style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
+      >
         <button
           onClick={goNext}
           disabled={submitting}
