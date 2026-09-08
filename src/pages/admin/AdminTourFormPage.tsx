@@ -487,26 +487,27 @@ export function AdminTourFormPage() {
         </Section>
 
         <Section title="Zeitraum & Treffpunkt">
-          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
-            <Field label="Start">
-              <input
-                required
-                type="date"
-                value={form.start_date}
-                onChange={(e) => set('start_date', e.target.value)}
-                className={`${inputClass} font-mono font-medium`}
-              />
-            </Field>
-            <Field label="Ende">
-              <input
-                required
-                type="date"
-                value={form.end_date}
-                onChange={(e) => set('end_date', e.target.value)}
-                className={`${inputClass} font-mono font-medium`}
-              />
-            </Field>
-          </div>
+          {/* Start/Ende bewusst untereinander statt nebeneinander im Grid: native
+              date-Inputs bringen auf manchen Mobilbrowsern eine intrinsische
+              Mindestbreite mit, die eine 2-Spalten-Aufteilung sprengen kann. */}
+          <Field label="Start">
+            <input
+              required
+              type="date"
+              value={form.start_date}
+              onChange={(e) => set('start_date', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          <Field label="Ende">
+            <input
+              required
+              type="date"
+              value={form.end_date}
+              onChange={(e) => set('end_date', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
           <Field label="Streckenlänge (km)">
             <input
               type="number"
@@ -649,24 +650,22 @@ export function AdminTourFormPage() {
         </Section>
 
         <Section title="Anmelde- & Check-in-Fenster">
-          <div className="grid min-w-0 grid-cols-2 gap-[11px]">
-            <Field label="Anmeldung ab">
-              <input
-                type="datetime-local"
-                value={form.registration_open_at}
-                onChange={(e) => set('registration_open_at', e.target.value)}
-                className={`${inputClass} font-mono font-medium`}
-              />
-            </Field>
-            <Field label="Anmeldung bis">
-              <input
-                type="datetime-local"
-                value={form.registration_close_at}
-                onChange={(e) => set('registration_close_at', e.target.value)}
-                className={`${inputClass} font-mono font-medium`}
-              />
-            </Field>
-          </div>
+          <Field label="Anmeldung ab">
+            <input
+              type="datetime-local"
+              value={form.registration_open_at}
+              onChange={(e) => set('registration_open_at', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          <Field label="Anmeldung bis">
+            <input
+              type="datetime-local"
+              value={form.registration_close_at}
+              onChange={(e) => set('registration_close_at', e.target.value)}
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
           <Field label="Personenzahl änderbar bis">
             <input
               type="datetime-local"

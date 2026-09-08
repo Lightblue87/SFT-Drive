@@ -214,26 +214,24 @@ export function AdminRestaurantStopPage() {
             />
           </span>
         </button>
-        <div className="grid min-w-0 grid-cols-2 gap-[11px]">
-          <label className="min-w-0">
-            <span className={fieldLabel}>ÖFFNET</span>
-            <input
-              type="datetime-local"
-              value={openAt}
-              onChange={(e) => setOpenAt(e.target.value)}
-              className={`${fieldInput} font-mono`}
-            />
-          </label>
-          <label className="min-w-0">
-            <span className={fieldLabel}>SCHLIESST</span>
-            <input
-              type="datetime-local"
-              value={deadlineAt}
-              onChange={(e) => setDeadlineAt(e.target.value)}
-              className={`${fieldInput} font-mono`}
-            />
-          </label>
-        </div>
+        <label className="block">
+          <span className={fieldLabel}>ÖFFNET</span>
+          <input
+            type="datetime-local"
+            value={openAt}
+            onChange={(e) => setOpenAt(e.target.value)}
+            className={`${fieldInput} font-mono`}
+          />
+        </label>
+        <label className="mt-3.5 block">
+          <span className={fieldLabel}>SCHLIESST</span>
+          <input
+            type="datetime-local"
+            value={deadlineAt}
+            onChange={(e) => setDeadlineAt(e.target.value)}
+            className={`${fieldInput} font-mono`}
+          />
+        </label>
         <label className="mt-3.5 block">
           <span className={fieldLabel}>HINWEIS (Z. B. ÖFFNUNGSZEITEN)</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} className={fieldInput} />

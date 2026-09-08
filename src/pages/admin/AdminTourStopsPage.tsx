@@ -254,26 +254,24 @@ export function AdminTourStopsPage() {
           />
         </label>
 
-        <div className="grid min-w-0 grid-cols-2 gap-[11px]">
-          <label className="min-w-0">
-            <span className={fieldLabel}>UHRZEIT</span>
-            <input
-              type="datetime-local"
-              value={form.starts_at}
-              onChange={(e) => set('starts_at', e.target.value)}
-              className={`${fieldInput} font-mono`}
-            />
-          </label>
-          <label className="min-w-0">
-            <span className={fieldLabel}>REIHENFOLGE</span>
-            <input
-              type="number"
-              value={form.sort_order}
-              onChange={(e) => set('sort_order', e.target.value)}
-              className={`${fieldInput} font-mono`}
-            />
-          </label>
-        </div>
+        <label className="block">
+          <span className={fieldLabel}>UHRZEIT</span>
+          <input
+            type="datetime-local"
+            value={form.starts_at}
+            onChange={(e) => set('starts_at', e.target.value)}
+            className={`${fieldInput} font-mono`}
+          />
+        </label>
+        <label className="block">
+          <span className={fieldLabel}>REIHENFOLGE</span>
+          <input
+            type="number"
+            value={form.sort_order}
+            onChange={(e) => set('sort_order', e.target.value)}
+            className={`${fieldInput} font-mono`}
+          />
+        </label>
 
         {error && <p className="text-sm text-sft-red">{error}</p>}
 
