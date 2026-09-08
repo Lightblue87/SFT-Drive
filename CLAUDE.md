@@ -4861,3 +4861,450 @@ Query-Filter (`status = 'published'`) ausgeschlossen.
 - Zeitgesteuerte Notifications werden serverseitig ausgelöst und sind gegen Doppelversand abzusichern.
 - Keine kostenpflichtigen Kommunikations-APIs ohne ausdrückliche Zustimmung einführen.
 - Nach jeder Phase Build, Linter sowie relevante RLS-/RPC-/Regressionstests ausführen.
+
+---
+
+## 36. Geplante Entwicklungsphase 19 — Hotelvorschläge und Übernachtungsbestätigung
+
+Phase 19 ist verbindlich geplant, aber noch nicht als umgesetzt zu behandeln.
+
+Ziel ist die organisatorische Unterstützung von Übernachtungen bei
+Mehrtagestouren, ohne SFT Drive zu einem Hotel-Buchungssystem zu machen.
+
+SFT Drive:
+- schlägt Unterkünfte vor,
+- verlinkt auf die externe Buchungsmöglichkeit,
+- erfasst ausschließlich, ob der Teilnehmer seine Übernachtung organisiert hat.
+
+Die eigentliche Hotelbuchung erfolgt immer außerhalb von SFT Drive.
+
+### 36.1 Grundprinzip
+
+Die Funktion ist nur für Mehrtagestouren relevant:
+
+```text
+end_date > start_date
+```
+
+Die benötigten Übernachtungsnächte werden automatisch aus dem Tourzeitraum
+abgeleitet.
+
+Beispiel:
+
+```text
+Tour:
+18.06.2027 bis 21.06.2027
+
+Übernachtungen:
+18./19.06.2027
+19./20.06.2027
+20./21.06.2027
+```
+
+Es gibt keine Übernachtung nach dem letzten Tourtag.
+
+Der Admin muss die einzelnen Nächte nicht manuell anlegen.
+
+### 36.2 Hotelvorschläge durch den Admin
+
+Der planende Admin kann für jede Übernachtungsnacht einen oder mehrere
+Hotel-/Unterkunftsvorschläge hinterlegen.
+
+Ein Vorschlag kann mindestens enthalten:
+
+- Hotel-/Unterkunftsname
+- externe URL
+- optionale Adresse
+- optionale organisatorische Notiz
+- optionale Buchungsdeadline / Hinweis auf ein Abrufkontingent
+- Sortierreihenfolge
+
+Beispiel:
+
+```text
+Übernachtung 18./19.06.2027
+
+Hotel Alpenblick
+Musterstraße 12, Bozen
+Buchungskontingent bis 01.04.2027
+
+[ Hotel öffnen ]
+
+Hotel Dolomiti
+[ Hotel öffnen ]
+```
+
+Mehrere Vorschläge pro Nacht sind zulässig.
+
+Hotelvorschläge sind keine Reservierungen und erzeugen keinerlei
+Verpflichtung oder Buchung innerhalb von SFT Drive.
+
+Keine Booking.com-, Hotel-, Zahlungs- oder sonstige externe Buchungs-API
+integrieren.
+
+Externe Links sicher öffnen; bei neuen Fenstern mindestens
+noopener/noreferrer beachten.
+
+### 36.3 Teilnehmer muss kein vorgeschlagenes Hotel wählen
+
+Ein bestätigter Teilnehmer muss SFT Drive NICHT mitteilen, welches Hotel
+oder welche Unterkunft er tatsächlich gebucht hat.
+
+Er darf:
+- einen vorgeschlagenen Anbieter verwenden,
+- ein anderes Hotel buchen,
+- eine Ferienwohnung verwenden,
+- privat übernachten,
+- eine andere geeignete Unterkunft organisieren.
+
+SFT Drive speichert ausschließlich den organisatorischen Status:
+
+```text
+"Übernachtung gebucht / organisiert"
+```
+
+Dadurch werden keine unnötigen privaten Reise- oder Buchungsdaten erfasst.
+
+Insbesondere NICHT speichern:
+
+- Buchungsnummer
+- Reservierungsnummer
+- Preis
+- Zahlungsinformationen
+- Kreditkartendaten
+- Zimmernummer
+- Zimmerkategorie
+- Buchungsplattform
+- sonstige unnötige Buchungsdetails
+
+### 36.4 Teilnehmer-UX
+
+Nur ein für die betreffende Tour bestätigter Teilnehmer darf seinen
+Übernachtungsstatus verwalten.
+
+Beispiel:
+
+```text
+Übernachtungen
+
+18./19.06.2027
+
+Hotelvorschläge:
+Hotel Alpenblick
+[ Hotel öffnen ]
+
+[ ✓ Übernachtung gebucht ]
+```
+
+Nach Bestätigung:
+
+```text
+✓ Übernachtung gebucht
+```
+
+Bei mehreren Nächten wird der Status für jede Nacht separat geführt:
+
+```text
+18./19.06.   ✓ bestätigt
+19./20.06.   Noch nicht bestätigt
+20./21.06.   ✓ bestätigt
+```
+
+Der User kann eine Bestätigung wieder zurücknehmen, falls eine Buchung
+storniert wurde oder sich seine Planung geändert hat.
+
+Auch wenn für eine Nacht kein Hotelvorschlag hinterlegt ist, darf der
+Teilnehmer bestätigen, dass seine Übernachtung organisiert ist.
+
+Die Bestätigung bedeutet ausschließlich:
+
+```text
+"Der Teilnehmer hat SFT Drive mitgeteilt, dass seine Übernachtung für diese
+Nacht organisiert ist."
+```
+
+Sie ist kein Beleg dafür, dass tatsächlich eine Buchung besteht.
+
+### 36.5 Mögliches Datenmodell
+
+Hotelvorschläge getrennt vom Teilnehmerstatus speichern.
+
+Beispielsweise:
+
+```text
+tour_hotel_suggestions
+
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id)
+night_date DATE NOT NULL
+name TEXT NOT NULL
+url TEXT NULL
+address TEXT NULL
+note TEXT NULL
+booking_deadline DATE NULL
+sort_order INTEGER DEFAULT 0
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Mehrere Hotelvorschläge für dieselbe Tour und Nacht sind zulässig.
+
+Teilnehmerbestätigungen beispielsweise:
+
+```text
+tour_accommodation_confirmations
+
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id)
+user_id UUID REFERENCES auth.users(id)
+night_date DATE NOT NULL
+confirmed_at TIMESTAMPTZ NOT NULL
+UNIQUE(tour_id, user_id, night_date)
+```
+
+Bei Umsetzung das tatsächliche bestehende Schema zuerst prüfen und die
+bestehenden Namens-/FK-/Timestamp-Konventionen des Projekts übernehmen.
+
+Keine alte Migration rückwirkend ändern.
+
+### 36.6 Serverseitige Regeln für die Bestätigung
+
+Die Bestätigung muss serverseitig abgesichert sein.
+
+Bevorzugt über eine kontrollierte RPC oder eine gleichwertig sichere
+RLS-/Trigger-Lösung.
+
+Beispielsweise:
+
+```text
+set_accommodation_confirmation(
+  tour_id,
+  night_date,
+  confirmed
+)
+```
+
+Serverseitig mindestens prüfen:
+
+1. Caller ist authentifiziert.
+2. auth.uid() bestimmt den User; keine fremde user_id vom Client vertrauen.
+3. Tour ist eine Mehrtagestour.
+4. night_date gehört tatsächlich zu einer gültigen Übernachtungsnacht:
+   start_date <= night_date < end_date.
+5. Caller besitzt für die Tour aktuell eine Registrierung mit
+   status = confirmed.
+6. Tour ist organisatorisch noch für diese Aktion zulässig.
+7. Bei Bestätigung wird confirmed_at ausschließlich serverseitig gesetzt.
+8. Doppelbestätigungen dürfen nicht zu doppelten Datensätzen führen.
+9. Der User darf ausschließlich seinen eigenen Status ändern.
+
+pending, waitlisted, rejected oder cancelled dürfen keine
+Übernachtungsbestätigung setzen.
+
+Admins dürfen die Bestätigungen lesen, aber eine Teilnehmerbestätigung nicht
+unbemerkt im Namen des Users erzeugen.
+
+### 36.7 Sichtbarkeit
+
+Hotelvorschläge und Übernachtungsstatus sind organisatorische
+Participant-Inhalte.
+
+Hotelvorschläge lesen dürfen:
+
+- Admin
+- bestätigte Teilnehmer der betreffenden Tour
+
+Übernachtungsbestätigungen:
+
+- Teilnehmer sieht und ändert ausschließlich die eigenen Bestätigungen.
+- Admin darf alle Bestätigungen der Tour zur organisatorischen Auswertung lesen.
+- Normale Mitglieder ohne bestätigte Teilnahme dürfen keine fremden
+  Übernachtungsdaten sehen.
+- Visitor erhalten keine Übernachtungsdaten.
+
+Keine breite SELECT-Policy auf profiles oder tour_registrations dafür
+einführen.
+
+Bestehende sichere RPC-/RLS-Strukturen wiederverwenden.
+
+### 36.8 Admin-Übersicht
+
+Der wichtigste organisatorische Zweck ist, dass der Admin erkennt, bei
+welchen bestätigten Teilnehmern noch keine Übernachtungsbestätigung vorliegt.
+
+Für jede Nacht mindestens anzeigen:
+
+```text
+Übernachtung 18./19.06.2027
+
+Bestätigt: 17 / 20
+Noch nicht bestätigt: 3
+
+Offene Teilnehmer:
+
+S4shadow · Audi S4
+RS3Tom · Audi RS3
+TurboMike · Porsche 911
+```
+
+WICHTIGE BEZEICHNUNG:
+
+Nicht formulieren:
+
+```text
+"hat kein Hotel"
+```
+
+sondern:
+
+```text
+"Übernachtung noch nicht bestätigt"
+```
+
+SFT Drive kann nicht wissen, ob der Teilnehmer bereits außerhalb der App
+gebucht und nur die Bestätigung vergessen hat.
+
+### 36.9 Status pro Teilnehmer
+
+Bei mehreren Übernachtungen soll der Admin zusätzlich den Gesamtstatus pro
+Teilnehmer erkennen können.
+
+Beispiel:
+
+```text
+S4shadow
+
+18./19.06.   ✓ bestätigt
+19./20.06.   Noch nicht bestätigt
+20./21.06.   ✓ bestätigt
+
+Gesamtstatus:
+Teilweise bestätigt
+```
+
+Mindestens folgende Filter:
+
+- Alle Übernachtungen bestätigt
+- Teilweise bestätigt
+- Keine Übernachtung bestätigt
+
+Die Auswertung basiert ausschließlich auf aktuell bestätigten
+Tourteilnehmern.
+
+Ein User, dessen Tourregistrierung nicht mehr confirmed ist, darf nicht als
+offener Teilnehmer in der aktuellen Übernachtungsstatistik gezählt werden.
+
+### 36.10 Gezielte Erinnerung durch den Admin
+
+Der Admin soll Teilnehmer mit fehlender Übernachtungsbestätigung gezielt
+ansprechen können.
+
+Dafür bestehende Notification-Infrastruktur weiterverwenden.
+
+Kein neues Nachrichtensystem bauen.
+
+Der Admin kann:
+- einen einzelnen offenen Teilnehmer auswählen,
+- mehrere offene Teilnehmer auswählen,
+- nach konkreter Übernachtungsnacht filtern,
+- eine Erinnerung an die ausgewählten User senden.
+
+Ein eigener Notification-Typ wie:
+
+```text
+ACCOMMODATION_REMINDER
+```
+
+ist zulässig.
+
+Beispiel:
+
+```text
+Übernachtung noch nicht bestätigt
+
+Für die Dolomiten Tour fehlt uns noch deine Bestätigung für die
+Übernachtung vom 19. auf den 20. Juni.
+
+Bitte bestätige in SFT Drive, sobald deine Unterkunft gebucht ist.
+
+[ Tour öffnen ]
+```
+
+Deep Link zur bestehenden Tourdetailseite.
+
+Wenn Push für den User aktiviert ist, darf die bestehende Push-Infrastruktur
+verwendet werden.
+
+Keine zweite Push-Infrastruktur aufbauen.
+
+Zusätzlich kann die Admin-Ansicht optional "Liste kopieren" bzw. die bereits
+vorhandene Share-/Clipboard-Infrastruktur aus Phase 16 verwenden, damit die
+offenen Teilnehmer bei Bedarf extern über WhatsApp, E-Mail, iMessage usw.
+angesprochen werden können.
+
+Keine automatischen wiederkehrenden Hotel-Erinnerungen ohne separate
+Produktentscheidung einführen.
+
+### 36.11 Datumsänderungen der Tour
+
+Die gültigen Übernachtungsnächte werden immer aus start_date und end_date
+abgeleitet.
+
+Bei einer Änderung des Tourzeitraums:
+
+- passende Nächte weiterhin verwenden,
+- Hotelvorschläge und Bestätigungen außerhalb des neuen Zeitraums nicht
+  mehr als gültig anzeigen oder zählen,
+- vorhandene Daten nicht stillschweigend und destruktiv löschen,
+- Admin bei betroffenen bereits vorhandenen Hotel-/Bestätigungsdaten
+  entsprechend warnen bzw. eine kontrollierte Bereinigung vorsehen.
+
+Beim vollständigen Löschen einer Tour dürfen abhängige Hotelvorschläge und
+Bestätigungen entsprechend der bestehenden Projektkonvention sauber
+mitgelöscht werden.
+
+### 36.12 Sicherheits- und Datenschutzregeln
+
+- keine Zahlungsdaten speichern
+- keine Reservierungs-/Buchungsnummern speichern
+- keine unnötigen Reisedaten speichern
+- kein service_role im Client
+- keine zusätzlichen laufenden Kosten
+- keine externe Hotel-API erforderlich
+- keine Hotelbuchung durch SFT Drive
+- auth.uid() serverseitig als Identität verwenden
+- Admin-Zugriff über bestehende Adminprüfung absichern
+- bestätigte Teilnehmer dürfen nur eigene Bestätigungen schreiben
+- bestehende RLS-Grenzen niemals lockern
+
+### 36.13 Mindesttests bei späterer Umsetzung
+
+Mindestens testen:
+
+- eintägige Tour zeigt keine Hotel-/Übernachtungsfunktion
+- Mehrtagestour leitet Nächte korrekt ab
+- letzte Tournacht ist der Tag vor end_date
+- mehrere Hotelvorschläge pro Nacht funktionieren
+- bestätigter Teilnehmer kann eigene gültige Nacht bestätigen
+- pending kann nicht bestätigen
+- waitlisted kann nicht bestätigen
+- fremde user_id kann nicht verwendet werden
+- ungültige night_date außerhalb des Tourzeitraums wird abgelehnt
+- Doppelbestätigung erzeugt keinen zweiten Datensatz
+- Bestätigung kann wieder zurückgenommen werden
+- Nicht-Teilnehmer können Hotel-/Bestätigungsdaten nicht lesen
+- Admin kann Hotelvorschläge verwalten
+- Admin sieht bestätigt/offen pro Nacht korrekt
+- Admin-Offenliste enthält ausschließlich aktuell confirmed Teilnehmer
+- vollständig/teilweise/nicht bestätigt wird korrekt berechnet
+- Datumsspannenänderungen führen nicht zu falschen offenen Nächten
+- Kennzeichen, Buchungsdaten oder sonstige nicht benötigte private Daten
+  werden nicht an andere Teilnehmer ausgegeben
+
+### 36.14 Umsetzungsstand
+
+Umsetzungsstand: geplant, noch nicht implementiert.
+
+Keine Punkte dieses Abschnitts als produktiv vorhanden darstellen, bevor
+Datenbank, RLS/RPC, Admin-UI, Teilnehmer-UI und relevante Tests tatsächlich
+umgesetzt wurden.
