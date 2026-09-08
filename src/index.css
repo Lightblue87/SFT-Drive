@@ -31,6 +31,23 @@ select {
   font-size: 16px;
 }
 
+/* iOS Safari kann nativen date/datetime-local-Controls trotz width:100%
+   eine größere intrinsische Breite geben. overflow-x:hidden verdeckt dann
+   lediglich den Überlauf und schneidet den rechten Rand ab. Die Controls
+   deshalb explizit auf die Breite ihres Containers begrenzen, ohne den
+   nativen Date-Picker per appearance:none abzuschalten. */
+input[type='date'],
+input[type='datetime-local'] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
 @layer utilities {
   .tap-scale {
     transition: transform 120ms ease;
