@@ -7,8 +7,8 @@ export function Header() {
 
   return (
     <header
-      className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-white/8 bg-sft-black/95 px-4 backdrop-blur-md"
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-sft-black/95 px-4 backdrop-blur-md"
+      style={{ height: 'calc(4rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
     >
       <Link to="/" className="flex items-center gap-2.5">
         <img src="/icons/icon-192.png" alt="" className="h-7 w-7 rounded-lg" />
