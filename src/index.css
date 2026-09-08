@@ -32,10 +32,16 @@ select {
 }
 
 /* iOS Safari kann nativen date/datetime-local-Controls trotz width:100%
-   eine größere intrinsische Breite geben. overflow-x:hidden verdeckt dann
-   lediglich den Überlauf und schneidet den rechten Rand ab. Die Controls
-   deshalb explizit auf die Breite ihres Containers begrenzen, ohne den
-   nativen Date-Picker per appearance:none abzuschalten. */
+   eine größere intrinsische Breite geben. Reines Box-Sizing (width/max-width/
+   min-width) reicht dafür nachweislich NICHT aus — der Überlauf trat
+   weiterhin auch bei einem einzelnen, freistehenden date-Feld ohne jede
+   Flex-/Grid-Verschachtelung auf (Geburtsdatum im öffentlichen
+   Anmeldeformular). Das deutet auf eine reine Rendering-Eigenheit der
+   nativen WebKit-Widget-Darstellung hin, die sich nur über
+   -webkit-appearance:none umgehen lässt — der native Date-/Zeit-Picker
+   (Scroll-Rad) bleibt dabei erhalten, nur das Eingabefeld selbst wird nicht
+   mehr in WebKits eigenem Widget-Layout, sondern wie ein normales Textfeld
+   dargestellt. */
 input[type='date'],
 input[type='datetime-local'] {
   display: block;
@@ -46,6 +52,8 @@ input[type='datetime-local'] {
   inline-size: 100%;
   max-inline-size: 100%;
   min-inline-size: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 @layer utilities {

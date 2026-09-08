@@ -274,7 +274,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
       </div>
 
       {needsDateOfBirth && (
-        <label>
+        <label className="min-w-0 block">
           <span className={fieldLabel}>GEBURTSDATUM * · FÜR MINDESTALTER</span>
           <input
             required
