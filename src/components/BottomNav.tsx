@@ -64,7 +64,7 @@ export function BottomNav() {
             <MyToursIcon />
             Meine Touren
           </NavLink>
-          <NavLink to="/profile" className={itemClass}>
+          <NavLink to="/profile" end className={itemClass}>
             <ProfileIcon />
             Profil
           </NavLink>
