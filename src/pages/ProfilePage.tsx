@@ -31,6 +31,7 @@ export function ProfilePage() {
 
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newPassword, setNewPassword] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSaved, setPasswordSaved] = useState(false)
@@ -65,6 +66,11 @@ export function ProfilePage() {
       return
     }
 
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError('Die Passwörter stimmen nicht überein.')
+      return
+    }
+
     setPasswordSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     setPasswordSaving(false)
@@ -75,6 +81,7 @@ export function ProfilePage() {
     }
 
     setNewPassword('')
+    setNewPasswordConfirm('')
     setPasswordSaved(true)
   }
 
@@ -211,6 +218,18 @@ export function ProfilePage() {
                 className={fieldInput}
               />
             </label>
+            <label className="flex flex-col gap-1">
+              Passwort bestätigen
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={newPasswordConfirm}
+                onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                className={fieldInput}
+              />
+            </label>
             {passwordError && <p className="text-sft-red">{passwordError}</p>}
             {passwordSaved && <p className="text-sft-gray">Passwort geändert.</p>}
             <div className="flex gap-2">
@@ -223,7 +242,12 @@ export function ProfilePage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowPasswordForm(false)}
+                onClick={() => {
+                  setShowPasswordForm(false)
+                  setNewPassword('')
+                  setNewPasswordConfirm('')
+                  setPasswordError(null)
+                }}
                 className="rounded-xl border border-white/13 px-4 py-2.5 text-sft-gray"
               >
                 Abbrechen
