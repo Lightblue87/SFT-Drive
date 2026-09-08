@@ -31,7 +31,9 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   const [model, setModel] = useState('')
   const [power, setPower] = useState('')
   const [licensePlate, setLicensePlate] = useState('')
-  const [passengerCount, setPassengerCount] = useState(0)
+  // Gesamtpersonenzahl inklusive Fahrer (nie unter 1) — beim Absenden in
+  // die vom Backend erwartete Beifahrerzahl umgerechnet (CLAUDE.md §9.8).
+  const [totalPersons, setTotalPersons] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -112,7 +114,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
       p_vehicle_model: model,
       p_vehicle_power_ps: Number(power),
       p_license_plate: licensePlate || null,
-      p_passenger_count: passengerCount,
+      p_passenger_count: totalPersons - 1,
     })
 
     setSubmitting(false)
@@ -250,20 +252,20 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
       <div className="flex items-center justify-between rounded-xl border border-white/9 bg-sft-card px-3.5 py-3.5">
         <div>
           <div className="text-[14px] font-medium">Personen im Fahrzeug</div>
-          <div className="mt-1 font-mono text-[11px] text-sft-gray">FAHRER + BEIFAHRER</div>
+          <div className="mt-1 font-mono text-[11px] text-sft-gray">INKL. FAHRER</div>
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setPassengerCount((n) => Math.max(0, n - 1))}
+            onClick={() => setTotalPersons((n) => Math.max(1, n - 1))}
             className="tap-scale h-9 w-9 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-lg text-sft-white"
           >
             −
           </button>
-          <span className="min-w-[20px] text-center font-mono text-lg font-bold">{passengerCount}</span>
+          <span className="min-w-[20px] text-center font-mono text-lg font-bold">{totalPersons}</span>
           <button
             type="button"
-            onClick={() => setPassengerCount((n) => Math.min(4, n + 1))}
+            onClick={() => setTotalPersons((n) => Math.min(5, n + 1))}
             className="tap-scale h-9 w-9 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-lg text-sft-white"
           >
             +

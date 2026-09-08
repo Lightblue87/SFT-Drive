@@ -401,8 +401,8 @@ export function TourDetailPage() {
                 {activeRegistration.vehicle_power_ps} PS
               </div>
               <div className="mt-1 font-mono text-[12px] text-sft-gray">
-                {activeRegistration.license_plate ?? '—'} · {activeRegistration.passenger_count}{' '}
-                {activeRegistration.passenger_count === 1 ? 'PERSON' : 'PERSONEN'}
+                {activeRegistration.license_plate ?? '—'} · {1 + activeRegistration.passenger_count}{' '}
+                {1 + activeRegistration.passenger_count === 1 ? 'PERSON' : 'PERSONEN'}
               </div>
 
               {['pending', 'confirmed', 'waitlisted'].includes(activeRegistration.status) &&

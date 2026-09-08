@@ -5,13 +5,20 @@ import { rpcErrorMessage } from '@/types/tour'
 
 interface Props {
   tourId: string
+  /** Beifahrer-Anzahl gemäß `tour_registrations.passenger_count` (CLAUDE.md §9.8: 0 = Fahrer allein). */
   initialCount: number
   onUpdated: () => void
 }
 
-/** Änderung der Personenzahl bis zur Admin-Deadline (siehe CLAUDE.md §9.8). */
+/**
+ * Änderung der Personenzahl bis zur Admin-Deadline (siehe CLAUDE.md §9.8).
+ *
+ * Angezeigt/bearbeitet wird die Gesamtpersonenzahl inklusive Fahrer (nie
+ * unter 1), das gespeicherte `passenger_count`-Feld bleibt weiterhin die
+ * reine Beifahrerzahl (Gesamt − 1).
+ */
 export function PassengerCountForm({ tourId, initialCount, onUpdated }: Props) {
-  const [count, setCount] = useState(String(initialCount))
+  const [total, setTotal] = useState(String(initialCount + 1))
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -24,7 +31,7 @@ export function PassengerCountForm({ tourId, initialCount, onUpdated }: Props) {
 
     const { data, error: rpcError } = await supabase.rpc('update_passenger_count', {
       p_tour_id: tourId,
-      p_passenger_count: Number(count),
+      p_passenger_count: Number(total) - 1,
     })
 
     setSubmitting(false)
@@ -51,28 +58,29 @@ export function PassengerCountForm({ tourId, initialCount, onUpdated }: Props) {
     >
       <div>
         <div className="text-[13px] font-medium">Personen im Fahrzeug</div>
+        <div className="mt-0.5 font-mono text-[10px] text-sft-gray-dim">INKL. FAHRER</div>
         {saved && <div className="mt-1 font-mono text-[10px] text-sft-gray">GESPEICHERT</div>}
         {error && <div className="mt-1 font-mono text-[10px] text-sft-red">{error}</div>}
       </div>
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => setCount((n) => String(Math.max(0, Number(n) - 1)))}
+          onClick={() => setTotal((n) => String(Math.max(1, Number(n) - 1)))}
           className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-base text-sft-white"
         >
           −
         </button>
-        <span className="min-w-[16px] text-center font-mono text-base font-bold">{count}</span>
+        <span className="min-w-[16px] text-center font-mono text-base font-bold">{total}</span>
         <button
           type="button"
-          onClick={() => setCount((n) => String(Math.min(4, Number(n) + 1)))}
+          onClick={() => setTotal((n) => String(Math.min(5, Number(n) + 1)))}
           className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-base text-sft-white"
         >
           +
         </button>
         <button
           type="submit"
-          disabled={submitting || count === String(initialCount)}
+          disabled={submitting || total === String(initialCount + 1)}
           className="tap-scale rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium text-sft-white disabled:opacity-40"
         >
           Speichern
