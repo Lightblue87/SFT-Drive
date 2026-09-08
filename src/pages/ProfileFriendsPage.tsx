@@ -251,8 +251,9 @@ export function ProfileFriendsPage() {
       )}
 
       <div className="mx-3.5 mt-[18px] rounded-2xl border border-dashed border-white/14 px-[15px] py-[13px] text-xs leading-relaxed text-[#8e8e96]">
-        Klarnamen werden erst nach bestätigter Freundschaft gegenseitig sichtbar. In Teilnehmerlisten sind
-        Freunde hervorgehoben.
+        Klarnamen werden erst nach bestätigter Freundschaft gegenseitig sichtbar. In der Teilnehmerliste
+        einer Tour siehst du bei Freunden dann zusätzlich zum Username den Vornamen. Kennzeichen und
+        Personenzahl bleiben immer privat.
       </div>
     </div>
   )

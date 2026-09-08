@@ -111,6 +111,18 @@ export function ProfileVehiclesPage() {
     load()
   }
 
+  /**
+   * Ein DB-Trigger sorgt dafür, dass pro User genau ein Standardfahrzeug
+   * bestehen bleibt (§34.2) — hier reicht deshalb das Setzen des Flags.
+   */
+  async function makeDefault(id: string) {
+    await supabase
+      .from('vehicles')
+      .update({ is_default: true, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    load()
+  }
+
   async function remove() {
     if (!editingId) return
     await supabase.from('vehicles').delete().eq('id', editingId)
@@ -136,32 +148,44 @@ export function ProfileVehiclesPage() {
 
       <div className="flex flex-col gap-2.5 px-3.5">
         {vehicles.map((v) => (
-          <button
+          <div
             key={v.id}
-            onClick={() => openEdit(v)}
-            className={`tap-scale flex items-center gap-3.5 rounded-[15px] border p-3.5 text-left ${
+            className={`rounded-[15px] border ${
               v.is_default ? 'border-sft-red/45' : 'border-white/8'
             } bg-sft-card`}
           >
-            <div className="min-w-0 flex-1">
-              <div className="text-[15px] font-semibold leading-tight">
-                {v.manufacturer} {v.model}
+            <button
+              onClick={() => openEdit(v)}
+              className="tap-scale flex w-full items-center gap-3.5 p-3.5 text-left"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[15px] font-semibold leading-tight">
+                  {v.manufacturer} {v.model}
+                </div>
+                <div className="mt-1.5 font-mono text-[11px] text-sft-gray">
+                  {v.license_plate ?? '—'}
+                  {v.is_default && ' · STANDARD'}
+                </div>
               </div>
-              <div className="mt-1.5 font-mono text-[11px] text-sft-gray">
-                {v.license_plate ?? '—'}
-                {v.is_default && ' · STANDARD'}
+              <div className="flex-none text-right">
+                <div className="font-mono text-[26px] font-bold leading-none">{v.power_ps}</div>
+                <div className="mt-1 font-mono text-[9px] tracking-[0.16em] text-sft-gray-dim">PS</div>
               </div>
-              {!v.is_default && (
-                <span className="mt-2.5 inline-block rounded-md bg-white/6 px-2 py-1 font-mono text-[9px] font-bold tracking-[0.12em] text-sft-gray">
-                  ALS STANDARD
-                </span>
-              )}
-            </div>
-            <div className="flex-none text-right">
-              <div className="font-mono text-[26px] font-bold leading-none">{v.power_ps}</div>
-              <div className="mt-1 font-mono text-[9px] tracking-[0.16em] text-sft-gray-dim">PS</div>
-            </div>
-          </button>
+            </button>
+            {/*
+              Eigener Button außerhalb des Bearbeiten-Buttons: als reines
+              <span> darin sah die Aktion klickbar aus, öffnete aber nur das
+              Bearbeiten-Sheet (verschachtelte Buttons sind zudem ungültig).
+            */}
+            {!v.is_default && (
+              <button
+                onClick={() => makeDefault(v.id)}
+                className="tap-scale w-full border-t border-white/8 px-3.5 py-2.5 text-left font-mono text-[9px] font-bold tracking-[0.12em] text-sft-gray"
+              >
+                ALS STANDARD FESTLEGEN
+              </button>
+            )}
+          </div>
         ))}
 
         {vehicles.length === 0 && (
@@ -169,7 +193,8 @@ export function ProfileVehiclesPage() {
         )}
 
         <p className="px-1 pt-1 font-mono text-[11px] leading-relaxed text-[#8a8a92]">
-          FAHRZEUG ANTIPPEN ZUM BEARBEITEN ODER LÖSCHEN
+          FAHRZEUG ANTIPPEN ZUM BEARBEITEN ODER LÖSCHEN. DAS STANDARDFAHRZEUG WIRD BEI DER
+          TOURANMELDUNG VORAUSGEWÄHLT.
         </p>
 
         <button

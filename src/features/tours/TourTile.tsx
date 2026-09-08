@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { TourWithStats } from '@/features/tours/useTours'
 import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
+import { freeSlotsLabel } from '@/utils/capacity'
 
 const OWN_STATUS_LABEL: Record<string, string> = {
   confirmed: 'DU BIST DABEI',
@@ -24,21 +25,13 @@ export function TourTile({ tour, stats, ownStatus }: TourWithStats) {
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
   const dayInfo = multiDay ? currentTourDay(tour.start_date, tour.end_date) : null
 
-  const slotsLabel =
-    ownStatus && OWN_STATUS_LABEL[ownStatus]
-      ? OWN_STATUS_LABEL[ownStatus]
-      : stats
-        ? stats.is_full
-          ? 'AUSGEBUCHT'
-          : `${stats.free_vehicle_slots} PLÄTZE FREI`
-        : null
+  // Eigener Anmeldestatus ergänzt die Kapazitätsangabe, ersetzt sie nicht —
+  // der allgemeine Kapazitätsstatus bleibt sichtbar (siehe CLAUDE.md §13.14).
+  const ownLabel = ownStatus ? OWN_STATUS_LABEL[ownStatus] : null
+  const ownClass = (ownStatus && OWN_STATUS_CLASS[ownStatus]) || 'bg-white/6 text-sft-gray'
 
-  const slotsClass =
-    ownStatus && OWN_STATUS_CLASS[ownStatus]
-      ? OWN_STATUS_CLASS[ownStatus]
-      : stats?.is_full
-        ? 'bg-white/6 text-sft-gray'
-        : 'bg-white/6 text-[#c9c9ce]'
+  const slotsLabel = stats ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full) : null
+  const slotsClass = stats?.is_full ? 'bg-white/6 text-sft-gray' : 'bg-white/6 text-[#c9c9ce]'
 
   return (
     <Link
@@ -62,17 +55,22 @@ export function TourTile({ tour, stats, ownStatus }: TourWithStats) {
         <div className="font-mono text-xs text-sft-gray">
           {formatDateRange(tour.start_date, tour.end_date)}
           {multiDay && ` · ${tourDayCount(tour.start_date, tour.end_date)} Tage`}
-          {dayInfo && ` · läuft`}
+          {dayInfo && ` · Läuft aktuell · Tag ${dayInfo} von ${tourDayCount(tour.start_date, tour.end_date)}`}
         </div>
-        <div className="flex items-center gap-1.5">
-          {tour.route_length_km != null && (
-            <span className="rounded-md bg-white/6 px-1.5 py-0.5 font-mono text-[10px] font-medium text-[#c9c9ce]">
-              {tour.route_length_km} KM
-            </span>
-          )}
+        <div className="truncate font-mono text-[11px] text-sft-gray-dim">
+          {tour.region}
+          {tour.route_length_km != null && ` · ${tour.route_length_km} km`}
+          {stats && ` · ${stats.confirmed_vehicles}/${stats.max_vehicles} Fahrzeuge`}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
           {slotsLabel && (
             <span className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium ${slotsClass}`}>
               {slotsLabel}
+            </span>
+          )}
+          {ownLabel && (
+            <span className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium ${ownClass}`}>
+              {ownLabel}
             </span>
           )}
         </div>

@@ -5,6 +5,7 @@ import { NextTourHero } from '@/features/tours/NextTourHero'
 import { MonthCalendar } from '@/features/tours/MonthCalendar'
 import { PageLoading } from '@/components/PageLoading'
 import { dateKey } from '@/utils/calendar'
+import { parseDateOnly } from '@/utils/date'
 
 const MONTH_NAMES = [
   'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
@@ -45,7 +46,9 @@ export function ToursPage() {
       return // aktueller Monat bleibt Standard
     }
 
-    const nextDate = new Date(relevant[0].start_date)
+    // parseDateOnly statt new Date(...): ein reiner DATE-String würde sonst als
+    // UTC-Mitternacht gelesen und könnte lokal in den Vormonat rutschen (§19).
+    const nextDate = parseDateOnly(relevant[0].start_date)
     setViewYear(nextDate.getFullYear())
     setViewMonth(nextDate.getMonth())
   }, [loading, tours, today])

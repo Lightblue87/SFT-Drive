@@ -6,7 +6,7 @@ import { de } from 'date-fns/locale'
  * DATE-Werte — wir parsen sie nie über UTC-Mitternacht, damit der Tag nicht
  * durch Zeitzonenkonvertierung verschoben wird.
  */
-function parseDateOnly(value: string): Date {
+export function parseDateOnly(value: string): Date {
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year, month - 1, day)
 }

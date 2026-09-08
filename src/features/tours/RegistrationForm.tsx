@@ -134,7 +134,9 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
   }
 
   const submitLabel =
-    !wasRejected && tour.confirmation_mode === 'automatic' ? 'Anmeldung senden' : 'Teilnahme anfragen'
+    // "Verbindlich anmelden" ist bewusst so formuliert (CLAUDE.md §14.3): die
+    // Anmeldung im Automatikmodus ist verbindlich, nicht bloß ein Absenden.
+    !wasRejected && tour.confirmation_mode === 'automatic' ? 'Verbindlich anmelden' : 'Teilnahme anfragen'
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
@@ -286,16 +288,23 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
         </label>
       )}
 
-      {(tour.min_power_ps != null || tour.min_driver_age != null) && (
-        <div className="rounded-xl border border-sft-amber/30 bg-sft-amber/[0.07] px-3.5 py-3.5 text-xs leading-relaxed text-[#e6c07a]">
-          {tour.min_power_ps != null && `Mindestleistung ${tour.min_power_ps} PS`}
-          {tour.min_driver_age != null && ` · Mindestalter ${tour.min_driver_age}`}
-          {' · '}
-          {!wasRejected && tour.confirmation_mode === 'automatic'
+      {/*
+        Der Hinweis zum Bestätigungsmodus muss immer erscheinen, auch wenn die
+        Tour gar keine Fahrzeug-/Fahreranforderungen besitzt — sonst weiß der
+        User nicht, ob seine Anmeldung sofort gilt (CLAUDE.md §14.3).
+      */}
+      <div className="rounded-xl border border-sft-amber/30 bg-sft-amber/[0.07] px-3.5 py-3.5 text-xs leading-relaxed text-[#e6c07a]">
+        {[
+          tour.min_power_ps != null ? `Mindestleistung ${tour.min_power_ps} PS` : null,
+          tour.max_power_ps != null ? `Maximalleistung ${tour.max_power_ps} PS` : null,
+          tour.min_driver_age != null ? `Mindestalter ${tour.min_driver_age} Jahre` : null,
+          !wasRejected && tour.confirmation_mode === 'automatic'
             ? 'Bestätigung erfolgt automatisch, solange Plätze frei sind.'
-            : 'Die Tourleitung prüft deine Anfrage manuell.'}
-        </div>
-      )}
+            : 'Die Tourleitung prüft deine Anfrage manuell.',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </div>
 
       {error && <p className="text-sm text-sft-red">{error}</p>}
 

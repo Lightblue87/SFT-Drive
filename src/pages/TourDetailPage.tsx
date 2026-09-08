@@ -7,7 +7,8 @@ import { BottomSheet } from '@/components/BottomSheet'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useIsAdmin } from '@/features/auth/useIsAdmin'
 import { supabase } from '@/lib/supabase'
-import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
+import { formatDate, formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
+import { freeSlotsLabel } from '@/utils/capacity'
 import { routeButtonLabel } from '@/utils/routeLink'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
@@ -133,9 +134,7 @@ export function TourDetailPage() {
               {confirmed
                 ? 'DU BIST DABEI'
                 : stats
-                  ? stats.is_full
-                    ? 'AUSGEBUCHT'
-                    : `${stats.free_vehicle_slots} PLÄTZE FREI`
+                  ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full)
                   : ''}
             </span>
             {multiDay && (
@@ -179,8 +178,12 @@ export function TourDetailPage() {
             <div className="bg-sft-card px-3.5 py-3">
               <div className={factLabel}>LEISTUNG</div>
               <div className={factValue}>
-                {tour.min_power_ps != null && `ab ${tour.min_power_ps} PS`}
-                {tour.max_power_ps != null && ` · max ${tour.max_power_ps} PS`}
+                {[
+                  tour.min_power_ps != null ? `ab ${tour.min_power_ps} PS` : null,
+                  tour.max_power_ps != null ? `max ${tour.max_power_ps} PS` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </div>
             </div>
           )}
@@ -200,6 +203,16 @@ export function TourDetailPage() {
 
         {tour.public_description && (
           <p className="mt-4 px-1 text-[14px] leading-relaxed text-[#b9b9c0]">{tour.public_description}</p>
+        )}
+
+        {/* Mitgliederinhalt (§10 MEMBER): nur für eingeloggte User. */}
+        {memberDetails?.member_description && (
+          <div className={card}>
+            <div className={sectionLabel}>FÜR MITGLIEDER</div>
+            <p className="whitespace-pre-line px-4 pb-4 text-[14px] leading-relaxed text-[#b9b9c0]">
+              {memberDetails.member_description}
+            </p>
+          </div>
         )}
 
         {isAdmin && (
@@ -246,6 +259,16 @@ export function TourDetailPage() {
               />
             )}
 
+            {/* Teilnehmerinhalt (§10 CONFIRMED_PARTICIPANT): interne Ablaufdetails. */}
+            {participantDetails?.participant_description && (
+              <div className={card}>
+                <div className={sectionLabel}>INTERNE HINWEISE</div>
+                <p className="whitespace-pre-line px-4 pb-4 text-[14px] leading-relaxed text-[#b9b9c0]">
+                  {participantDetails.participant_description}
+                </p>
+              </div>
+            )}
+
             {participantDetails && (
               <div className={card}>
                 <div className={sectionLabel}>TREFFPUNKT (INTERN)</div>
@@ -286,9 +309,7 @@ export function TourDetailPage() {
                     return (
                       <div key={stage.id} className="border-t border-white/6 px-4 py-3.5">
                         <div className="font-mono text-[11px] text-sft-gray">
-                          TAG {stage.stage_number} ·{' '}
-                          {new Date(stage.stage_date)
-                            .toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          TAG {stage.stage_number} · {formatDate(stage.stage_date)}
                         </div>
                         <a
                           href={url}
@@ -497,11 +518,13 @@ export function TourDetailPage() {
 
 function requirements(tour: {
   min_power_ps: number | null
+  max_power_ps: number | null
   min_driver_age: number | null
   license_plate_required: boolean
 }): string[] {
   const list: string[] = []
   if (tour.min_power_ps != null) list.push(`Mindestleistung ${tour.min_power_ps} PS`)
+  if (tour.max_power_ps != null) list.push(`Maximalleistung ${tour.max_power_ps} PS`)
   if (tour.min_driver_age != null) list.push(`Mindestalter ${tour.min_driver_age} Jahre`)
   if (tour.license_plate_required) list.push('Kennzeichen bei Anmeldung erforderlich')
   return list

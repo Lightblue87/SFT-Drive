@@ -25,7 +25,12 @@ function initials(name: string): string {
   return name.replace('@', '').slice(0, 2).toUpperCase()
 }
 
-/** Admin darf die Personenzahl unabhängig von der Deadline korrigieren (§9.8). */
+/**
+ * Admin darf die Personenzahl unabhängig von der Deadline korrigieren (§9.8).
+ * Angezeigt und bearbeitet wird — wie überall in der App — die
+ * Gesamtpersonenzahl inklusive Fahrer (nie unter 1); gespeichert wird
+ * weiterhin die reine Beifahrerzahl (Gesamt − 1).
+ */
 function PassengerCountEditor({
   registrationId,
   passengerCount,
@@ -35,17 +40,18 @@ function PassengerCountEditor({
   passengerCount: number
   onSave: (registrationId: string, count: number) => Promise<void>
 }) {
-  const [value, setValue] = useState(String(passengerCount))
+  const [value, setValue] = useState(String(passengerCount + 1))
   const [saving, setSaving] = useState(false)
 
-  const changed = Number(value) !== passengerCount
+  const total = Number(value)
+  const changed = Number.isFinite(total) && total >= 1 && total !== passengerCount + 1
 
   return (
     <div className="mt-1.5 flex items-center gap-2 font-mono text-[11px] text-sft-gray">
-      <span>PERSONEN:</span>
+      <span>PERSONEN (INKL. FAHRER):</span>
       <input
         type="number"
-        min={0}
+        min={1}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         className="w-12 rounded border border-white/12 bg-sft-black px-1.5 py-0.5 text-sft-white"
@@ -56,7 +62,7 @@ function PassengerCountEditor({
           disabled={saving}
           onClick={async () => {
             setSaving(true)
-            await onSave(registrationId, Number(value))
+            await onSave(registrationId, total - 1)
             setSaving(false)
           }}
           className="text-sft-red underline disabled:opacity-60"

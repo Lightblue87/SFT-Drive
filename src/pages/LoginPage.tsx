@@ -96,7 +96,7 @@ export function LoginPage() {
           </svg>
         </span>
         <span className="text-[12px] leading-relaxed text-[#8e8e96]">
-          Tipp: „Zum Home-Bildschirm hinzufügen" — SFT Drive läuft dann wie eine App, auch offline.
+          Tipp: „Zum Home-Bildschirm hinzufügen" — SFT Drive läuft dann wie eine App im Vollbild.
         </span>
       </div>
     </div>

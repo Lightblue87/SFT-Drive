@@ -31,6 +31,7 @@ interface FormState {
   status: TourStatus
   cover_image_url: string
   member_description: string
+  participant_description: string
   meeting_point_private: string
   kurviger_url: string
   zello_url: string
@@ -63,18 +64,25 @@ const EMPTY: FormState = {
   status: 'draft',
   cover_image_url: '',
   member_description: '',
+  participant_description: '',
   meeting_point_private: '',
   kurviger_url: '',
   zello_url: '',
   whatsapp_group_url: '',
 }
 
+// Beschreibt bewusst das tatsächliche Verhalten, nicht die Wunschvorstellung:
+// öffentlich lesbar ist per RLS ausschließlich `published` — jeder andere
+// Status blendet die Tour für normale Nutzer komplett aus. Und ein Statuswechsel
+// löst von sich aus weder Benachrichtigungen noch Stornierungen aus.
 const STATUS_HINT: Record<TourStatus, string> = {
   draft: 'Nur für Admins sichtbar, keine Anmeldung möglich.',
-  published: 'Öffentlich sichtbar, Anmeldung nach Anmeldefenster.',
-  registration_closed: 'Sichtbar, aber keine neuen Anmeldungen.',
-  cancelled: 'Teilnehmer werden informiert, Anmeldungen storniert.',
-  completed: 'Wandert ins persönliche Tourenarchiv.',
+  published: 'Öffentlich sichtbar, Anmeldung im Anmeldefenster möglich.',
+  registration_closed: 'Nur noch für Admins sichtbar, keine neuen Anmeldungen.',
+  cancelled:
+    'Nur noch für Admins sichtbar. Teilnehmer werden nicht automatisch informiert — bitte über Mitteilungen benachrichtigen.',
+  completed:
+    'Nur noch für Admins sichtbar. Vergangene bestätigte Teilnahmen stehen unabhängig davon im Tourenarchiv.',
   archived: 'In Übersicht und Tourenverwaltung ausgeblendet.',
 }
 
@@ -129,6 +137,10 @@ export function AdminTourFormPage() {
 
   const [form, setForm] = useState<FormState>(EMPTY)
   const [originalMaxVehicles, setOriginalMaxVehicles] = useState<number | null>(null)
+  // Einmal gesetztes published_at bleibt erhalten — sonst würde jedes Speichern
+  // einer bereits veröffentlichten Tour den Veröffentlichungszeitpunkt auf
+  // "jetzt" zurücksetzen (§8.3).
+  const [originalPublishedAt, setOriginalPublishedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(!!id)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -185,6 +197,7 @@ export function AdminTourFormPage() {
       }
 
       setOriginalMaxVehicles(tour.max_vehicles)
+      setOriginalPublishedAt(tour.published_at ?? null)
       setForm({
         slug: tour.slug,
         title: tour.title,
@@ -211,6 +224,7 @@ export function AdminTourFormPage() {
         status: tour.status,
         cover_image_url: tour.cover_image_url ?? '',
         member_description: member?.member_description ?? '',
+        participant_description: participant?.participant_description ?? '',
         meeting_point_private: participant?.meeting_point_private ?? '',
         kurviger_url: participant?.kurviger_url ?? '',
         zello_url: participant?.zello_url ?? '',
@@ -320,7 +334,8 @@ export function AdminTourFormPage() {
       check_in_close_minutes_after: Number(form.check_in_close_minutes_after) || 0,
       status: form.status,
       cover_image_url: form.cover_image_url || null,
-      published_at: form.status === 'published' ? new Date().toISOString() : null,
+      published_at:
+        form.status === 'published' ? (originalPublishedAt ?? new Date().toISOString()) : null,
     }
 
     const newMaxVehicles = Number(form.max_vehicles)
@@ -381,6 +396,7 @@ export function AdminTourFormPage() {
         .upsert({ tour_id: tourId, member_description: form.member_description || null }),
       supabase.from('tour_participant_details').upsert({
         tour_id: tourId,
+        participant_description: form.participant_description || null,
         meeting_point_private: form.meeting_point_private || null,
         kurviger_url: form.kurviger_url || null,
         zello_url: form.zello_url || null,
@@ -431,6 +447,14 @@ export function AdminTourFormPage() {
             <textarea
               value={form.member_description}
               onChange={(e) => set('member_description', e.target.value)}
+              className={`${inputClass} resize-none leading-relaxed`}
+              rows={2}
+            />
+          </Field>
+          <Field label="Teilnehmertext (nur für bestätigte Teilnehmer)">
+            <textarea
+              value={form.participant_description}
+              onChange={(e) => set('participant_description', e.target.value)}
               className={`${inputClass} resize-none leading-relaxed`}
               rows={2}
             />

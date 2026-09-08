@@ -10,12 +10,19 @@ const fieldInput =
 export function ResetPasswordPage() {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
+
+    if (password !== passwordConfirm) {
+      setError('Die Passwörter stimmen nicht überein.')
+      return
+    }
+
     setSubmitting(true)
 
     const { error: updateError } = await supabase.auth.updateUser({ password })
@@ -44,6 +51,19 @@ export function ResetPasswordPage() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className={fieldInput}
+          />
+        </label>
+
+        <label>
+          <span className={fieldLabel}>PASSWORT BESTÄTIGEN</span>
+          <input
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
             className={fieldInput}
           />
         </label>

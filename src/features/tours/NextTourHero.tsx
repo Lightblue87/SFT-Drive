@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { TourWithStats } from '@/features/tours/useTours'
+import { freeSlotsLabel } from '@/utils/capacity'
 import { formatDateRange, formatTime, isMultiDayTour, tourDayCount } from '@/utils/date'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -12,8 +13,8 @@ const STATUS_LABEL: Record<string, string> = {
 export function NextTourHero({ tour, stats, ownStatus }: TourWithStats) {
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
   const statusLabel =
-    (ownStatus && STATUS_LABEL[ownStatus]) ??
-    (stats ? (stats.is_full ? 'AUSGEBUCHT' : `${stats.free_vehicle_slots} PLÄTZE FREI`) : null)
+    (ownStatus ? STATUS_LABEL[ownStatus] : null) ||
+    (stats ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full) : null)
   const statusActive = ownStatus === 'confirmed'
 
   return (
