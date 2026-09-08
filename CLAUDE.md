@@ -3437,21 +3437,25 @@ rekonstruiert werden muss.
 - Erster Admin wurde über Dashboard → Authentication → Users → Add user (ohne
   Metadaten, siehe defensiver `handle_new_user()`-Trigger) angelegt und per
   `insert into public.user_roles ...` zum Admin gemacht.
-- Vier Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
+- Fünf Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
   ebenfalls manuell deployed, kein CI/CD dafür): `delete-account` (vollständige
   Auth-Kontolöschung, §7), `send-push` (Web-Push-Zustellung, §27),
   `admin-manage-user` (Sperren/Entsperren/Löschen fremder Konten aus
-  `/admin/users`, §21.3/§27.20) und `restaurant-order-notifications`
-  (zeitgesteuerte Restaurant-Bestell-Pushes über `pg_cron`, §27.10/§27.20). Für
-  `send-push` und `restaurant-order-notifications` sind zusätzlich drei
-  projektweite Edge-Function-Secrets gesetzt: `VAPID_PUBLIC_KEY`,
-  `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche VAPID-Schlüssel liegt
-  zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den Cloudflare-Pages-
-  Umgebungsvariablen (Production und Preview). Für `restaurant-order-
-  notifications` ist zusätzlich per `pg_cron`/`pg_net`/Supabase Vault ein
-  15-Minuten-Job eingerichtet (Setup-Anleitung als Kommentar am Anfang der
+  `/admin/users`, §21.3/§27.20), `restaurant-order-notifications`
+  (zeitgesteuerte Restaurant-Bestell-Pushes über `pg_cron`, §27.10/§27.20) und
+  `tour-interest-notifications` (zeitgesteuerte Anmeldeöffnungs-Pushes für
+  Vormerkungen über `pg_cron`, §35.3). Für `send-push`,
+  `restaurant-order-notifications` und `tour-interest-notifications` sind
+  zusätzlich drei projektweite Edge-Function-Secrets gesetzt:
+  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche
+  VAPID-Schlüssel liegt zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den
+  Cloudflare-Pages-Umgebungsvariablen (Production und Preview). Für
+  `restaurant-order-notifications` und `tour-interest-notifications` ist
+  zusätzlich je ein per `pg_cron`/`pg_net`/Supabase Vault eingerichteter
+  15-Minuten-Job nötig (Setup-Anleitung als Kommentar am Anfang der jeweiligen
   Function selbst dokumentiert, nicht als Migration, da er den echten
-  Service-Role-Key enthält).
+  Service-Role-Key enthält) — beide Jobs nutzen dasselbe bereits in Vault
+  abgelegte `service_role_key`-Secret, es muss nicht doppelt angelegt werden.
 - Edge Functions in diesem Projekt werden ausschließlich über "Deploy a new
   function" mit korrektem Namen von Anfang an angelegt. Ein nachträgliches
   Umbenennen über Dashboard → Settings → Name ändert nur die Anzeige, nicht
@@ -4600,16 +4604,18 @@ bestehenden Haupt-Kurviger-Link auf Tour-Ebene.
 
 ---
 
-## 35. Geplante Entwicklungsphasen 16–18
+## 35. Entwicklungsphasen 16–18
 
-Die folgenden Phasen sind **verbindlich geplant, aber noch nicht als umgesetzt zu behandeln**. Sie ergänzen die in §34 festgelegte Roadmap additiv und verwenden die bestehenden Tour-, Registrierungs-, Restaurant- und Notification-Strukturen weiter.
+Diese Phasen ergänzen die in §34 festgelegte Roadmap additiv und verwenden die
+bestehenden Tour-, Registrierungs-, Restaurant- und Notification-Strukturen weiter.
+Alle drei sind inzwischen umgesetzt (siehe §35.1–§35.3).
 
 Reihenfolge:
 
 ```text
-Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen
-Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink
-Phase 18 — Vormerkung vor Öffnung der Touranmeldung
+Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen (umgesetzt)
+Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink (umgesetzt)
+Phase 18 — Vormerkung vor Öffnung der Touranmeldung (umgesetzt)
 ```
 
 ### 35.1 Phase 16 — Teilnehmer- und Restaurant-Export / digitales Teilen
@@ -4663,6 +4669,16 @@ Restaurant Berggasthof
 
 Die Export-/Share-Funktionen dürfen bestehende RLS- und Admin-Grenzen niemals umgehen.
 
+**Umsetzungsstand:** implementiert, ohne Datenbankänderung — reine Frontend-
+Funktionalität auf den bereits vorhandenen, RLS-geschützten Daten. `src/utils/csv.ts`
+(minimaler CSV-Export als Blob-Download) und `src/utils/share.ts`
+(`navigator.share`, Fallback `navigator.clipboard.writeText`). In
+`/admin/tours/:id/registrations`: CSV-Export und Textzusammenfassung teilen,
+mit einer Checkbox "Klarname & Kennzeichen einschließen" (Standard: aus). In
+`/admin/tours/:id/stops/:stopId` (Restaurant-Auswertung): CSV-Export der
+fahrzeugbezogenen Bestellungen und Textzusammenfassung der aggregierten
+Mengen teilen.
+
 ### 35.2 Phase 17 — Tour-Kommunikation über WhatsApp-Gruppenlink
 
 Für Ausfahrten wird bereits außerhalb von SFT Drive pro Tour eine WhatsApp-Gruppe für Austausch und Detailfragen genutzt. SFT Drive soll diese Kommunikation **nicht nachbauen**, sondern lediglich den passenden Gruppenlink sicher an die bestätigten Teilnehmer ausliefern.
@@ -4692,6 +4708,13 @@ WhatsApp-Gruppe
 ```
 
 Ist kein Link hinterlegt, wird kein WhatsApp-Button angezeigt.
+
+**Umsetzungsstand:** implementiert (Migration `20260908110000_whatsapp_group_url.sql`
+ergänzt lediglich `whatsapp_group_url` auf dem bereits bestehenden
+`tour_participant_details` — RLS dort war bereits korrekt, keine
+Policy-Änderung nötig). Admin-Feld im Tourformular neben Kurviger/Zello,
+Button auf der Tourdetailseite für bestätigte Teilnehmer, nur sichtbar wenn
+ein Link hinterlegt ist.
 
 ### 35.3 Phase 18 — Vormerkung vor Öffnung der Touranmeldung
 
@@ -4809,6 +4832,22 @@ Benachrichtigungsregeln:
 - Eine bereits versendete Öffnungsbenachrichtigung wird nicht allein wegen einer nachträglichen Zeitänderung automatisch erneut verschickt.
 
 Die bestehende serverseitige zeitgesteuerte Notification-/Push-Architektur ist zu erweitern; keine zweite unabhängige Push-Infrastruktur aufbauen.
+
+**Umsetzungsstand:** implementiert (Migration `20260908113000_tour_interests.sql`).
+Reines Self-Service-CRUD über RLS (eigene Zeile lesen/anlegen/löschen, Admin
+zusätzlich lesend für den Zähler) statt RPC — die fachlichen Voraussetzungen
+(Tour veröffentlicht, `registration_open_at` gesetzt und noch in der
+Zukunft) prüft stattdessen ein `BEFORE INSERT`-Trigger serverseitig; lokal
+gegen eine echte `authenticated`-Rolle bestätigt, dass ein Insert nach
+Anmeldeöffnung, bei einer abgesagten Tour und mit fremder `user_id` (RLS)
+jeweils abgelehnt wird. `TourInterestButton` auf der Tourdetailseite ersetzt
+das Anmeldeformular, solange `registration_open_at` gesetzt und noch in der
+Zukunft ist. Die verbindliche Benachrichtigung läuft über eine eigene Edge
+Function `tour-interest-notifications`, zeitgesteuert per `pg_cron` nach
+exakt demselben Muster wie `restaurant-order-notifications` (§27.20/§27.21):
+Service-Role-Key als gemeinsames Geheimnis, `registration_open_notified_at`
+pro Vormerkung verhindert Doppelversand, abgesagte Touren werden durch den
+Query-Filter (`status = 'published'`) ausgeschlossen.
 
 ### 35.4 Gemeinsame Regeln für Phasen 16–18
 

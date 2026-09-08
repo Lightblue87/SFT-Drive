@@ -13,6 +13,7 @@ import type { RegistrationResult } from '@/types/tour'
 import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
 import { MealOrderForm } from '@/features/tours/MealOrderForm'
 import { CheckInButton } from '@/features/tours/CheckInButton'
+import { TourInterestButton } from '@/features/tours/TourInterestButton'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -149,13 +150,18 @@ export function TourDetailPage() {
           </Link>
         )}
 
-        {user && memberDetails && !activeRegistration && (
-          <RegistrationForm
-            tour={tour}
-            onRegistered={reload}
-            wasRejected={ownRegistration?.status === 'rejected'}
-          />
-        )}
+        {user &&
+          memberDetails &&
+          !activeRegistration &&
+          (tour.registration_open_at && new Date(tour.registration_open_at) > new Date() ? (
+            <TourInterestButton tourId={tour.id} registrationOpenAt={tour.registration_open_at} />
+          ) : (
+            <RegistrationForm
+              tour={tour}
+              onRegistered={reload}
+              wasRejected={ownRegistration?.status === 'rejected'}
+            />
+          ))}
 
         {user && activeRegistration && (
           <div className="flex flex-col gap-4">
@@ -209,6 +215,16 @@ export function TourDetailPage() {
                     className="rounded-md bg-sft-red px-4 py-2.5 text-center font-medium"
                   >
                     Route in Kurviger öffnen
+                  </a>
+                )}
+                {participantDetails.whatsapp_group_url && (
+                  <a
+                    href={participantDetails.whatsapp_group_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-md bg-sft-surface2 px-4 py-2.5 text-center"
+                  >
+                    WhatsApp-Gruppe öffnen
                   </a>
                 )}
                 {participantDetails.zello_url ? (

@@ -56,6 +56,7 @@ export interface TourParticipantDetails {
   meeting_point_private: string | null
   kurviger_url: string | null
   zello_url: string | null
+  whatsapp_group_url: string | null
 }
 
 export interface PublicTourStats {

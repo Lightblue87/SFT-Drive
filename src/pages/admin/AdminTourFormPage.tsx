@@ -34,6 +34,7 @@ interface FormState {
   meeting_point_private: string
   kurviger_url: string
   zello_url: string
+  whatsapp_group_url: string
 }
 
 const EMPTY: FormState = {
@@ -65,6 +66,7 @@ const EMPTY: FormState = {
   meeting_point_private: '',
   kurviger_url: '',
   zello_url: '',
+  whatsapp_group_url: '',
 }
 
 // `<input type="datetime-local">` liefert/erwartet Werte ohne Zeitzone
@@ -203,6 +205,7 @@ export function AdminTourFormPage() {
         meeting_point_private: participant?.meeting_point_private ?? '',
         kurviger_url: participant?.kurviger_url ?? '',
         zello_url: participant?.zello_url ?? '',
+        whatsapp_group_url: participant?.whatsapp_group_url ?? '',
       })
       setLoading(false)
     }
@@ -372,6 +375,7 @@ export function AdminTourFormPage() {
         meeting_point_private: form.meeting_point_private || null,
         kurviger_url: form.kurviger_url || null,
         zello_url: form.zello_url || null,
+        whatsapp_group_url: form.whatsapp_group_url || null,
       }),
     ])
 
@@ -563,6 +567,13 @@ export function AdminTourFormPage() {
         </Field>
         <Field label="Zello-Link (nur bestätigte Teilnehmer)">
           <input value={form.zello_url} onChange={(e) => set('zello_url', e.target.value)} className={inputClass} />
+        </Field>
+        <Field label="WhatsApp-Gruppenlink (nur bestätigte Teilnehmer)">
+          <input
+            value={form.whatsapp_group_url}
+            onChange={(e) => set('whatsapp_group_url', e.target.value)}
+            className={inputClass}
+          />
         </Field>
 
         <h2 className="mt-2 text-sm font-medium text-sft-gray">Fahrzeug- &amp; Fahreranforderungen</h2>
