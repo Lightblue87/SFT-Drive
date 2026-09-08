@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PENDING_VEHICLE_STORAGE_KEY } from '@/features/auth/pendingVehicle'
 
@@ -19,6 +19,7 @@ const fieldInput =
  * Garage übernommen (siehe `features/auth/pendingVehicle.ts`).
  */
 export function RegisterPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const returnTo = searchParams.get('returnTo') ?? '/'
 
@@ -44,8 +45,12 @@ export function RegisterPage() {
     setError(null)
 
     if (step === 1) {
-      if (!email || password.length < 8) {
-        setError('Bitte E-Mail und ein Passwort mit mindestens 8 Zeichen angeben.')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError('Bitte eine gültige E-Mail-Adresse angeben.')
+        return
+      }
+      if (password.length < 8) {
+        setError('Das Passwort muss mindestens 8 Zeichen lang sein.')
         return
       }
       setStep(2)
@@ -66,6 +71,10 @@ export function RegisterPage() {
 
   function goBack() {
     setError(null)
+    if (step === 1) {
+      navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`)
+      return
+    }
     setStep((s) => Math.max(1, s - 1))
   }
 

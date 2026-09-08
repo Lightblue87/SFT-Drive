@@ -73,7 +73,7 @@ export function PassengerCountForm({ tourId, initialCount, onUpdated }: Props) {
         <span className="min-w-[16px] text-center font-mono text-base font-bold">{total}</span>
         <button
           type="button"
-          onClick={() => setTotal((n) => String(Math.min(5, Number(n) + 1)))}
+          onClick={() => setTotal((n) => String(Number(n) + 1))}
           className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-base text-sft-white"
         >
           +

@@ -4,6 +4,27 @@ const THRESHOLD = 72
 const MAX_PULL = 110
 
 /**
+ * Ob der Touch innerhalb eines eigenen vertikalen Scroll-Containers begann
+ * (z. B. BottomSheet mit overflow-y-auto) — dort soll die Abwärtsgeste dem
+ * Container selbst gehören, nicht dem globalen Pull-to-Refresh, sonst kann
+ * eine Wischgeste im gescrollten Sheet versehentlich einen Reload auslösen.
+ */
+function startedInsideScrollContainer(target: EventTarget | null): boolean {
+  let el = target instanceof Element ? target : null
+  while (el && el !== document.body) {
+    const style = window.getComputedStyle(el)
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      el.scrollHeight > el.clientHeight
+    ) {
+      return true
+    }
+    el = el.parentElement
+  }
+  return false
+}
+
+/**
  * Pull-to-Refresh für die gesamte App (PWA im Standalone-Modus besitzt keine
  * native Browser-Ziehgeste). Reagiert nur, wenn ganz oben gescrollt wurde,
  * und lädt die Seite bei Überschreiten der Schwelle komplett neu — einfacher
@@ -17,7 +38,7 @@ export function PullToRefresh() {
 
   useEffect(() => {
     function onTouchStart(e: TouchEvent) {
-      if (window.scrollY > 0 || refreshing) {
+      if (window.scrollY > 0 || refreshing || startedInsideScrollContainer(e.target)) {
         startYRef.current = null
         return
       }

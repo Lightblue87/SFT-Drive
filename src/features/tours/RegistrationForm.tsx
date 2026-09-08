@@ -265,7 +265,7 @@ export function RegistrationForm({ tour, onRegistered, wasRejected }: Props) {
           <span className="min-w-[20px] text-center font-mono text-lg font-bold">{totalPersons}</span>
           <button
             type="button"
-            onClick={() => setTotalPersons((n) => Math.min(5, n + 1))}
+            onClick={() => setTotalPersons((n) => n + 1)}
             className="tap-scale h-9 w-9 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-lg text-sft-white"
           >
             +

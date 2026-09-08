@@ -309,9 +309,19 @@ export function AdminTourRegistrationsPage() {
               </div>
               <button
                 onClick={() =>
-                  runAction(() => supabase.rpc('reject_tour_registration', { p_registration_id: r.id, p_reason: null }))
+                  runAction(() =>
+                    supabase.rpc('admin_remove_registration', { p_registration_id: r.id, p_reason: null }),
+                  )
                 }
                 className="tap-scale flex-none rounded-[11px] border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium"
+              >
+                Entfernen
+              </button>
+              <button
+                onClick={() =>
+                  runAction(() => supabase.rpc('reject_tour_registration', { p_registration_id: r.id, p_reason: null }))
+                }
+                className="tap-scale flex-none rounded-[11px] border border-sft-red/40 px-3 py-2 text-xs font-medium text-[#ff6b63]"
               >
                 Ablehnen
               </button>

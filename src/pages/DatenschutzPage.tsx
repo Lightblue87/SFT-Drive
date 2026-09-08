@@ -57,9 +57,12 @@ export function DatenschutzPage() {
 
       <h2 className="mt-6 font-medium">4. Sichtbarkeit deiner Daten für andere Nutzer</h2>
       <p className="mt-2 text-sft-gray">
-        Dein Vor- und Nachname sowie Kennzeichen und Personenzahl sind für andere Teilnehmer
-        niemals sichtbar. Bestätigte Mitfahrer einer Tour sehen von dir ausschließlich deinen
-        Username sowie Fahrzeughersteller, -modell und Leistung.
+        Dein Vor- und Nachname sind für andere Teilnehmer standardmäßig nicht sichtbar. Bestätigte
+        Mitfahrer einer Tour sehen von dir ausschließlich deinen Username sowie Fahrzeughersteller,
+        -modell und Leistung. Nimmst du eine Freundschaftsanfrage eines anderen Nutzers an, geben
+        sich beide Seiten damit gegenseitig ihren Vor- und Nachnamen frei; das lässt sich jederzeit
+        durch Beenden der Freundschaft rückgängig machen. Kennzeichen und Personenzahl sind für
+        andere Teilnehmer immer unsichtbar, unabhängig von einer Freundschaft.
       </p>
 
       <h2 className="mt-6 font-medium">5. Auftragsverarbeiter / Hosting</h2>

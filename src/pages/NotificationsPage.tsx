@@ -5,8 +5,20 @@ import { useNotifications } from '@/features/notifications/useNotifications'
 import { PageLoading } from '@/components/PageLoading'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
 import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
-import { formatDate, formatTime } from '@/utils/date'
 import type { AppNotification } from '@/types/notification'
+
+// created_at ist ein voller Zeitstempel (kein reines Kalenderdatum) — Datum
+// und Uhrzeit müssen deshalb aus derselben lokal umgerechneten Date-Instanz
+// kommen, statt das Datum per String-slice aus dem UTC-Rohwert zu schneiden
+// und nur die Uhrzeit lokal zu formatieren (rund um Mitternacht sonst
+// inkonsistent, siehe formatDate/formatTime in utils/date.ts, die für reine
+// DATE-Spalten ohne Zeitzonenkonvertierung gedacht sind).
+function formatNotificationTimestamp(value: string): string {
+  const d = new Date(value)
+  const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  return `${date} · ${time}`
+}
 
 /** In-App Notification Center (siehe CLAUDE.md §27.13). */
 export function NotificationsPage() {
@@ -94,7 +106,7 @@ export function NotificationsPage() {
                 <div className="text-[14px] font-semibold leading-tight">{n.title}</div>
                 <div className="mt-1.5 text-pretty text-[13px] leading-relaxed text-sft-gray">{n.body}</div>
                 <div className="mt-1.5 font-mono text-[10px] tracking-[0.1em] text-[#8a8a92]">
-                  {formatDate(n.created_at.slice(0, 10))} · {formatTime(n.created_at)}
+                  {formatNotificationTimestamp(n.created_at)}
                 </div>
               </div>
             </button>
