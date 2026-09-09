@@ -3518,16 +3518,14 @@ rekonstruiert werden muss.
 - Erster Admin wurde über Dashboard → Authentication → Users → Add user (ohne
   Metadaten, siehe defensiver `handle_new_user()`-Trigger) angelegt und per
   `insert into public.user_roles ...` zum Admin gemacht.
-- **Achtung, Stand 09.09.2026: nur zwei der fünf Functions sind tatsächlich
-  deployed** (`admin-manage-user` und `tour-interest-notifications`). Es fehlen
-  `send-push`, `delete-account` und `restaurant-order-notifications` — sie
-  liegen vollständig im Repository, wurden im Supabase-Dashboard aber nie
-  angelegt. Praktische Folge: Web-Push wird nirgends zugestellt (In-App-
-  Mitteilungen entstehen weiterhin in den RPCs und funktionieren), die
-  Kontolöschung im Profil schlägt fehl (§7), und die automatischen
-  Restaurant-Bestell-Pushes laufen nicht. Vor dem nächsten Release nachholen.
-  Diese Liste beschreibt also den Soll-Zustand:
-- Fünf Supabase Edge Functions sind vorgesehen (Dashboard → Edge Functions,
+- Alle fünf Functions sind seit dem 09.09.2026 deployed. Zuvor fehlten
+  `send-push`, `delete-account` und `restaurant-order-notifications` über
+  längere Zeit unbemerkt im Dashboard, obwohl sie im Repository lagen — mit der
+  Folge, dass Web-Push nirgends zugestellt wurde und die Kontolöschung im
+  Profil fehlschlug. Diese Liste ist deshalb bei Zweifeln gegen das Dashboard
+  abzugleichen, nicht blind zu glauben: das Repository allein sagt nichts
+  darüber aus, was tatsächlich läuft.
+- Fünf Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
   manuell deployed, kein CI/CD dafür): `delete-account` (vollständige
   Auth-Kontolöschung, §7), `send-push` (Web-Push-Zustellung, §27),
   `admin-manage-user` (Sperren/Entsperren/Löschen fremder Konten aus
