@@ -3,6 +3,10 @@ import { supabase } from '@/lib/supabase'
 export const PENDING_VEHICLE_STORAGE_KEY = 'sft-drive-pending-vehicle'
 
 interface PendingVehicle {
+  // User-ID aus der signUp()-Antwort. Ohne sie würde der Entwurf beim
+  // nächsten Login irgendeines Accounts übernommen — auf einem gemeinsam
+  // genutzten Browser also möglicherweise beim falschen Nutzer (§7).
+  user_id: string
   manufacturer: string
   model: string
   power_ps: number
@@ -32,6 +36,16 @@ export async function claimPendingVehicle(userId: string) {
     localStorage.removeItem(PENDING_VEHICLE_STORAGE_KEY)
     return
   }
+
+  // Gehört der Entwurf zu einem anderen Account, bleibt er unangetastet
+  // liegen — sein Besitzer soll ihn bei seinem eigenen ersten Login noch
+  // bekommen können. Fehlt die Zuordnung ganz (Entwurf aus einer älteren
+  // App-Version), wird er verworfen statt einem fremden Account zugeordnet.
+  if (!vehicle.user_id) {
+    localStorage.removeItem(PENDING_VEHICLE_STORAGE_KEY)
+    return
+  }
+  if (vehicle.user_id !== userId) return
 
   const { error } = await supabase.from('vehicles').insert({
     user_id: userId,

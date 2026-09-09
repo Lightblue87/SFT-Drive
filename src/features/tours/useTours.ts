@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Tour, PublicTourStats } from '@/types/tour'
 import { registrationPhase } from '@/utils/tourStatus'
+import { todayKey } from '@/utils/date'
 
 export interface TourWithStats {
   tour: Tour
@@ -10,7 +11,7 @@ export interface TourWithStats {
 }
 
 function sortTours(tours: Tour[]): Tour[] {
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = todayKey()
 
   const running = tours.filter((t) => t.start_date <= todayStr && t.end_date >= todayStr)
   const upcoming = tours

@@ -238,7 +238,18 @@ export function ProfileFriendsPage() {
             <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-white/7 font-mono text-xs font-bold text-[#c9c9ce]">
               {initials(f.other_username)}
             </div>
-            <div className="min-w-0 flex-1 text-sm font-semibold">{f.other_username}</div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">
+                {f.other_first_name && f.other_last_name
+                  ? `${f.other_first_name} ${f.other_last_name}`
+                  : f.other_username}
+              </div>
+              {f.other_first_name && (
+                <div className="mt-0.5 truncate font-mono text-[11px] text-sft-gray">
+                  {f.other_username}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => endFriendship(f.friendship_id)}
               disabled={pendingId === f.friendship_id}
@@ -252,7 +263,7 @@ export function ProfileFriendsPage() {
 
       <div className="mx-3.5 mt-[18px] rounded-2xl border border-dashed border-white/14 px-[15px] py-[13px] text-xs leading-relaxed text-[#8e8e96]">
         Klarnamen werden erst nach bestätigter Freundschaft gegenseitig sichtbar. In der Teilnehmerliste
-        einer Tour siehst du bei Freunden dann zusätzlich zum Username den Vornamen. Kennzeichen und
+        einer Tour siehst du bei Freunden dann zusätzlich zum Username den vollen Namen. Kennzeichen und
         Personenzahl bleiben immer privat.
       </div>
     </div>

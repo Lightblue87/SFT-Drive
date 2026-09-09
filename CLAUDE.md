@@ -4103,6 +4103,37 @@ Migrationen, die zum produktiven Stand von Phase 9–11 gehören, über die in
 20260907082300_fix_admin_list_users_email_type.sql
 ```
 
+Nachgezogene Korrekturen aus dem Review zum Cockpit-Redesign
+(`20260909020000_review_fixes.sql`), verbindlich für künftige Änderungen an
+diesen Stellen:
+
+- `submit_meal_order()` und `admin_update_meal_order()` validieren den
+  gesamten Payload, **bevor** Order oder Positionen geschrieben werden. Ein
+  `return` rollt in PL/pgSQL nichts zurück — validiert man erst währenddessen,
+  bleibt bei einem Fehler ein halb ersetzter Bestellstand stehen.
+- `register_for_tour()` lehnt eine Anmeldung nach `end_date` mit `TOUR_ENDED`
+  ab, unabhängig vom gespeicherten Status.
+- Ein Trigger auf `tour_registrations` räumt abhängige Daten auf, sobald eine
+  Registrierung den Status `confirmed` verliert (Storno, administrative
+  Entfernung, Ablehnung, Reaktivierung): `checked_in_at` wird geleert,
+  Essensbestellungen werden storniert, Übernachtungsbestätigungen entfernt.
+  Ohne das galt ein stornierter Fahrer weiterhin als eingecheckt und sein
+  Essen zählte in der Restaurant-Gesamtmenge mit.
+- `meal_order_items.menu_item_id` verwendet `ON DELETE RESTRICT`: ein bereits
+  bestelltes Gericht lässt sich nicht mehr löschen, nur noch deaktivieren
+  (§27.4). Deaktivierte Gerichte bleiben in bestehenden Bestellungen sichtbar
+  und können dort gezielt entfernt werden.
+- `are_friends()` gibt nur noch Auskunft, wenn `auth.uid()` selbst Teil der
+  abgefragten Beziehung ist.
+- `admin_send_accommodation_reminder()` prüft serverseitig, ob `p_night_date`
+  eine gültige Tournacht ist, und schließt Teilnehmer aus, die für diese Nacht
+  bereits bestätigt haben.
+- `list_my_friendships()` gibt bei `accepted` zusätzlich Vor- und Nachnamen aus
+  (§34.1) — bei `pending` weiterhin nicht.
+- Check-Constraints (als `NOT VALID` ergänzt, Altdaten bleiben unangetastet):
+  Anmeldeschluss nicht vor Anmeldestart, Check-in nur mit `meeting_at`,
+  Bestellschluss nicht vor Bestellstart.
+
 Bereits produktiv angewendete Migrationen niemals nachträglich umschreiben —
 Änderungen immer als neue Migration ergänzen.
 
@@ -4346,7 +4377,7 @@ Keine unnötige Enterprise-Architektur für ein kleines Community-Projekt aufbau
 
 ## 33. Aktuelle Kernanforderung in einem Satz
 
-Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, die nächste Ausfahrt als Hero-Kachel und alle weiteren als kompakte Tourzeilen mit freien Fahrzeugplätzen erscheinen, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
+Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, die nächste Ausfahrt als Hero-Kachel und alle weiteren als kompakte Tourzeilen mit freien Fahrzeugplätzen erscheinen, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username sehen — Klarnamen ausschließlich bei akzeptierter Freundschaft (§34.1), Kennzeichen anderer Teilnehmer niemals —, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
 
 ---
 
@@ -4952,9 +4983,11 @@ Query-Filter (`status = 'published'`) ausgeschlossen.
 
 ---
 
-## 36. Geplante Entwicklungsphase 19 — Hotelvorschläge und Übernachtungsbestätigung
+## 36. Entwicklungsphase 19 — Hotelvorschläge und Übernachtungsbestätigung
 
-Phase 19 ist verbindlich geplant, aber noch nicht als umgesetzt zu behandeln.
+Phase 19 ist umgesetzt (Datenmodell, RPCs, Teilnehmer- und Admin-UI — siehe
+§36.14 "Umsetzungsstand"). Die folgenden Abschnitte bleiben die verbindliche
+fachliche Beschreibung.
 
 Ziel ist die organisatorische Unterstützung von Übernachtungen bei
 Mehrtagestouren, ohne SFT Drive zu einem Hotel-Buchungssystem zu machen.

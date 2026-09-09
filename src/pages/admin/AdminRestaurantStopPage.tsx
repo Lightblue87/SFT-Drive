@@ -48,6 +48,8 @@ export function AdminRestaurantStopPage() {
 
   const [items, setItems] = useState<MenuItem[]>([])
   const [newItemName, setNewItemName] = useState('')
+  const [menuError, setMenuError] = useState<string | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
 
   const [orders, setOrders] = useState<OrderRow[]>([])
 
@@ -72,7 +74,7 @@ export function AdminRestaurantStopPage() {
     const { data: orderRows } = await supabase
       .from('meal_orders')
       .select(
-        'id, registration_id, status, tour_registrations(id, vehicle_manufacturer, vehicle_model), meal_order_items(quantity, note, menu_items(name))',
+        'id, registration_id, status, tour_registrations(id, status, vehicle_manufacturer, vehicle_model), meal_order_items(quantity, note, menu_items(name))',
       )
       .eq('restaurant_stop_id', stopId)
       .eq('status', 'submitted')
@@ -94,24 +96,35 @@ export function AdminRestaurantStopPage() {
       id: string
       registration_id: string
       status: string
-      tour_registrations: { vehicle_manufacturer: string; vehicle_model: string } | null
+      tour_registrations: {
+        status: string
+        vehicle_manufacturer: string
+        vehicle_model: string
+      } | null
       meal_order_items: { quantity: number; note: string | null; menu_items: { name: string } | null }[]
     }
 
+    // Nur Bestellungen aktuell bestätigter Teilnehmer zählen: storniert ein
+    // Fahrer nach dem Bestellen, darf sein Essen nicht weiter in Gesamtmenge
+    // und CSV-Export auftauchen (§27.9). Ein DB-Trigger storniert solche
+    // Bestellungen inzwischen zwar mit, dieser Filter bleibt als zweite
+    // Absicherung für Altbestände bestehen.
     setOrders(
-      ((orderRows ?? []) as unknown as RawOrderRow[]).map((o) => ({
-        order_id: o.id,
-        registration_id: o.registration_id,
-        status: o.status,
-        username: usernameByUserId.get(regUserId.get(o.registration_id) ?? '') ?? '—',
-        vehicle_manufacturer: o.tour_registrations?.vehicle_manufacturer ?? '',
-        vehicle_model: o.tour_registrations?.vehicle_model ?? '',
-        items: (o.meal_order_items ?? []).map((i) => ({
-          name: i.menu_items?.name ?? '—',
-          quantity: i.quantity,
-          note: i.note,
+      ((orderRows ?? []) as unknown as RawOrderRow[])
+        .filter((o) => o.tour_registrations?.status === 'confirmed')
+        .map((o) => ({
+          order_id: o.id,
+          registration_id: o.registration_id,
+          status: o.status,
+          username: usernameByUserId.get(regUserId.get(o.registration_id) ?? '') ?? '—',
+          vehicle_manufacturer: o.tour_registrations?.vehicle_manufacturer ?? '',
+          vehicle_model: o.tour_registrations?.vehicle_model ?? '',
+          items: (o.meal_order_items ?? []).map((i) => ({
+            name: i.menu_items?.name ?? '—',
+            quantity: i.quantity,
+            note: i.note,
+          })),
         })),
-      })),
     )
 
     setLoading(false)
@@ -123,6 +136,15 @@ export function AdminRestaurantStopPage() {
 
   async function saveSettings() {
     if (!stopId) return
+
+    // Bestellschluss vor Bestellstart ist fachlich unmöglich; die DB weist es
+    // seit 20260909020000 ebenfalls ab.
+    if (openAt && deadlineAt && deadlineAt < openAt) {
+      setSettingsError('Der Bestellschluss darf nicht vor dem Bestellstart liegen.')
+      return
+    }
+    setSettingsError(null)
+
     setSavingSettings(true)
     await supabase.from('restaurant_stop_settings').upsert({
       tour_stop_id: stopId,
@@ -148,12 +170,27 @@ export function AdminRestaurantStopPage() {
   }
 
   async function toggleAvailable(item: MenuItem) {
+    setMenuError(null)
     await supabase.from('menu_items').update({ is_available: !item.is_available }).eq('id', item.id)
     load()
   }
 
+  /**
+   * Echtes Löschen ist per Fremdschlüssel (ON DELETE RESTRICT) nur möglich,
+   * solange das Gericht in keiner Bestellung vorkommt — sonst würden fremde
+   * Bestellungen stillschweigend verändert (§27.4). In dem Fall bleibt
+   * "Deaktivieren": das Gericht ist nicht mehr wählbar, bestehende
+   * Bestellungen bleiben aber nachvollziehbar.
+   */
   async function removeMenuItem(itemId: string) {
-    await supabase.from('menu_items').delete().eq('id', itemId)
+    setMenuError(null)
+    const { error } = await supabase.from('menu_items').delete().eq('id', itemId)
+    if (error) {
+      setMenuError(
+        'Dieses Gericht wurde bereits bestellt und kann nicht gelöscht werden. Du kannst es stattdessen deaktivieren.',
+      )
+      return
+    }
     load()
   }
 
@@ -236,6 +273,11 @@ export function AdminRestaurantStopPage() {
           <span className={fieldLabel}>HINWEIS (Z. B. ÖFFNUNGSZEITEN)</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} className={fieldInput} />
         </label>
+        {settingsError && (
+          <p className="mt-3.5 rounded-xl border border-sft-red/40 bg-sft-red/8 px-3.5 py-3 text-[12px] font-medium text-[#ff8b84]">
+            {settingsError}
+          </p>
+        )}
         <button
           onClick={saveSettings}
           disabled={savingSettings}
@@ -247,6 +289,11 @@ export function AdminRestaurantStopPage() {
 
       <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
         <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">SPEISEKARTE</div>
+        {menuError && (
+          <p className="mx-4 mb-2.5 rounded-xl border border-sft-amber/30 bg-sft-amber/[0.07] px-3.5 py-3 text-xs leading-relaxed text-[#e6c07a]">
+            {menuError}
+          </p>
+        )}
         {items.map((item) => (
           <div key={item.id} className="flex items-center gap-2.5 border-t border-white/6 px-4 py-3">
             <span className={`flex-1 text-[13px] font-medium ${item.is_available ? '' : 'text-sft-gray line-through'}`}>

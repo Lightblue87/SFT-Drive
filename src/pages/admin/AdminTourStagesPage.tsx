@@ -139,7 +139,7 @@ export function AdminTourStagesPage() {
             <div className="flex items-baseline justify-between">
               <div className="text-[14px] font-semibold">Tag {day.stageNumber}</div>
               <div className="font-mono text-[11px] text-sft-gray">
-                {new Date(day.stageDate).toLocaleDateString('de-DE', {
+                {parseDateOnly(day.stageDate).toLocaleDateString('de-DE', {
                   day: '2-digit',
                   month: '2-digit',
                   year: 'numeric',

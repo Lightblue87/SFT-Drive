@@ -2,17 +2,21 @@ import { Link } from 'react-router-dom'
 import type { TourWithStats } from '@/features/tours/useTours'
 import { freeSlotsLabel } from '@/utils/capacity'
 import { registrationPhase, tourPhaseBadge } from '@/utils/tourStatus'
-import { formatDateRange, formatTime, isMultiDayTour, tourDayCount } from '@/utils/date'
+import { currentTourDay, formatDateRange, formatTime, isMultiDayTour, tourDayCount } from '@/utils/date'
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: 'DU BIST DABEI',
   pending: 'FREIGABE OFFEN',
   waitlisted: 'WARTELISTE',
+  // Fehlte bisher — ohne diesen Eintrag fiel die Anzeige auf die
+  // Kapazitätsangabe zurück, obwohl es einen eigenen Status gibt.
+  rejected: 'ABGELEHNT',
 }
 
 /** Hero-Kachel der nächsten laufenden/anstehenden Ausfahrt auf der Tourübersicht. */
 export function NextTourHero({ tour, stats, ownStatus }: TourWithStats) {
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
+  const running = currentTourDay(tour.start_date, tour.end_date) !== null
   const phase = registrationPhase(tour)
   const statusLabel =
     (ownStatus ? STATUS_LABEL[ownStatus] : null) ||
@@ -24,7 +28,7 @@ export function NextTourHero({ tour, stats, ownStatus }: TourWithStats) {
     <div className="mx-3.5 mt-1 overflow-hidden rounded-3xl border border-white/11 bg-gradient-to-b from-[#191a1e] via-[#111114] to-[#0e0e11] shadow-[0_20px_40px_-20px_#000] ring-1 ring-inset ring-white/7">
       <div className="flex items-center justify-between px-4 pt-3.5">
         <div className="font-mono text-[10px] font-medium tracking-[0.22em] text-sft-gray">
-          NÄCHSTE AUSFAHRT
+          {running ? 'LÄUFT AKTUELL' : 'NÄCHSTE AUSFAHRT'}
         </div>
         {statusLabel && (
           <div

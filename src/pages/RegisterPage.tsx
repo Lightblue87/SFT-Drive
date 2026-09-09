@@ -30,7 +30,6 @@ export function RegisterPage() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [username, setUsername] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
   const [vehicleMaker, setVehicleMaker] = useState('')
   const [vehicleModel, setVehicleModel] = useState('')
   const [vehiclePs, setVehiclePs] = useState('')
@@ -86,16 +85,15 @@ export function RegisterPage() {
 
     setSubmitting(true)
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}${returnTo}`,
         data: {
-          username,
-          first_name: firstName,
-          last_name: lastName,
-          date_of_birth: dateOfBirth || null,
+          username: username.trim(),
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
           privacy_policy_accepted_at: new Date().toISOString(),
         },
       },
@@ -108,10 +106,11 @@ export function RegisterPage() {
       return
     }
 
-    if (vehicleMaker.trim() && vehicleModel.trim() && vehiclePs) {
+    if (signUpData.user && vehicleMaker.trim() && vehicleModel.trim() && vehiclePs) {
       localStorage.setItem(
         PENDING_VEHICLE_STORAGE_KEY,
         JSON.stringify({
+          user_id: signUpData.user.id,
           manufacturer: vehicleMaker.trim(),
           model: vehicleModel.trim(),
           power_ps: Number(vehiclePs),
@@ -206,21 +205,17 @@ export function RegisterPage() {
           <label>
             <span className={fieldLabel}>USERNAME · ÖFFENTLICH SICHTBAR</span>
             <input
-              placeholder="@dein_name"
+              placeholder="dein_name"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              // Ohne führendes @ speichern — die Darstellung ergänzt es
+              // (Profil, Teilnehmerlisten), sonst entstünde "@@name".
+              onChange={(e) => setUsername(e.target.value.replace(/^@+/, ''))}
               className={fieldInput}
             />
           </label>
-          <label>
-            <span className={fieldLabel}>GEBURTSDATUM · FÜR MINDESTALTER</span>
-            <input
-              type="date"
-              value={dateOfBirth}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-              className={`${fieldInput} font-mono`}
-            />
-          </label>
+          {/* Kein Geburtsdatum hier: §7 verlangt ausdrücklich, es erst zu
+              erheben, wenn eine Tour eine Altersanforderung hat — danach fragt
+              das Anmeldeformular gezielt (RegistrationForm.tsx). */}
         </div>
       )}
 

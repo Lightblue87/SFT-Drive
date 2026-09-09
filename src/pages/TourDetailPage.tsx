@@ -418,7 +418,9 @@ export function TourDetailPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className={`text-[13px] font-semibold ${v.is_self ? 'text-white' : 'text-sft-white'}`}>
-                        {v.first_name && v.last_name ? `${v.first_name} · ${v.username}` : v.username}
+                        {v.first_name && v.last_name
+                          ? `${v.first_name} ${v.last_name} · ${v.username}`
+                          : v.username}
                       </div>
                       <div className="mt-0.5 font-mono text-[11px] text-sft-gray">
                         {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS

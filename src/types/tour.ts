@@ -121,6 +121,7 @@ export type RpcResultCode =
   | 'TOUR_FULL'
   | 'REGISTRATION_NOT_OPEN'
   | 'REGISTRATION_CLOSED'
+  | 'TOUR_ENDED'
   | 'ALREADY_REGISTERED'
   | 'ALREADY_CANCELLED'
   | 'REGISTRATION_NOT_FOUND'
@@ -155,6 +156,7 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   TOUR_FULL: 'Diese Tour ist bereits ausgebucht.',
   REGISTRATION_NOT_OPEN: 'Die Anmeldung für diese Tour hat noch nicht begonnen.',
   REGISTRATION_CLOSED: 'Die Anmeldung für diese Tour ist geschlossen.',
+  TOUR_ENDED: 'Diese Ausfahrt ist bereits beendet.',
   ALREADY_REGISTERED: 'Du bist bereits für diese Tour angemeldet.',
   ALREADY_CANCELLED: 'Diese Anmeldung ist bereits storniert.',
   REGISTRATION_NOT_FOUND: 'Keine Anmeldung gefunden.',

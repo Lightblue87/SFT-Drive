@@ -191,14 +191,24 @@ export function AdminUsersPage() {
               >
                 {user.is_banned ? 'Entsperren' : 'Sperren'}
               </button>
+              {/* Kontolöschung ist endgültig — die Bestätigung braucht deshalb
+                  einen sichtbaren Weg zurück, nicht nur "Wirklich?". */}
               {confirmDeleteId === user.id ? (
-                <button
-                  onClick={() => deleteUser(user)}
-                  disabled={pendingId === user.id}
-                  className="bg-sft-red px-2 py-2.5 text-[11px] font-medium text-white disabled:opacity-60"
-                >
-                  Wirklich?
-                </button>
+                <div className="flex bg-sft-card">
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="flex-1 px-2 py-2.5 text-[11px] font-medium text-[#c9c9ce]"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={() => deleteUser(user)}
+                    disabled={pendingId === user.id}
+                    className="flex-1 bg-sft-red px-2 py-2.5 text-[11px] font-medium text-white disabled:opacity-60"
+                  >
+                    Endgültig löschen
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(user.id)}

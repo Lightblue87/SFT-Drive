@@ -21,7 +21,13 @@ export function ProfilePage() {
   const { user } = useAuth()
   const { isAdmin } = useIsAdmin()
   const navigate = useNavigate()
-  const { permission, subscribing, error: pushError, subscribe } = usePushSubscription()
+  const {
+    permission,
+    subscriptionActive,
+    subscribing,
+    error: pushError,
+    subscribe,
+  } = usePushSubscription()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [archive, setArchive] = useState<ArchiveEntry[]>([])
   const [defaultVehicle, setDefaultVehicle] = useState<Vehicle | null>(null)
@@ -170,7 +176,7 @@ export function ProfilePage() {
           <div>
             <div className="text-sm font-medium">Push-Mitteilungen</div>
             <div className="mt-1 text-xs leading-relaxed text-sft-gray">
-              Treffpunkt-Änderungen, Freigaben, Bestellfristen
+              Mitteilungen der Tourleitung zu deinen Ausfahrten
             </div>
             {pushError && <p className="mt-1 text-xs text-sft-red">{pushError}</p>}
             {permission === 'denied' && (
@@ -179,7 +185,9 @@ export function ProfilePage() {
               </p>
             )}
           </div>
-          {permission !== 'granted' ? (
+          {/* "AKTIV" erst, wenn wirklich eine gespeicherte Subscription
+              existiert — erteilte Berechtigung allein genügt nicht. */}
+          {!(permission === 'granted' && subscriptionActive) ? (
             <button
               onClick={subscribe}
               disabled={subscribing}

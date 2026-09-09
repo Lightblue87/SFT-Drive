@@ -172,7 +172,7 @@ export function AdminNotificationsPage() {
             disabled={sending}
             className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-[15px] text-[15px] font-semibold text-white disabled:opacity-60"
           >
-            {sending ? 'Wird gesendet…' : 'Senden · In-App + Push'}
+            {sending ? 'Wird gesendet…' : 'In-App senden · Push falls aktiviert'}
           </button>
         </div>
       </div>

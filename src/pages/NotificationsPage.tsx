@@ -47,7 +47,9 @@ export function NotificationsPage() {
     <div className="pb-[110px]">
       <div className="flex items-center gap-3 px-4 pb-4 pt-1.5">
         <button
-          onClick={() => navigate('/tours')}
+          // Zurück in die tatsächliche Herkunft (Profil, Tourübersicht, …)
+          // statt immer auf /tours; nur ohne History-Eintrag auf /tours.
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/tours'))}
           className="tap-scale flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] border border-white/10 bg-[#131316]"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none">

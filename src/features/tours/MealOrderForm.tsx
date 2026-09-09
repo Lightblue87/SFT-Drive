@@ -31,16 +31,19 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
           .select('*')
           .eq('tour_stop_id', restaurantStopId)
           .maybeSingle(),
+        // Bewusst ohne is_available-Filter: eine bestehende Bestellung kann ein
+        // inzwischen deaktiviertes Gericht enthalten. Es muss sichtbar bleiben,
+        // damit der Teilnehmer es gezielt entfernen kann — nur auswählbar ist
+        // es nicht mehr (Filter unten).
         supabase
           .from('menu_items')
           .select('*')
           .eq('restaurant_stop_id', restaurantStopId)
-          .eq('is_available', true)
           .order('sort_order', { ascending: true }),
       ])
 
       setSettings((settingsRow as RestaurantStopSettings) ?? null)
-      setItems((menuRows as MenuItem[]) ?? [])
+      const allItems = (menuRows as MenuItem[]) ?? []
 
       const { data: order } = await supabase
         .from('meal_orders')
@@ -63,8 +66,15 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
         }
         setQuantities(q)
         setNotes(n)
+
+        // Deaktivierte Gerichte nur zeigen, wenn sie in dieser Bestellung
+        // tatsächlich vorkommen.
+        setItems(allItems.filter((i) => i.is_available || q[i.id] > 0))
+        setLoading(false)
+        return
       }
 
+      setItems(allItems.filter((i) => i.is_available))
       setLoading(false)
     }
     load()
@@ -137,7 +147,16 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
           <ul className="mt-2.5 flex flex-col gap-2.5">
             {items.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-3">
-                <span className="text-[13px]">{item.name}</span>
+                <span className="text-[13px]">
+                  {item.name}
+                  {/* Nicht mehr verfügbar, steht aber noch in der Bestellung:
+                      nur noch reduzierbar, damit es gezielt entfernt werden kann. */}
+                  {!item.is_available && (
+                    <span className="mt-0.5 block font-mono text-[10px] text-sft-amber">
+                      NICHT MEHR VERFÜGBAR · BITTE ENTFERNEN
+                    </span>
+                  )}
+                </span>
                 <div className="flex items-center gap-2.5">
                   <button
                     type="button"
@@ -151,8 +170,9 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
                   <span className="w-4 text-center font-mono text-sm font-bold">{quantities[item.id] ?? 0}</span>
                   <button
                     type="button"
+                    disabled={!item.is_available}
                     onClick={() => setQuantities((prev) => ({ ...prev, [item.id]: (prev[item.id] ?? 0) + 1 }))}
-                    className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-sft-white"
+                    className="tap-scale h-8 w-8 rounded-lg border border-white/14 bg-sft-surface2 font-mono text-sft-white disabled:opacity-40"
                   >
                     +
                   </button>

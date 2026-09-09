@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { formatDateRange, isMultiDayTour, tourDayCount } from '@/utils/date'
+import { formatDateRange, isMultiDayTour, todayKey, tourDayCount } from '@/utils/date'
 import type { RegistrationStatus } from '@/types/tour'
 
 interface Row {
@@ -61,7 +61,7 @@ export function ProfileToursPage() {
       setRows(
         (regs ?? [])
           .map((r) => ({ ...r, tours: tourById.get(r.tour_id) ?? null }))
-          .filter((r) => r.tours && r.tours.end_date >= new Date().toISOString().slice(0, 10))
+          .filter((r) => r.tours && r.tours.end_date >= todayKey())
           .sort((a, b) => a.tours!.start_date.localeCompare(b.tours!.start_date)),
       )
       setLoading(false)

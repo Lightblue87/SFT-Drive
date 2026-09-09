@@ -356,6 +356,35 @@ export function AdminTourFormPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
+
+    // Vorabprüfung logisch unmöglicher Kombinationen. Die Datenbank lehnt sie
+    // seit 20260909020000 ebenfalls ab — hier geht es um eine verständliche
+    // Meldung statt eines rohen Constraint-Fehlers.
+    if (form.end_date && form.start_date && form.end_date < form.start_date) {
+      setError('Das Enddatum darf nicht vor dem Startdatum liegen.')
+      return
+    }
+    if (
+      form.registration_open_at &&
+      form.registration_close_at &&
+      form.registration_close_at < form.registration_open_at
+    ) {
+      setError('Der Anmeldeschluss darf nicht vor dem Anmeldestart liegen.')
+      return
+    }
+    if (form.check_in_enabled && !form.meeting_at) {
+      setError('Für den Check-in wird eine Treffpunktzeit benötigt.')
+      return
+    }
+    if (
+      form.min_power_ps &&
+      form.max_power_ps &&
+      Number(form.max_power_ps) < Number(form.min_power_ps)
+    ) {
+      setError('Die Maximalleistung darf nicht unter der Mindestleistung liegen.')
+      return
+    }
+
     setSubmitting(true)
 
     const tourPayload = {
