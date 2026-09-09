@@ -2385,6 +2385,48 @@ Install, `self.clients.claim()` beim Activate) zusammen mit
 zusätzlich periodisch auf ein neues Deployment prüft. Bei jeder künftigen
 Service-Worker-Änderung sicherstellen, dass dieses Verhalten erhalten bleibt.
 
+### Android-Chrome-Eigenheiten (aus der Praxis)
+
+Ohne eigenes Android-Testgerät wurde die App gegen Chrome-für-Android-Emulation
+(Device-Metrics eines Pixel 7, Chromium) sowie per Code-Audit geprüft, mit demselben
+Maßstab wie bei den iOS-Punkten oben. Ergebnis: kein horizontaler Overflow auf
+412px-Viewport, App-Shell rendert korrekt. Zusätzlich wurden dabei drei
+Android-spezifische Fehlerquellen gefunden und behoben, die die obigen iOS-Fixes ohne
+Gegenprüfung eingeführt hätten:
+
+- **Maskable Icon ohne Sicherheitsabstand:** `icon-512.png` war in der Manifest-Konfiguration
+  zusätzlich mit `purpose: 'maskable'` eingetragen. Android beschneidet ein als maskable
+  deklariertes Icon auf eine zentrierte ca. 80%-Sicherheitszone (Kreis/Squircle/Teardrop je
+  nach Launcher/Hersteller) — das vorhandene Artwork reicht aber bis auf < 1% an drei
+  Bildrändern heran und wäre auf dem Android-Homescreen sichtbar beschnitten worden. iOS kennt
+  dieses adaptive Zuschnittsystem nicht, weshalb der Fehler dort nie aufgefallen wäre. Fix in
+  `vite.config.ts`: der `maskable`-Eintrag wurde entfernt, bis ein eigens mit ausreichendem
+  Sicherheitsabstand erstelltes Icon-Artwork vorliegt. Android verwendet für die verbleibende
+  `any`-Variante seine eigene, deutlich mildere Standardmaskierung.
+- **`-webkit-appearance: none` auf date-/datetime-local-Feldern unscoped:** Der iOS-Fix gegen
+  die Breitenüberlauf-Eigenheit (siehe oben) war ursprünglich ohne Browser-Weiche auf alle
+  `input[type=date]`/`datetime-local` angewendet. Chrome für Android hat den Breiten-Bug nicht,
+  entfernt bei `appearance:none` aber das native Kalender-Icon und die Tippfläche zum Öffnen des
+  Pickers — das Feld wäre dort zu einem reinen Textfeld ohne Picker-Zugriff degradiert worden.
+  Fix in `src/index.css`: die Regel liegt jetzt hinter `@supports (-webkit-touch-callout: none)`
+  — eine etablierte Feature-Detection, die ausschließlich in iOS Safari zutrifft (Chrome, auch
+  Chrome unter iOS, unterstützt `-webkit-touch-callout` nicht). Die `min-height` gegen das
+  Höhenspringen bei leerem Feld bleibt für beide Plattformen unscoped bestehen.
+- **Fehlendes `overscroll-behavior-y: contain`:** Das eigene Pull-to-Refresh
+  (`src/components/PullToRefresh.tsx`) kann, solange die App noch nicht installiert im normalen
+  Chrome-Tab läuft, mit Chromes eigener nativer Overscroll-Pull-to-Refresh-Geste am oberen
+  Seitenrand kollidieren. iOS Safari kennt diese native Tab-Geste in gleicher Form nicht. Fix:
+  `overscroll-behavior-y: contain` auf `html` in `src/index.css`.
+
+Offener, bewusst nicht in dieser Runde behobener Punkt: Bottom-Sheets
+(`src/components/BottomSheet.tsx`, u. a. Anmeldeformular, Admin-Teilnehmer-hinzufügen) legen
+beim Öffnen keinen eigenen History-Eintrag an. Auf Android schließt der Zurück-Button/die
+Zurück-Geste ein offenes Sheet deshalb nicht, sondern verlässt die zugrunde liegende Seite bzw.
+bei fehlender History die App — auf iOS ohne Hardware-/Geste-Zurück-Erwartung kein Thema. Eine
+saubere Lösung braucht History-State-Integration über alle Sheet-Nutzungen hinweg und ist damit
+eine eigene, in sich abgeschlossene Änderung (§23/§31), keine kleine Bugfix-Ergänzung — für eine
+spätere Entscheidung dokumentiert statt ungefragt breit umgesetzt.
+
 ---
 
 ## 17. UI / UX

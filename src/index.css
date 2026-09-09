@@ -17,6 +17,12 @@
 html {
   color-scheme: dark;
   overflow-x: hidden;
+  /* Verhindert, dass Chrome unter Android die native Overscroll-Pull-to-
+     Refresh-Geste am oberen Rand auslöst, wenn die App (noch) im normalen
+     Browser-Tab statt installiert läuft — das eigene PullToRefresh würde
+     sonst gegen Chromes eigene Geste laufen. Auf iOS Safari ohne Wirkung,
+     dort gibt es diese native Geste im Tab ohnehin nicht in gleicher Form. */
+  overscroll-behavior-y: contain;
 }
 
 body {
@@ -53,26 +59,45 @@ select {
    -webkit-appearance:none umgehen lässt — der native Date-/Zeit-Picker
    (Scroll-Rad) bleibt dabei erhalten, nur das Eingabefeld selbst wird nicht
    mehr in WebKits eigenem Widget-Layout, sondern wie ein normales Textfeld
-   dargestellt. */
+   dargestellt.
+
+   Bewusst über @supports (-webkit-touch-callout: none) auf iOS Safari
+   beschränkt (dort als Feature-Detection etabliert, weil -webkit-touch-callout
+   ausschließlich von WebKit auf iOS unterstützt wird, nicht von Chrome unter
+   Android). Chrome für Android hat den beschriebenen Breiten-Bug nicht — dort
+   entfernt appearance:none stattdessen das native Kalender-Icon und die
+   Tippfläche zum Öffnen des Pickers, das Feld würde zu einem reinen Textfeld
+   ohne Picker-Zugriff degradieren. Deshalb dort das native Rendering
+   unangetastet lassen. */
+@supports (-webkit-touch-callout: none) {
+  input[type='date'],
+  input[type='datetime-local'] {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    /* Ohne -webkit-appearance schrumpft ein LEERES date-/datetime-local-Feld
+       in WebKit auf eine geringere Höhe als dasselbe Feld mit gesetztem Wert
+       (die eigene vertikale Innenabstand-Klasse allein reicht nicht) — als
+       feste Untergrenze auf die übliche Feldhöhe geklemmt, damit leer und
+       befüllt gleich hoch bleiben. */
+    min-height: 3.375rem;
+    line-height: 1.5;
+  }
+}
+
+/* Android Chrome braucht die obige Breiten-Korrektur nicht, aber min-height
+   sorgt dort ebenfalls dafür, dass ein leeres date-/datetime-local-Feld nicht
+   niedriger wirkt als ein befülltes — ohne das native appearance anzutasten. */
 input[type='date'],
 input[type='datetime-local'] {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  inline-size: 100%;
-  max-inline-size: 100%;
-  min-inline-size: 0;
-  -webkit-appearance: none;
-  appearance: none;
-  /* Ohne -webkit-appearance schrumpft ein LEERES date-/datetime-local-Feld in
-     WebKit auf eine geringere Höhe als dasselbe Feld mit gesetztem Wert (die
-     eigene vertikale Innenabstand-Klasse allein reicht nicht) — als feste
-     Untergrenze auf die übliche Feldhöhe geklemmt, damit leer und befüllt
-     gleich hoch bleiben. */
   min-height: 3.375rem;
-  line-height: 1.5;
 }
 
 @layer utilities {
