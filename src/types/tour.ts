@@ -39,6 +39,8 @@ export interface Tour {
   check_in_close_minutes_after: number
   status: TourStatus
   cover_image_url: string | null
+  youtube_url: string | null
+  youtube_embed: boolean
   created_by: string | null
   created_at: string
   updated_at: string

@@ -5645,3 +5645,102 @@ serverseitigen Vorbedingungen aus §36.6 getestet, nicht nur als Superuser).
   Teilnehmer sehen und schreiben nichts), sowie korrekte Empfänger-Filterung
   der Erinnerungs-RPC (nur tatsächlich bestätigte Teilnehmer, sonst
   `USER_NOT_FOUND`).
+
+---
+
+## 37. Entwicklungsphase 20 — Tourduplikat und YouTube-Video
+
+Phase 20 ist umgesetzt: zwei kleine, additive Komfortfunktionen für die
+Tourenverwaltung.
+
+### 37.1 Tour duplizieren
+
+Ziel ist, eine neue Tour schneller anlegen zu können, indem eine bestehende
+Tour als Ausgangspunkt kopiert wird, statt alle Felder erneut einzutippen.
+
+Da das gesamte Anlegen/Bearbeiten einer Tour bereits frontend-seitig über
+`AdminTourFormPage` direkt gegen `tours` (RLS `tours_admin_all`) sowie
+`tour_member_details`/`tour_participant_details` läuft und es keinen
+serverseitigen Slug-Mechanismus gibt (§8.3 "Umsetzungsentscheidung: Slug ist
+kein Admin-Eingabefeld"), war dafür **keine neue Migration oder RPC
+notwendig** — die Duplizierung ist eine reine Vorbefüllung desselben
+Formulars.
+
+Umsetzung:
+
+- In `/admin/tours` besitzt jede Tourzeile zusätzlich zu den bestehenden
+  Aktionen einen Button „Tour duplizieren“, der zu
+  `/admin/tours/new?duplicate=<sourceId>` navigiert.
+- `AdminTourFormPage` lädt bei `?duplicate=<id>` (nur wenn keine eigene `id`
+  aus der Route vorliegt, also nur im Neu-anlegen-Fall) die Quelltour samt
+  `tour_member_details`/`tour_participant_details` und befüllt daraus ein
+  neues Formular. Übernommen werden u. a. Region, Streckenlänge,
+  Fahrzeuglimit, Bestätigungsmodus, Leistungs-/Alters-/Kennzeichenanforderung,
+  Check-in-Konfiguration, Titelbild, YouTube-Feld (§37.2), Mitglieder-/
+  Teilnehmertext, Treffpunkte, Kurviger-/Zello-/WhatsApp-Link.
+- Bewusst **nicht** übernommen: Status (immer `draft`, damit die Kopie nicht
+  versehentlich sofort live ist), Start-/Enddatum, Treffpunktzeit,
+  Anmeldefenster, Personenzahl-Änderungsdeadline und der Slug — das sind
+  Entscheidungen für die neue Ausfahrt, keine Kopie der alten. Der Titel wird
+  um den Zusatz „(Kopie)“ ergänzt, damit die Kopie im Formular erkennbar ist;
+  der Admin passt Titel und die genannten Felder anschließend an und
+  speichert ganz normal über den bestehenden Anlegen-Pfad (inklusive der
+  bestehenden slugkollisionssicheren Insert-Logik).
+- Registrierungen, Tour-Stopps, Tagesrouten und Hotelvorschläge der
+  Ausgangstour werden nicht mitkopiert — die neue Tour startet organisatorisch
+  leer.
+- Der bestehende `localStorage`-Formularentwurf (§16 "Formular-Resilienz bei
+  Tab-Reloads") verwendet für den Duplizieren-Fall einen eigenen Schlüssel
+  (`sft-drive-tour-draft-duplicate-<sourceId>`) statt des generischen
+  `…-draft-new`, damit ein noch offener, unabhängiger "neue Tour"-Entwurf
+  nicht mit einer Duplizierung kollidiert oder sie überschreibt.
+
+### 37.2 YouTube-Video pro Tour
+
+Ziel ist, optional ein YouTube-Video (Ankündigung oder Rückblick) an eine
+Tour anzuhängen — entweder eingebettet abspielbar oder nur als Link.
+
+Datenmodell (neue Migration `20260909050000_tour_youtube_video.sql`, rein
+additiv, `tours` bleibt sonst unverändert):
+
+```text
+tours.youtube_url    TEXT NULL
+tours.youtube_embed  BOOLEAN NOT NULL DEFAULT TRUE
+```
+
+Bewusste Platzierung auf der öffentlichen `tours`-Zeile statt in
+`tour_participant_details`: ein Tour-Video ist wie das Titelbild
+(`cover_image_url`) ein öffentlicher Marketinginhalt und kein interner
+Teilnehmer-Inhalt — es enthält keinen Treffpunkt, Kurviger- oder Zello-Zugang
+und unterliegt deshalb nicht der Participant-Sichtbarkeitsgrenze aus §8/§10.
+
+Datenschutz (§7, konsistent mit der bereits bestehenden Entscheidung, Google
+Fonts selbst zu hosten statt Google-Infrastruktur unaufgefordert zu
+kontaktieren): Es wird **kein** YouTube-Thumbnail vorab geladen und **kein**
+iframe automatisch eingebettet. Vor einem expliziten Klick auf „Video laden“
+geht keine Anfrage an YouTube-Server. Im Link-Modus öffnet der Klick den
+externen Link direkt in einem neuen Tab (`noopener`/`noreferrer`); im
+Embed-Modus wird nach dem Klick `youtube-nocookie.com` als iframe-Quelle
+verwendet.
+
+Sicherheit: Die Video-ID wird nicht direkt als iframe-`src` verwendet,
+sondern über `extractYouTubeId()` (`src/utils/youtube.ts`) aus bekannten
+URL-Formen (`watch?v=`, `youtu.be/`, `embed/`, `shorts/`) per Regex
+extrahiert und auf ein sicheres ID-Muster geprüft. Jede nicht erkannte URL
+liefert `null` und fällt automatisch auf die reine Link-Anzeige zurück —
+kein unvalidierter Wert erreicht ein iframe.
+
+Umsetzung:
+
+- Admin-Formular (`AdminTourFormPage`, Abschnitt „Grunddaten“ neben dem
+  Titelbild): Feld „YouTube-Video-URL“ sowie — nur sichtbar, wenn eine URL
+  eingetragen ist — ein Umschalter „Video eingebettet anzeigen“
+  (Standard: aktiviert).
+- Tourdetailseite (`YouTubeVideo`-Komponente, `src/features/tours/YouTubeVideo.tsx`):
+  öffentlich sichtbar für jeden Besucher, direkt unter der öffentlichen
+  Beschreibung, unabhängig vom Anmelde- oder Teilnahmestatus.
+- Die Duplizieren-Funktion aus §37.1 übernimmt `youtube_url`/`youtube_embed`
+  wie die übrigen öffentlichen Feststoffe der Quelltour.
+
+Kosten: Keine — YouTube-Einbettung ist kostenlos, `youtube-nocookie.com` ist
+YouTubes eigener datensparsamerer Embed-Host und erfordert keinen API-Key.

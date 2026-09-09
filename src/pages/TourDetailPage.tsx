@@ -18,6 +18,7 @@ import { MealOrderForm } from '@/features/tours/MealOrderForm'
 import { CheckInButton } from '@/features/tours/CheckInButton'
 import { TourInterestButton } from '@/features/tours/TourInterestButton'
 import { AccommodationSection } from '@/features/tours/AccommodationSection'
+import { YouTubeVideo } from '@/features/tours/YouTubeVideo'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -207,6 +208,9 @@ export function TourDetailPage() {
         {tour.public_description && (
           <p className="mt-4 px-1 text-[14px] leading-relaxed text-[#b9b9c0]">{tour.public_description}</p>
         )}
+
+        {/* Öffentlicher Inhalt (§10 PUBLIC): Promo-/Rückblickvideo, kein Teilnehmer-Geheimnis. */}
+        {tour.youtube_url && <YouTubeVideo url={tour.youtube_url} embed={tour.youtube_embed} />}
 
         {/* Mitgliederinhalt (§10 MEMBER): nur für eingeloggte User. */}
         {memberDetails?.member_description && (
