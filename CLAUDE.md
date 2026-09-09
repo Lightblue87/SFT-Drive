@@ -1766,7 +1766,18 @@ STRECKE      FAHRZEUGE      TREFFEN
 [ Tour öffnen ]
 ```
 
-Eine abgesagte Ausfahrt wird nie als Hero-Kachel verwendet.
+Welche Tour dort steht, richtet sich danach, was für den Betrachter noch
+relevant ist — nicht allein nach dem Datum:
+
+- Eine abgesagte Ausfahrt wird nie als Hero-Kachel verwendet.
+- Eine Ausfahrt mit geschlossener Anmeldung nur dann, wenn der Betrachter
+  selbst angemeldet ist (`confirmed`, `pending` oder `waitlisted`) — dann ist
+  sie tatsächlich seine nächste Ausfahrt. Ist er nicht dabei, gibt es dort
+  nichts mehr zu tun, und es rückt die nächste Tour nach, bei der er entweder
+  angemeldet ist oder sich noch anmelden kann (je nachdem, welche früher
+  stattfindet).
+- In der Tourliste darunter bleiben geschlossene Touren unabhängig davon
+  sichtbar.
 
 **2. Kompakte Tourzeilen**
 

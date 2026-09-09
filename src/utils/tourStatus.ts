@@ -68,6 +68,15 @@ export function tourPhaseMessage(phase: RegistrationPhase): string | null {
   }
 }
 
+/**
+ * Zählt der eigene Anmeldestatus als aktive Teilnahme? `cancelled` und
+ * `rejected` sind keine — sie bedeuten, dass man gerade nicht dabei ist
+ * (dieselbe Abgrenzung wie `activeRegistration` auf der Tourdetailseite).
+ */
+export function isActiveRegistration(ownStatus: string | null): boolean {
+  return ownStatus === 'confirmed' || ownStatus === 'pending' || ownStatus === 'waitlisted'
+}
+
 export const TOUR_STATUS_LABEL: Record<TourStatus, string> = {
   draft: 'ENTWURF',
   published: 'VERÖFFENTLICHT',
