@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { BottomSheet } from '@/components/BottomSheet'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
+import type { Vehicle } from '@/types/vehicle'
 
 interface AdminUser {
   id: string
@@ -41,6 +42,8 @@ export function AddRegistrationSheet({ tourId, tourTitle, onClose, onAdded }: Pr
   const [totalPersons, setTotalPersons] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [loadingVehicle, setLoadingVehicle] = useState(false)
+  const [noVehicleFound, setNoVehicleFound] = useState(false)
 
   useEffect(() => {
     supabase.rpc('admin_list_users').then(({ data }) => setUsers((data as AdminUser[]) ?? []))
@@ -54,6 +57,37 @@ export function AddRegistrationSheet({ tourId, tourTitle, onClose, onAdded }: Pr
         )
         .slice(0, 6)
     : []
+
+  /**
+   * Der Admin kennt die Fahrzeugdaten des Teilnehmers normalerweise nicht —
+   * deshalb wird das Standardfahrzeug aus dessen Garage vorbefüllt (§34.2).
+   * Der Teilnehmer kann sein Fahrzeug in der Tour danach selbst ändern.
+   */
+  async function selectUser(u: AdminUser) {
+    setSelected(u)
+    setError(null)
+    setNoVehicleFound(false)
+    setLoadingVehicle(true)
+
+    const { data } = await supabase.rpc('admin_get_user_vehicles', { p_user_id: u.id })
+    const vehicles = (data as Vehicle[]) ?? []
+    const preferred = vehicles.find((v) => v.is_default) ?? vehicles[0]
+
+    if (preferred) {
+      setManufacturer(preferred.manufacturer)
+      setModel(preferred.model)
+      setPower(String(preferred.power_ps))
+      setLicensePlate(preferred.license_plate ?? '')
+    } else {
+      setManufacturer('')
+      setModel('')
+      setPower('')
+      setLicensePlate('')
+      setNoVehicleFound(true)
+    }
+
+    setLoadingVehicle(false)
+  }
 
   async function save() {
     setError(null)
@@ -120,7 +154,7 @@ export function AddRegistrationSheet({ tourId, tourTitle, onClose, onAdded }: Pr
               <button
                 key={u.id}
                 type="button"
-                onClick={() => setSelected(u)}
+                onClick={() => selectUser(u)}
                 className="tap-scale rounded-xl border border-white/9 bg-sft-card px-3.5 py-3 text-left"
               >
                 <div className="text-[14px] font-semibold">{u.username}</div>
@@ -130,6 +164,23 @@ export function AddRegistrationSheet({ tourId, tourTitle, onClose, onAdded }: Pr
               </button>
             ))}
           </div>
+        )}
+
+        {selected && loadingVehicle && (
+          <p className="font-mono text-[11px] text-sft-gray">LÄDT FAHRZEUGDATEN…</p>
+        )}
+
+        {selected && !loadingVehicle && !noVehicleFound && (
+          <p className="font-mono text-[11px] text-sft-gray">
+            STANDARDFAHRZEUG AUS DER GARAGE VORBEFÜLLT — BEI BEDARF ÄNDERBAR
+          </p>
+        )}
+
+        {selected && !loadingVehicle && noVehicleFound && (
+          <p className="rounded-xl border border-sft-amber/30 bg-sft-amber/[0.07] px-3.5 py-3 text-xs leading-relaxed text-[#e6c07a]">
+            Für {selected.username} ist kein Fahrzeug in der Garage hinterlegt. Bitte Fahrzeugdaten
+            manuell eintragen.
+          </p>
         )}
 
         <div className="grid grid-cols-2 gap-3">

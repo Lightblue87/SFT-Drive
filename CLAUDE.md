@@ -600,7 +600,15 @@ Weitere Regeln:
   jemanden aufnehmen, über `admin_add_registration()`. Anmeldefenster sowie
   Leistungs- und Altersanforderungen werden dabei bewusst übergangen, die
   Fahrzeugkapazität dagegen **nicht** (§12) — ist die Tour voll, entsteht ein
-  Wartelisteneintrag.
+  Wartelisteneintrag. Der Admin kennt die Fahrzeugdaten des Teilnehmers
+  normalerweise nicht — das Admin-Formular lädt deshalb über
+  `admin_get_user_vehicles()` (Migration `20260909030000_admin_user_vehicles.sql`,
+  gezielte Ausnahme von der `vehicles_own`-RLS analog zu anderen
+  Admin-Zugriffs-RPCs) automatisch das Standardfahrzeug des ausgewählten
+  Nutzers aus dessen Garage (§34.2) vor; ohne gespeichertes Fahrzeug bleiben
+  die Felder leer und müssen manuell ausgefüllt werden. Der Teilnehmer kann
+  sein Fahrzeug für die Tour anschließend selbst ändern, sofern es weiterhin
+  den Anforderungen entspricht.
 - Eine Absage erfolgt ausschließlich manuell über `admin_cancel_tour()` und ist
   im Statusfeld des Tourformulars deshalb nicht direkt wählbar. Die RPC
   benachrichtigt alle Registrierungen mit `confirmed`, `pending` oder
