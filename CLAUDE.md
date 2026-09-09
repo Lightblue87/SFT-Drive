@@ -315,6 +315,18 @@ Der Klarname ist nicht öffentlich.
 
 Geburtsdatum wird nur benötigt, wenn eine Tour eine Altersanforderung besitzt. Es kann daher zunächst `NULL` sein und erst bei Bedarf ergänzt werden.
 
+#### Umsetzung
+
+`handle_new_user()` übernimmt ein optionales `date_of_birth`-Auth-Metadatum nach
+`profiles` (Migration `20260909000000_handle_new_user_date_of_birth.sql`). Der aktuelle
+Registrierungsassistent (`RegisterPage`) sendet dieses Feld bewusst **nicht** mehr mit —
+es wurde aus der allgemeinen Registrierung entfernt, weil es dort eine unnötige Erhebung
+gemäß §7 (Datensparsamkeit) gewesen wäre. Gefüllt wird `date_of_birth` stattdessen erst
+gezielt bei Bedarf über das Anmeldeformular einer altersbeschränkten Tour
+(`RegistrationForm`, direktes `update` auf `profiles`, siehe §14.3). Der Trigger bleibt
+trotzdem bestehen: er ist rein defensiv (verwirft `NULL`, wenn nichts mitgegeben wird)
+und stellt sicher, dass ein extern/zukünftig gesetztes Metadatum nicht verworfen würde.
+
 Spätere Erweiterungen können sein:
 
 - Google Login
@@ -2338,6 +2350,18 @@ als verbindliche Anforderung, nicht nur als Bugfix:
   Eingabestand deshalb laufend in `localStorage` zwischenspeichern und nach einem
   Neustart wiederherstellen (Wiederherstellung hat Vorrang vor bereits aus der DB
   geladenen Werten), und den Entwurf nach erfolgreichem Speichern löschen.
+- **Native `date`/`datetime-local`-Felder überlaufen ihren Container**: iOS Safari
+  ignoriert bei diesen Feldtypen `width: 100%` und rendert stattdessen eine
+  intrinsische Breite, die den umgebenden Container seitlich sprengt — in Chromium
+  (auch bei aktiviertem Mobile-Emulation-DevTools) nicht reproduzierbar, deshalb nur
+  auf echtem iPhone/installierter PWA aufgefallen. Fix: `-webkit-appearance: none`
+  auf dem Feld selbst. Nebenwirkung dieses Fixes: ein leeres Feld kollabiert dann in
+  der Höhe (kein sichtbarer Platzhaltertext mehr, der die Zeilenhöhe vorgibt) und
+  springt beim Befüllen sichtbar auf — deshalb zusätzlich `min-height` und
+  `line-height` explizit setzen. `min-w-0` muss außerdem auf **jeder** verschachtelten
+  Flex-/Grid-Ebene (Formular → Section → Label → Input) gesetzt sein, nicht nur auf
+  dem Input selbst, sonst genügt bereits eine einzige fehlende Ebene, damit die
+  intrinsische Breite wieder durchschlägt.
 
 Wichtig:
 
@@ -2349,6 +2373,17 @@ Für das MVP bevorzugt:
 - statische Assets cachen
 - dynamische Auth-/Supabase-Daten network-first oder gar nicht persistent über den Service Worker cachen
 - sinnvolle Offline-Seite anbieten
+
+**Service Worker aktivierte neue Deployments nie (behoben):** Ohne explizites
+`skipWaiting()`/`clients.claim()` im Service Worker bleibt ein neu deployter Worker im
+Zustand "waiting", bis buchstäblich jeder offene Tab/jede App-Instanz geschlossen wird —
+bei einer installierten PWA praktisch nie, da sie oft dauerhaft im Hintergrund bleibt.
+Bugfixes und neue Features kamen dadurch bei bestehenden Installationen faktisch nie an,
+auch nach erfolgreichem Cloudflare-Deploy. Fix in `src/sw.ts` (`self.skipWaiting()` beim
+Install, `self.clients.claim()` beim Activate) zusammen mit
+`registerSW({ immediate: true })` (`virtual:pwa-register`) in `src/main.tsx`, das
+zusätzlich periodisch auf ein neues Deployment prüft. Bei jeder künftigen
+Service-Worker-Änderung sicherstellen, dass dieses Verhalten erhalten bleibt.
 
 ---
 
