@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Tour, PublicTourStats } from '@/types/tour'
+import { registrationPhase } from '@/utils/tourStatus'
+import { todayKey } from '@/utils/date'
 
 export interface TourWithStats {
   tour: Tour
@@ -9,7 +11,7 @@ export interface TourWithStats {
 }
 
 function sortTours(tours: Tour[]): Tour[] {
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = todayKey()
 
   const running = tours.filter((t) => t.start_date <= todayStr && t.end_date >= todayStr)
   const upcoming = tours
@@ -23,9 +25,15 @@ function sortTours(tours: Tour[]): Tour[] {
 }
 
 /**
- * Lädt veröffentlichte Touren (RLS beschränkt Visitor/User ohnehin auf
- * `status = 'published'`, siehe supabase/migrations) und reichert sie um
+ * Lädt die für den Betrachter sichtbaren Touren und reichert sie um
  * öffentliche Kapazitätsdaten und den eigenen Anmeldestatus an.
+ *
+ * Bewusst ohne Statusfilter: welche Touren sichtbar sind, entscheidet
+ * ausschließlich die RLS (`tour_is_visible()`, siehe CLAUDE.md §8.3) — also
+ * `published`, `registration_closed`, `completed` sowie abgesagte Touren bis
+ * zu ihrem Starttag. Ein zusätzlicher Client-Filter auf `published` hatte
+ * dazu geführt, dass eine Tour mit Anmeldeschluss für Teilnehmer schlagartig
+ * ganz verschwand.
  */
 export function useTours() {
   const [tours, setTours] = useState<TourWithStats[]>([])
@@ -39,10 +47,7 @@ export function useTours() {
       setLoading(true)
       setError(null)
 
-      const { data: tourRows, error: toursError } = await supabase
-        .from('tours')
-        .select('*')
-        .eq('status', 'published')
+      const { data: tourRows, error: toursError } = await supabase.from('tours').select('*')
 
       if (cancelled) return
 
@@ -52,7 +57,13 @@ export function useTours() {
         return
       }
 
-      const sorted = sortTours((tourRows ?? []) as Tour[])
+      // Admins bekommen über die RLS zusätzlich Entwürfe und archivierte Touren
+      // — die gehören aber in die Tourenverwaltung, nicht in die öffentliche
+      // Übersicht. Deshalb hier dieselbe Auswahl wie für alle anderen.
+      const visible = ((tourRows ?? []) as Tour[]).filter(
+        (t) => registrationPhase(t) !== 'unavailable',
+      )
+      const sorted = sortTours(visible)
 
       const { data: authData } = await supabase.auth.getUser()
       const userId = authData.user?.id

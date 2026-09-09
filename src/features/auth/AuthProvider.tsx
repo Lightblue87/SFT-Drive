@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { claimPendingVehicle } from '@/features/auth/pendingVehicle'
 
 interface AuthContextValue {
   session: Session | null
@@ -24,8 +25,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
+      if (event === 'SIGNED_IN' && newSession?.user) {
+        void claimPendingVehicle(newSession.user.id)
+      }
     })
 
     return () => subscription.subscription.unsubscribe()

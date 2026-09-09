@@ -99,10 +99,10 @@ Diese Regeln sind für das MVP verbindlich:
 - Touren werden darunter chronologisch nach Startdatum angezeigt.
 - Die nächste relevante Tour steht oben.
 - Laufende Mehrtagestouren stehen oberhalb noch nicht gestarteter Touren.
-- Jede Tour erhält eine quadratische 1:1-Kachel mit Tourtitel darüber.
-- Die Kachel nutzt auf Mobilgeräten nahezu die gesamte verfügbare Displaybreite.
-- Auf jeder Kachel müssen freie Fahrzeugplätze sichtbar sein.
-- Als Kachelbild kann ein Tourlogo, Eventdesign, Fahrzeugfoto oder Routen-Screenshot verwendet werden.
+- Die nächste Ausfahrt erscheint als hervorgehobene Hero-Kachel, alle weiteren als kompakte Tourzeilen mit quadratischem Vorschaubild (siehe §13.10).
+- Die Liste nutzt auf Mobilgeräten nahezu die gesamte verfügbare Displaybreite.
+- Auf jeder Tourzeile müssen freie Fahrzeugplätze sichtbar sein.
+- Als Tourbild kann ein Tourlogo, Eventdesign, Fahrzeugfoto oder Routen-Screenshot verwendet werden.
 
 ---
 
@@ -269,7 +269,7 @@ Darf zusätzlich:
 - Touren erstellen
 - Touren bearbeiten
 - Touren veröffentlichen
-- Touren absagen
+- Touren absagen (über `admin_cancel_tour`, benachrichtigt die Teilnehmer)
 - Touren archivieren
 - maximale Fahrzeugzahl festlegen
 - Bestätigungsmodus festlegen
@@ -314,6 +314,18 @@ Beim Onboarding zusätzlich erfassen:
 Der Klarname ist nicht öffentlich.
 
 Geburtsdatum wird nur benötigt, wenn eine Tour eine Altersanforderung besitzt. Es kann daher zunächst `NULL` sein und erst bei Bedarf ergänzt werden.
+
+#### Umsetzung
+
+`handle_new_user()` übernimmt ein optionales `date_of_birth`-Auth-Metadatum nach
+`profiles` (Migration `20260909000000_handle_new_user_date_of_birth.sql`). Der aktuelle
+Registrierungsassistent (`RegisterPage`) sendet dieses Feld bewusst **nicht** mehr mit —
+es wurde aus der allgemeinen Registrierung entfernt, weil es dort eine unnötige Erhebung
+gemäß §7 (Datensparsamkeit) gewesen wäre. Gefüllt wird `date_of_birth` stattdessen erst
+gezielt bei Bedarf über das Anmeldeformular einer altersbeschränkten Tour
+(`RegistrationForm`, direktes `update` auf `profiles`, siehe §14.3). Der Trigger bleibt
+trotzdem bestehen: er ist rein defensiv (verwirft `NULL`, wenn nichts mitgegeben wird)
+und stellt sicher, dass ein extern/zukünftig gesetztes Metadatum nicht verworfen würde.
 
 Spätere Erweiterungen können sein:
 
@@ -555,6 +567,77 @@ Regeln:
 - Fahrzeugkapazität niemals aus einer vom Client gelieferten Zahl ableiten.
 - `passenger_edit_deadline_at` darf unabhängig vom Ende des normalen Anmeldezeitraums gesetzt werden.
 - Keine exakten privaten Treffpunkte, Kurviger-Links, Zello-Links oder internen Participant-Texte in dieser Tabelle speichern.
+
+### Lebenszyklus der Tourstatus
+
+Verbindliche Ausarbeitung, wie die einzelnen Status entstehen und was sie für
+Sichtbarkeit und Anmeldung bedeuten (Migration
+`20260909010000_tour_lifecycle.sql`).
+
+Ursprünglich gab die RLS ausschließlich `status = 'published'` frei. Eine Tour
+verschwand dadurch beim Statuswechsel schlagartig komplett — auch für bereits
+angemeldete Teilnehmer und aus `/profile/tours`. Das war nicht gewollt.
+
+Sichtbar für Visitor und normale User sind:
+
+```text
+published            sichtbar, Anmeldung im Anmeldefenster möglich
+registration_closed  sichtbar, keine Anmeldung mehr möglich
+completed            sichtbar, keine Anmeldung mehr möglich
+cancelled            sichtbar bis einschließlich start_date
+draft                nicht sichtbar
+archived             nicht sichtbar
+```
+
+Die Regel liegt zentral in `tour_is_visible(status, start_date)` und wird von
+der `tours`-Policy, der `tour_member_details`-Policy und
+`get_public_tour_stats()` gemeinsam verwendet — keine dieser Stellen darf
+eine eigene abweichende Statusliste führen.
+
+Automatische Übergänge (`apply_tour_lifecycle()`, per `pg_cron` alle 15
+Minuten; die Funktion ist idempotent und braucht keinen eigenen Zustand):
+
+```text
+published           -> registration_closed   sobald registration_close_at vorbei ist
+published/closed    -> completed             sobald end_date vorbei ist
+cancelled           -> archived              sobald start_date vorbei ist
+```
+
+`draft`, `cancelled` und `archived` werden nie automatisch überschrieben — eine
+Absage bleibt eine Absage.
+
+Weitere Regeln:
+
+- Nach Anmeldeschluss (`registration_closed`) kann ausschließlich der Admin noch
+  jemanden aufnehmen, über `admin_add_registration()`. Anmeldefenster sowie
+  Leistungs- und Altersanforderungen werden dabei bewusst übergangen, die
+  Fahrzeugkapazität dagegen **nicht** (§12) — ist die Tour voll, entsteht ein
+  Wartelisteneintrag. Der Admin kennt die Fahrzeugdaten des Teilnehmers
+  normalerweise nicht — das Admin-Formular lädt deshalb über
+  `admin_get_user_vehicles()` (Migration `20260909030000_admin_user_vehicles.sql`,
+  gezielte Ausnahme von der `vehicles_own`-RLS analog zu anderen
+  Admin-Zugriffs-RPCs) automatisch das Standardfahrzeug des ausgewählten
+  Nutzers aus dessen Garage (§34.2) vor; ohne gespeichertes Fahrzeug bleiben
+  die Felder leer und müssen manuell ausgefüllt werden. Der Teilnehmer kann
+  sein Fahrzeug für die Tour anschließend selbst ändern, sofern es weiterhin
+  den Anforderungen entspricht.
+- Eine Absage erfolgt ausschließlich manuell über `admin_cancel_tour()` und ist
+  im Statusfeld des Tourformulars deshalb nicht direkt wählbar. Die RPC
+  benachrichtigt alle Registrierungen mit `confirmed`, `pending` oder
+  `waitlisted` über die bestehende Notification-Infrastruktur (Typ
+  `TOUR_CANCELLED`); der zusätzliche Web-Push wird wie überall vom Client über
+  `send-push` ausgelöst (§27.16). `send-push` akzeptiert dafür ein optionales
+  `statuses`-Feld (Standard weiterhin nur `confirmed`, §27.11) — eine Absage
+  ist die begründete Ausnahme, weil auch `pending` und `waitlisted` betroffen
+  sind.
+- Eine abgesagte Tour wird nach ihrem Starttag archiviert und damit aus allen
+  normalen Ansichten entfernt. Sie wird bewusst **nicht** gelöscht: das wäre
+  nicht umkehrbar und würde §23.14 verletzen.
+- Das UI leitet den tatsächlichen Anmeldezustand zusätzlich aus den Zeitstempeln
+  ab (`registrationPhase()` in `src/utils/tourStatus.ts`), damit zwischen
+  Anmeldeschluss und dem nächsten Joblauf kein Anmeldeformular angeboten wird,
+  das die RPC anschließend ablehnt. Die verbindliche Prüfung bleibt
+  serverseitig in `register_for_tour` (§9.2).
 
 ### Umsetzungsentscheidung: Slug ist kein Admin-Eingabefeld
 
@@ -1413,6 +1496,9 @@ Admin kann mindestens:
 - Pending ablehnen
 - bestätigte Teilnahme administrativ stornieren
 - Wartelistenreihenfolge sehen
+- Teilnehmer administrativ nachtragen (`admin_add_registration`, siehe §8.3
+  "Lebenszyklus der Tourstatus") — nach Anmeldeschluss der einzige verbleibende
+  Weg, jemanden aufzunehmen
 
 Wichtig:
 
@@ -1672,30 +1758,56 @@ Die Tagesnummer darf aus Datum und Zeitraum berechnet werden.
 
 ---
 
-### 13.10 Tour-Kachel
+### 13.10 Tourliste und Hero-Kachel
 
-Jede Tour besitzt eine große visuelle Kachel.
+**Diese Vorgabe wurde mit dem Cockpit-Board-Redesign überarbeitet.** Ursprünglich
+war für jede Tour eine große quadratische 1:1-Kachel mit Titel darüber
+vorgesehen. In der Praxis passte damit auf ein Smartphone nur eine einzige
+Tour auf den Bildschirm — Kalender, aktive Filterinformation und die zweite
+Ausfahrt lagen dauerhaft unterhalb der Falz. Das widersprach dem primären
+UX-Ziel aus §13 ("App öffnen → nächste Ausfahrten sofort erkennen").
 
-Aufbau:
+Verbindlich ist deshalb eine zweistufige Darstellung:
+
+**1. Hero-Kachel der nächsten Ausfahrt**
+
+Ganz oben steht genau eine hervorgehobene Karte für die nächste relevante
+Ausfahrt (laufend oder als nächstes startend). Sie zeigt:
 
 ```text
+NÄCHSTE AUSFAHRT                    [Statusbadge]
+
 Tourtitel
+Region · Datum bzw. Zeitraum
 
-[ quadratisches 1:1 Tourbild ]
+STRECKE      FAHRZEUGE      TREFFEN
+285 km       14/20          09:00
+
+[ Tour öffnen ]
 ```
 
-Der Titel steht immer oberhalb der Grafik.
+Welche Tour dort steht, richtet sich danach, was für den Betrachter noch
+relevant ist — nicht allein nach dem Datum:
 
-Die Grafik nutzt:
+- Eine abgesagte Ausfahrt wird nie als Hero-Kachel verwendet.
+- Eine Ausfahrt mit geschlossener Anmeldung nur dann, wenn der Betrachter
+  selbst angemeldet ist (`confirmed`, `pending` oder `waitlisted`) — dann ist
+  sie tatsächlich seine nächste Ausfahrt. Ist er nicht dabei, gibt es dort
+  nichts mehr zu tun, und es rückt die nächste Tour nach, bei der er entweder
+  angemeldet ist oder sich noch anmelden kann (je nachdem, welche früher
+  stattfindet).
+- In der Tourliste darunter bleiben geschlossene Touren unabhängig davon
+  sichtbar.
 
-```css
-width: 100%;
-aspect-ratio: 1 / 1;
-```
+**2. Kompakte Tourzeilen**
 
-Auf Smartphones soll sie nahezu die gesamte verfügbare Displaybreite einnehmen.
+Alle übrigen Touren erscheinen als kompakte Zeilen mit quadratischem
+Vorschaubild links (das Coverbild aus §13.11, weiterhin `object-fit: cover`)
+und den Informationen aus §13.12 rechts daneben. Mehrere Ausfahrten sind damit
+gleichzeitig sichtbar.
 
-Auf größeren Displays darf die zentrale Content-Spalte begrenzt werden, beispielsweise auf ca. 700–800 px.
+Auf größeren Displays darf die zentrale Content-Spalte begrenzt werden,
+beispielsweise auf ca. 700–800 px.
 
 Die mobile Darstellung besitzt Priorität.
 
@@ -1850,7 +1962,7 @@ Der allgemeine Kapazitätsstatus bleibt trotzdem sichtbar.
 
 ### 13.15 Interaktion
 
-Die gesamte quadratische Tourkachel ist antippbar.
+Die gesamte Tourzeile bzw. Hero-Kachel ist antippbar.
 
 Tap führt zu:
 
@@ -1860,7 +1972,7 @@ Tap führt zu:
 
 Keine kleinen `Mehr erfahren` Buttons als alleinige Interaktionsfläche.
 
-Die komplette Kachel muss als großes Touch-Ziel funktionieren.
+Die komplette Zeile muss als großes Touch-Ziel funktionieren.
 
 ---
 
@@ -2238,6 +2350,18 @@ als verbindliche Anforderung, nicht nur als Bugfix:
   Eingabestand deshalb laufend in `localStorage` zwischenspeichern und nach einem
   Neustart wiederherstellen (Wiederherstellung hat Vorrang vor bereits aus der DB
   geladenen Werten), und den Entwurf nach erfolgreichem Speichern löschen.
+- **Native `date`/`datetime-local`-Felder überlaufen ihren Container**: iOS Safari
+  ignoriert bei diesen Feldtypen `width: 100%` und rendert stattdessen eine
+  intrinsische Breite, die den umgebenden Container seitlich sprengt — in Chromium
+  (auch bei aktiviertem Mobile-Emulation-DevTools) nicht reproduzierbar, deshalb nur
+  auf echtem iPhone/installierter PWA aufgefallen. Fix: `-webkit-appearance: none`
+  auf dem Feld selbst. Nebenwirkung dieses Fixes: ein leeres Feld kollabiert dann in
+  der Höhe (kein sichtbarer Platzhaltertext mehr, der die Zeilenhöhe vorgibt) und
+  springt beim Befüllen sichtbar auf — deshalb zusätzlich `min-height` und
+  `line-height` explizit setzen. `min-w-0` muss außerdem auf **jeder** verschachtelten
+  Flex-/Grid-Ebene (Formular → Section → Label → Input) gesetzt sein, nicht nur auf
+  dem Input selbst, sonst genügt bereits eine einzige fehlende Ebene, damit die
+  intrinsische Breite wieder durchschlägt.
 
 Wichtig:
 
@@ -2249,6 +2373,110 @@ Für das MVP bevorzugt:
 - statische Assets cachen
 - dynamische Auth-/Supabase-Daten network-first oder gar nicht persistent über den Service Worker cachen
 - sinnvolle Offline-Seite anbieten
+
+**Service Worker aktivierte neue Deployments nie (behoben):** Ohne explizites
+`skipWaiting()`/`clients.claim()` im Service Worker bleibt ein neu deployter Worker im
+Zustand "waiting", bis buchstäblich jeder offene Tab/jede App-Instanz geschlossen wird —
+bei einer installierten PWA praktisch nie, da sie oft dauerhaft im Hintergrund bleibt.
+Bugfixes und neue Features kamen dadurch bei bestehenden Installationen faktisch nie an,
+auch nach erfolgreichem Cloudflare-Deploy. Fix in `src/sw.ts` (`self.skipWaiting()` beim
+Install, `self.clients.claim()` beim Activate) zusammen mit
+`registerSW({ immediate: true })` (`virtual:pwa-register`) in `src/main.tsx`, das
+zusätzlich periodisch auf ein neues Deployment prüft. Bei jeder künftigen
+Service-Worker-Änderung sicherstellen, dass dieses Verhalten erhalten bleibt.
+
+### Android-Chrome-Eigenheiten (aus der Praxis)
+
+Ohne eigenes Android-Testgerät wurde die App gegen Chrome-für-Android-Emulation
+(Device-Metrics eines Pixel 7, Chromium) sowie per Code-Audit geprüft, mit demselben
+Maßstab wie bei den iOS-Punkten oben. Ergebnis: kein horizontaler Overflow auf
+412px-Viewport, App-Shell rendert korrekt. Zusätzlich wurden dabei drei
+Android-spezifische Fehlerquellen gefunden und behoben, die die obigen iOS-Fixes ohne
+Gegenprüfung eingeführt hätten:
+
+- **Maskable Icon ohne Sicherheitsabstand:** `icon-512.png` war in der Manifest-Konfiguration
+  zusätzlich mit `purpose: 'maskable'` eingetragen. Android beschneidet ein als maskable
+  deklariertes Icon auf eine zentrierte ca. 80%-Sicherheitszone (Kreis/Squircle/Teardrop je
+  nach Launcher/Hersteller) — das vorhandene Artwork reicht aber bis auf < 1% an drei
+  Bildrändern heran und wäre auf dem Android-Homescreen sichtbar beschnitten worden. iOS kennt
+  dieses adaptive Zuschnittsystem nicht, weshalb der Fehler dort nie aufgefallen wäre. Fix in
+  `vite.config.ts`: der `maskable`-Eintrag wurde entfernt, bis ein eigens mit ausreichendem
+  Sicherheitsabstand erstelltes Icon-Artwork vorliegt. Android verwendet für die verbleibende
+  `any`-Variante seine eigene, deutlich mildere Standardmaskierung.
+- **`-webkit-appearance: none` auf date-/datetime-local-Feldern unscoped:** Der iOS-Fix gegen
+  die Breitenüberlauf-Eigenheit (siehe oben) war ursprünglich ohne Browser-Weiche auf alle
+  `input[type=date]`/`datetime-local` angewendet. Chrome für Android hat den Breiten-Bug nicht,
+  entfernt bei `appearance:none` aber das native Kalender-Icon und die Tippfläche zum Öffnen des
+  Pickers — das Feld wäre dort zu einem reinen Textfeld ohne Picker-Zugriff degradiert worden.
+  Fix in `src/index.css`: die Regel liegt jetzt hinter `@supports (-webkit-touch-callout: none)`
+  — eine etablierte Feature-Detection, die ausschließlich in iOS Safari zutrifft (Chrome, auch
+  Chrome unter iOS, unterstützt `-webkit-touch-callout` nicht). Die `min-height` gegen das
+  Höhenspringen bei leerem Feld bleibt für beide Plattformen unscoped bestehen.
+- **Fehlendes `overscroll-behavior-y: contain`:** Das eigene Pull-to-Refresh
+  (`src/components/PullToRefresh.tsx`) kann, solange die App noch nicht installiert im normalen
+  Chrome-Tab läuft, mit Chromes eigener nativer Overscroll-Pull-to-Refresh-Geste am oberen
+  Seitenrand kollidieren. iOS Safari kennt diese native Tab-Geste in gleicher Form nicht. Fix:
+  `overscroll-behavior-y: contain` auf `html` in `src/index.css`.
+
+**Bottom-Sheets und Android-Zurück-Geste (behoben):** Ursprünglich legten Bottom-Sheets
+(`src/components/BottomSheet.tsx`, u. a. Anmeldeformular, Admin-Teilnehmer-hinzufügen) beim
+Öffnen keinen eigenen History-Eintrag an. Auf Android schloss der Zurück-Button/die
+Zurück-Geste ein offenes Sheet deshalb nicht, sondern verließ die zugrunde liegende Seite bzw.
+bei fehlender History die App — auf iOS ohne Hardware-/Geste-Zurück-Erwartung kein Thema. Fix:
+`BottomSheet` pusht beim Mount einen eigenen `history.pushState`-Eintrag und schließt sich über
+`onClose()` bei einem `popstate`-Event (Zurück-Taste/-Geste). Wird das Sheet stattdessen über
+Button/Backdrop geschlossen, entfernt das Cleanup den zuvor gepushten Eintrag wieder
+(`history.back()`), damit der nächste Zurück-Tap nicht ins Leere geht, statt zur eigentlich
+erwarteten vorherigen Seite zu führen. Da alle Sheets diese eine gemeinsame Komponente nutzen,
+war keine Änderung an den einzelnen Sheet-Inhalten nötig.
+
+Zusätzlich als PR-Review-Feedback vom Repository-Inhaber eingegangen (Android-/PWA-
+Kompatibilitätsreview) und geprüft:
+
+- **Landscape-Display-Cutout links/rechts:** `viewport-fit=cover` deckte bisher nur oben/unten
+  über `env(safe-area-inset-top/bottom)` ab. Header und Bottom-Navigation berücksichtigen jetzt
+  zusätzlich `env(safe-area-inset-left/right)`, damit sie auf Android-Geräten mit
+  Kamera-Cutout im Querformat nicht seitlich dahinter verschwinden.
+- **Virtuelle Tastatur über fixed UI:** `interactive-widget=resizes-content` im
+  Viewport-Meta-Tag ergänzt, damit aktuelles Chrome für Android den Layout-Viewport bei
+  geöffneter Tastatur tatsächlich verkleinert, statt fixed positionierte Bottom-Sheets/
+  Bottom-Nav darunter zu verdecken. Für Browser ohne Unterstützung (u. a. iOS Safari) ohne
+  Wirkung.
+
+Zweite Review-Runde desselben PR-Kompatibilitätsreviews (Stand `dc457d9`), ebenfalls
+umgesetzt:
+
+- **Pull-to-Refresh in kurzen Bottom-Sheets:** `PullToRefresh` erkannte einen Sheet-Inhalt
+  bisher nur dann als eigenen Scroll-Container, wenn `scrollHeight > clientHeight` galt —
+  ein kurzes, noch nicht selbst scrollbares Sheet zählte also nicht, und ein Herunterwischen
+  darin bei `window.scrollY === 0` konnte den globalen Reload auslösen und eine
+  unabgeschickte Eingabe verwerfen. Fix: `BottomSheet`s Scroll-Container trägt jetzt
+  `data-pull-to-refresh-ignore`, und `startedInsideScrollContainer()` in `PullToRefresh.tsx`
+  erkennt dieses Attribut unabhängig von der tatsächlichen Scrollbarkeit.
+- **Fehlende Safe-Area am unteren Sheet-Rand:** Der Content-Bereich von `BottomSheet` endete
+  bisher mit festem `pb-6`. Auf Android Edge-to-Edge/Gesture-Navigation konnte der letzte
+  Button dadurch zu nah an der System-Gestenfläche liegen. Fix: Bottom-Padding auf
+  `calc(1.5rem + env(safe-area-inset-bottom))` erweitert, analog zu `BottomNav`.
+- **History-State beim Sheet-Öffnen überschrieben:** `BottomSheet` pushte bisher
+  `{ sftSheet: true }` ohne den zuvor vorhandenen `history.state` (u. a. von React Router)
+  zu erhalten. Fix: der vorhandene State wird jetzt in den gepushten State übernommen
+  (`{ ...previousState, sftSheet: true }`).
+
+Bewusst **nicht** umgesetzt, weil dafür entweder echtes Android-Gerät oder neues
+Design-Artwork nötig ist, das nicht ungefragt erzeugt werden soll:
+
+- **Eigenes maskable Icon mit Sicherheitsabstand:** siehe oben — der fehlerhafte
+  `maskable`-Eintrag wurde entfernt, ein neues, mit ausreichendem Sicherheitsabstand
+  gestaltetes 512×512-Artwork für `purpose: maskable` steht noch aus.
+- **Eigenes Notification-Badge-Asset:** der Service Worker verwendet für Web-Push aktuell
+  `icon-192.png` sowohl als `icon` als auch als `badge`. Android erwartet für `badge`
+  bevorzugt ein einfaches monochromes/transparentes Statusleisten-Symbol; ein komplexes
+  Icon kann dort je nach Hersteller schlecht aussehen. Braucht ein eigenes kleines
+  Asset, keine Code-Änderung.
+- **Verifikation auf echten Android-Geräten** (Gesture- vs. 3-Button-Navigation, virtuelle
+  Tastatur, Push-Zustellung/-Tap, Add-to-Home-Screen-Icon-Darstellung je Launcher, Portrait/
+  Landscape): in dieser Session mangels physischem Gerät nicht möglich, siehe oben
+  "Ohne eigenes Android-Testgerät".
 
 ---
 
@@ -2304,8 +2532,8 @@ Kein übertriebener "Gaming"- oder Neon-Look.
 - Wochentage und Tageszahlen müssen auch auf kleinen Displays lesbar bleiben.
 - Mehrtagestour-Balken dürfen die Tageszahlen nicht unlesbar machen.
 - parallele Tourzeiträume müssen visuell stapelbar sein.
-- Tourkacheln verwenden mobil `aspect-ratio: 1 / 1`.
-- Tourtitel steht oberhalb der Kachel.
+- Das Tourbild in der Tourzeile bleibt quadratisch (`aspect-ratio: 1 / 1`).
+- Tourtitel steht in der Zeile neben dem Bild, in der Hero-Kachel darüber.
 - freie Plätze müssen ohne Öffnen der Detailseite sichtbar sein.
 - gesamte Kachel ist ein Touch-Ziel.
 - Informationen über dem Bild nicht unnötig duplizieren.
@@ -3357,7 +3585,7 @@ Die Phasen 1–8 sind umgesetzt. Die folgende Auflistung bleibt als Architektur-
 - Monatswechsel bei Mehrtagestouren
 - Tagesfilter
 - laufende Touren priorisieren
-- 1:1 Tourkacheln
+- Hero-Kachel und kompakte Tourzeilen
 - Tour-Coverbilder
 - freie Plätze direkt auf Kacheln
 - Tourdetail
@@ -3437,8 +3665,15 @@ rekonstruiert werden muss.
 - Erster Admin wurde über Dashboard → Authentication → Users → Add user (ohne
   Metadaten, siehe defensiver `handle_new_user()`-Trigger) angelegt und per
   `insert into public.user_roles ...` zum Admin gemacht.
+- Alle fünf Functions sind seit dem 09.09.2026 deployed. Zuvor fehlten
+  `send-push`, `delete-account` und `restaurant-order-notifications` über
+  längere Zeit unbemerkt im Dashboard, obwohl sie im Repository lagen — mit der
+  Folge, dass Web-Push nirgends zugestellt wurde und die Kontolöschung im
+  Profil fehlschlug. Diese Liste ist deshalb bei Zweifeln gegen das Dashboard
+  abzugleichen, nicht blind zu glauben: das Repository allein sagt nichts
+  darüber aus, was tatsächlich läuft.
 - Fünf Supabase Edge Functions sind im Einsatz (Dashboard → Edge Functions,
-  ebenfalls manuell deployed, kein CI/CD dafür): `delete-account` (vollständige
+  manuell deployed, kein CI/CD dafür): `delete-account` (vollständige
   Auth-Kontolöschung, §7), `send-push` (Web-Push-Zustellung, §27),
   `admin-manage-user` (Sperren/Entsperren/Löschen fremder Konten aus
   `/admin/users`, §21.3/§27.20), `restaurant-order-notifications`
@@ -3464,6 +3699,12 @@ rekonstruiert werden muss.
 - Bei `SECURITY DEFINER`-Funktionen mit `RETURNS TABLE`, die Spalten aus
   `auth.users` ausgeben (z. B. `email`), diese explizit auf `text` casten
   (`u.email::text`) — siehe §8.12 "Praxis-Falle bei `RETURN QUERY`".
+- Der `pg_cron`-Job für den Tour-Lebenszyklus (§8.3) wird abweichend davon
+  direkt in der Migration `20260909010000_tour_lifecycle.sql` angelegt: er ruft
+  reines SQL auf, keine Edge Function, und braucht deshalb keinen
+  Service-Role-Key. Nach dem Einspielen dieser Migration muss zusätzlich die
+  Edge Function `send-push` neu deployed werden — sie hat ein neues optionales
+  `statuses`-Feld für die Tourabsage bekommen.
 - Der PWA-Build läuft seit Phase 9 über vite-plugin-pwas `injectManifest`-
   Strategie mit eigenem Service Worker (`src/sw.ts`), nicht mehr über
   `generateSW` — nötig für die `push`/`notificationclick`-Handler von Web
@@ -3744,6 +3985,7 @@ DEPARTURE_REMINDER
 WEATHER_WARNING
 ADMIN_MESSAGE
 NEW_TOUR_IN_REGION
+TOUR_CANCELLED
 ```
 
 Die Infrastruktur ist bewusst nicht ausschließlich für Restaurants gebaut.
@@ -4015,8 +4257,63 @@ Migrationen, die zum produktiven Stand von Phase 9–11 gehören, über die in
 20260907082300_fix_admin_list_users_email_type.sql
 ```
 
+Nachgezogene Korrekturen aus dem Review zum Cockpit-Redesign
+(`20260909020000_review_fixes.sql`), verbindlich für künftige Änderungen an
+diesen Stellen:
+
+- `submit_meal_order()` und `admin_update_meal_order()` validieren den
+  gesamten Payload, **bevor** Order oder Positionen geschrieben werden. Ein
+  `return` rollt in PL/pgSQL nichts zurück — validiert man erst währenddessen,
+  bleibt bei einem Fehler ein halb ersetzter Bestellstand stehen.
+- `register_for_tour()` lehnt eine Anmeldung nach `end_date` mit `TOUR_ENDED`
+  ab, unabhängig vom gespeicherten Status.
+- Ein Trigger auf `tour_registrations` räumt abhängige Daten auf, sobald eine
+  Registrierung den Status `confirmed` verliert (Storno, administrative
+  Entfernung, Ablehnung, Reaktivierung): `checked_in_at` wird geleert,
+  Essensbestellungen werden storniert, Übernachtungsbestätigungen entfernt.
+  Ohne das galt ein stornierter Fahrer weiterhin als eingecheckt und sein
+  Essen zählte in der Restaurant-Gesamtmenge mit.
+- `meal_order_items.menu_item_id` verwendet `ON DELETE RESTRICT`: ein bereits
+  bestelltes Gericht lässt sich nicht mehr löschen, nur noch deaktivieren
+  (§27.4). Deaktivierte Gerichte bleiben in bestehenden Bestellungen sichtbar
+  und können dort gezielt entfernt werden.
+- `are_friends()` gibt nur noch Auskunft, wenn `auth.uid()` selbst Teil der
+  abgefragten Beziehung ist.
+- `admin_send_accommodation_reminder()` prüft serverseitig, ob `p_night_date`
+  eine gültige Tournacht ist, und schließt Teilnehmer aus, die für diese Nacht
+  bereits bestätigt haben.
+- `list_my_friendships()` gibt bei `accepted` zusätzlich Vor- und Nachnamen aus
+  (§34.1) — bei `pending` weiterhin nicht.
+- Check-Constraints (als `NOT VALID` ergänzt, Altdaten bleiben unangetastet):
+  Anmeldeschluss nicht vor Anmeldestart, Check-in nur mit `meeting_at`,
+  Bestellschluss nicht vor Bestellstart.
+
 Bereits produktiv angewendete Migrationen niemals nachträglich umschreiben —
 Änderungen immer als neue Migration ergänzen.
+
+Weitere Korrekturen aus einem automatisierten PR-Review (`20260909040000_second_review_fixes.sql`),
+lokal gegen eine echte `authenticated`-Rolle bestätigt:
+
+- `register_for_tour()`: Die in `20260907081100_rejected_requires_manual_reapproval.sql`
+  eingeführte Ausnahme für zuvor abgelehnte Registrierungen (immer `pending`, nie
+  automatisch `confirmed`/`waitlisted`) war beim Umschreiben in
+  `20260909020000_review_fixes.sql` versehentlich verloren gegangen — ein vom Admin
+  abgelehnter User konnte sich in einer automatisch bestätigenden Tour mit freier
+  Kapazität direkt wieder selbst bestätigen. Wiederhergestellt.
+- `admin_add_registration()`: Die Admin-Ausnahme (§8.3) übergeht ausdrücklich nur
+  Anmeldefenster sowie Leistungs-/Altersanforderungen — die Kennzeichenpflicht gehörte
+  nie dazu, wurde bei einem administrativen Nachtrag aber nicht geprüft. Ein vom Admin
+  ausgewähltes Garage-Fahrzeug ohne Kennzeichen konnte dadurch eine bestätigte
+  Registrierung erzeugen, obwohl die Tour ein Kennzeichen verlangt. Fix: dieselbe
+  `LICENSE_PLATE_REQUIRED`-Prüfung wie in `register_for_tour()`.
+- `admin_cancel_tour()`: prüfte bisher nur, ob die Tour bereits `cancelled` war. Dadurch
+  ließ sich auch eine `completed`/`archived` Tour nachträglich absagen (verfälscht die
+  Historie, benachrichtigt ehemalige Teilnehmer erneut) oder eine `draft`-Tour direkt in
+  den öffentlich sichtbaren `cancelled`-Zustand versetzen, ohne je veröffentlicht gewesen
+  zu sein. Auf `published`/`registration_closed` beschränkt — die einzigen Zustände, in
+  denen eine Absage fachlich sinnvoll ist. Der „Tour absagen"-Bereich im Admin-Tourformular
+  (`AdminTourFormPage`) wird passend dazu nur noch für diese beiden Status angezeigt statt
+  für jeden Status außer `cancelled`.
 
 `restaurant_stop_settings` besitzt neben `push_sent_at` zusätzlich
 `reminder_sent_at TIMESTAMPTZ NULL`, um `RESTAURANT_ORDER_OPEN` und
@@ -4181,9 +4478,9 @@ Das MVP gilt erst als fertig, wenn:
 56. der Tagesfilter Mehrtagestouren an jedem Tag ihres Zeitraums findet
 57. beim Öffnen sinnvoll der aktuelle Monat oder der Monat der nächsten Tour angezeigt wird
 58. laufende Mehrtagestouren oberhalb zukünftiger Touren stehen
-59. jede Tour eine mobile 1:1-Kachel besitzt
-60. Tourtitel oberhalb der Kachel dargestellt wird
-61. freie Fahrzeugplätze direkt auf jeder Kachel sichtbar sind
+59. die nächste Ausfahrt als Hero-Kachel und alle weiteren als kompakte Tourzeilen dargestellt werden (§13.10)
+60. das Tourbild in der Tourzeile quadratisch bleibt
+61. freie Fahrzeugplätze direkt in jeder Tourzeile sichtbar sind
 62. Touren standardmäßig nach Startdatum sortiert werden
 63. Mehrtagestouren eine verständliche Zeitraumdarstellung erhalten
 64. die Sitemap entsprechend dieser Spezifikation umgesetzt ist
@@ -4258,7 +4555,7 @@ Keine unnötige Enterprise-Architektur für ein kleines Community-Projekt aufbau
 
 ## 33. Aktuelle Kernanforderung in einem Satz
 
-Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
+Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, die nächste Ausfahrt als Hero-Kachel und alle weiteren als kompakte Tourzeilen mit freien Fahrzeugplätzen erscheinen, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username sehen — Klarnamen ausschließlich bei akzeptierter Freundschaft (§34.1), Kennzeichen anderer Teilnehmer niemals —, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
 
 ---
 
@@ -4864,9 +5161,11 @@ Query-Filter (`status = 'published'`) ausgeschlossen.
 
 ---
 
-## 36. Geplante Entwicklungsphase 19 — Hotelvorschläge und Übernachtungsbestätigung
+## 36. Entwicklungsphase 19 — Hotelvorschläge und Übernachtungsbestätigung
 
-Phase 19 ist verbindlich geplant, aber noch nicht als umgesetzt zu behandeln.
+Phase 19 ist umgesetzt (Datenmodell, RPCs, Teilnehmer- und Admin-UI — siehe
+§36.14 "Umsetzungsstand"). Die folgenden Abschnitte bleiben die verbindliche
+fachliche Beschreibung.
 
 Ziel ist die organisatorische Unterstützung von Übernachtungen bei
 Mehrtagestouren, ohne SFT Drive zu einem Hotel-Buchungssystem zu machen.

@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
+import { useIsAdmin } from '@/features/auth/useIsAdmin'
 import { supabase } from '@/lib/supabase'
 import { usePushSubscription } from '@/features/notifications/usePushSubscription'
-import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
+import type { ArchiveEntry } from '@/types/tour'
+import type { Vehicle } from '@/types/vehicle'
 
 interface Profile {
   username: string
@@ -12,17 +14,30 @@ interface Profile {
   date_of_birth: string | null
 }
 
+const fieldInput =
+  'rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[16px] text-sft-white'
+
 export function ProfilePage() {
   const { user } = useAuth()
+  const { isAdmin } = useIsAdmin()
   const navigate = useNavigate()
-  const { permission, subscribing, error: pushError, subscribe } = usePushSubscription()
+  const {
+    permission,
+    subscriptionActive,
+    subscribing,
+    error: pushError,
+    subscribe,
+  } = usePushSubscription()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [archive, setArchive] = useState<ArchiveEntry[]>([])
+  const [defaultVehicle, setDefaultVehicle] = useState<Vehicle | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newPassword, setNewPassword] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSaved, setPasswordSaved] = useState(false)
@@ -35,6 +50,16 @@ export function ProfilePage() {
       .eq('id', user.id)
       .single()
       .then(({ data }) => setProfile(data))
+
+    supabase.rpc('get_my_tour_archive').then(({ data }) => setArchive((data as ArchiveEntry[]) ?? []))
+
+    supabase
+      .from('vehicles')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_default', true)
+      .maybeSingle()
+      .then(({ data }) => setDefaultVehicle(data as Vehicle | null))
   }, [user])
 
   async function handlePasswordChange(event: FormEvent) {
@@ -44,6 +69,11 @@ export function ProfilePage() {
 
     if (newPassword.length < 8) {
       setPasswordError('Das Passwort muss mindestens 8 Zeichen lang sein.')
+      return
+    }
+
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError('Die Passwörter stimmen nicht überein.')
       return
     }
 
@@ -57,6 +87,7 @@ export function ProfilePage() {
     }
 
     setNewPassword('')
+    setNewPasswordConfirm('')
     setPasswordSaved(true)
   }
 
@@ -79,76 +110,110 @@ export function ProfilePage() {
     navigate('/', { replace: true })
   }
 
-  return (
-    <div className="mx-auto max-w-sm px-4 py-6">
-      <h1 className="text-xl font-semibold">Profil</h1>
+  const totalKm = archive.reduce((sum, e) => sum + (e.route_length_km ?? 0), 0)
 
-      <div className="mt-4 flex flex-col gap-1 text-sm">
-        <div className="text-sft-gray">{user?.email}</div>
-        {profile && (
-          <>
-            <div>Username: {profile.username}</div>
+  const links = [
+    { label: 'Meine Touren', to: '/profile/tours' },
+    { label: 'Tourenarchiv', to: '/profile/archive', meta: String(archive.length) },
+    { label: 'Freunde', to: '/profile/friends' },
+    { label: 'Meine Fahrzeuge', to: '/profile/vehicles' },
+    { label: 'Mitteilungen', to: '/notifications' },
+    ...(isAdmin ? [{ label: 'Admin-Bereich', to: '/admin', meta: 'TOURLEITER' }] : []),
+  ]
+
+  return (
+    <div className="pb-[110px]">
+      <div className="px-[18px] pb-1 pt-1.5 text-[26px] font-semibold leading-none">Profil</div>
+      <div className="px-[18px] pt-2.5 font-mono text-[13px] text-sft-gray">
+        {profile ? `@${profile.username}` : ''} {profile && '·'} {user?.email}
+      </div>
+
+      <div className="mx-3.5 mt-4 grid grid-cols-2 overflow-hidden rounded-[18px] border border-white/10 bg-gradient-to-b from-[#17171b] to-[#0f0f12]">
+        <div className="border-r border-white/7 px-4 py-3.5">
+          <div className="font-mono text-[9px] tracking-[0.18em] text-sft-gray-dim">KILOMETER</div>
+          <div className="mt-1.5 font-mono text-2xl font-bold leading-none">{totalKm.toLocaleString('de-DE')}</div>
+        </div>
+        <div className="px-4 py-3.5">
+          <div className="font-mono text-[9px] tracking-[0.18em] text-sft-gray-dim">TOUREN</div>
+          <div className="mt-1.5 font-mono text-2xl font-bold leading-none">{archive.length}</div>
+        </div>
+        {defaultVehicle && (
+          <div className="col-span-2 flex items-center justify-between border-t border-white/7 px-4 py-[13px]">
             <div>
-              {profile.first_name} {profile.last_name}
+              <div className="font-mono text-[9px] tracking-[0.18em] text-sft-gray-dim">AKTUELLES FAHRZEUG</div>
+              <div className="mt-1.5 text-sm font-semibold">
+                {defaultVehicle.manufacturer} {defaultVehicle.model}
+              </div>
             </div>
-          </>
+            <div className="font-mono text-lg font-bold">
+              {defaultVehicle.power_ps}
+              <span className="text-[10px] text-sft-gray"> PS</span>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 text-sm">
-        <Link to="/profile/tours" className="rounded-md bg-sft-surface px-4 py-3">
-          Meine Touren
-        </Link>
-        <Link to="/profile/archive" className="rounded-md bg-sft-surface px-4 py-3">
-          Tourenarchiv
-        </Link>
-        <Link to="/profile/friends" className="rounded-md bg-sft-surface px-4 py-3">
-          Freunde
-        </Link>
-        <Link to="/profile/vehicles" className="rounded-md bg-sft-surface px-4 py-3">
-          Meine Fahrzeuge
-        </Link>
+      <div className="mt-4 flex flex-col gap-2 px-3.5">
+        {links.map((l) => (
+          <Link
+            key={l.to}
+            to={l.to}
+            className="tap-scale flex items-center justify-between rounded-2xl border border-white/8 bg-sft-card px-4 py-[15px]"
+          >
+            <span className="text-sm font-medium">{l.label}</span>
+            <span className="flex items-center gap-2.5">
+              {l.meta && <span className="font-mono text-[11px] text-sft-gray-dim">{l.meta}</span>}
+              <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                <path d="M1 1l6 6-6 6" stroke="#5e5e66" strokeWidth="1.8" />
+              </svg>
+            </span>
+          </Link>
+        ))}
       </div>
 
-      {permission !== 'unsupported' && permission !== 'granted' && (
-        <div className="mt-6 rounded-md bg-sft-surface p-4 text-sm">
-          <p className="text-sft-gray">
-            Erhalte eine Benachrichtigung, wenn ein Admin dir etwas zu einer deiner Touren
-            mitteilt (z. B. bei einer Treffpunktänderung).
-          </p>
-          <button
-            onClick={subscribe}
-            disabled={subscribing}
-            className="mt-3 rounded-md bg-sft-red px-4 py-2 font-medium disabled:opacity-60"
-          >
-            {subscribing ? 'Wird aktiviert…' : 'Mitteilungen per Push aktivieren'}
-          </button>
-          {pushError && <p className="mt-2 text-sft-red">{pushError}</p>}
-          {permission === 'denied' && (
-            <p className="mt-2 text-sft-gray">
-              Push wurde in den Browser-/System-Einstellungen abgelehnt. Um es zu aktivieren,
-              muss die Berechtigung dort manuell erlaubt werden.
-            </p>
+      {permission !== 'unsupported' && (
+        <div className="mx-3.5 mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-sft-card px-4 py-[14px]">
+          <div>
+            <div className="text-sm font-medium">Push-Mitteilungen</div>
+            <div className="mt-1 text-xs leading-relaxed text-sft-gray">
+              Mitteilungen der Tourleitung zu deinen Ausfahrten
+            </div>
+            {pushError && <p className="mt-1 text-xs text-sft-red">{pushError}</p>}
+            {permission === 'denied' && (
+              <p className="mt-1 text-xs text-sft-gray">
+                In den Browser-/System-Einstellungen abgelehnt — dort manuell erlauben.
+              </p>
+            )}
+          </div>
+          {/* "AKTIV" erst, wenn wirklich eine gespeicherte Subscription
+              existiert — erteilte Berechtigung allein genügt nicht. */}
+          {!(permission === 'granted' && subscriptionActive) ? (
+            <button
+              onClick={subscribe}
+              disabled={subscribing}
+              className="tap-scale flex-none rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium disabled:opacity-60"
+            >
+              {subscribing ? 'Wird aktiviert…' : 'Aktivieren'}
+            </button>
+          ) : (
+            <span className="flex-none font-mono text-[10px] tracking-[0.1em] text-[#5fd3b4]">AKTIV</span>
           )}
         </div>
       )}
 
-      <RegionNotificationPreferences />
-
-      <button
-        onClick={() => supabase.auth.signOut()}
-        className="mt-8 rounded-md border border-sft-surface2 px-4 py-2.5 text-sm text-sft-gray"
-      >
-        Abmelden
-      </button>
-
-      <div className="mt-6 border-t border-sft-surface2 pt-6">
+      <div className="mt-6 flex flex-col gap-2 px-3.5">
         {!showPasswordForm ? (
-          <button onClick={() => setShowPasswordForm(true)} className="text-sm underline">
+          <button
+            onClick={() => setShowPasswordForm(true)}
+            className="tap-scale rounded-2xl border border-white/8 bg-sft-card px-4 py-[15px] text-left text-sm font-medium"
+          >
             Passwort ändern
           </button>
         ) : (
-          <form onSubmit={handlePasswordChange} className="flex flex-col gap-3 text-sm">
+          <form
+            onSubmit={handlePasswordChange}
+            className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-sft-card p-4 text-sm"
+          >
             <label className="flex flex-col gap-1">
               Neues Passwort
               <input
@@ -158,7 +223,19 @@ export function ProfilePage() {
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+                className={fieldInput}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              Passwort bestätigen
+              <input
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={newPasswordConfirm}
+                onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                className={fieldInput}
               />
             </label>
             {passwordError && <p className="text-sft-red">{passwordError}</p>}
@@ -167,14 +244,19 @@ export function ProfilePage() {
               <button
                 type="submit"
                 disabled={passwordSaving}
-                className="rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
+                className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] px-4 py-2.5 font-medium text-white disabled:opacity-60"
               >
                 {passwordSaving ? 'Wird gespeichert…' : 'Speichern'}
               </button>
               <button
                 type="button"
-                onClick={() => setShowPasswordForm(false)}
-                className="rounded-md border border-sft-surface2 px-4 py-2.5 text-sft-gray"
+                onClick={() => {
+                  setShowPasswordForm(false)
+                  setNewPassword('')
+                  setNewPasswordConfirm('')
+                  setPasswordError(null)
+                }}
+                className="rounded-xl border border-white/13 px-4 py-2.5 text-sft-gray"
               >
                 Abbrechen
               </button>
@@ -183,50 +265,53 @@ export function ProfilePage() {
         )}
       </div>
 
-      <div className="mt-8 border-t border-sft-surface2 pt-6">
-        {!confirmingDelete ? (
-          <button
-            onClick={() => setConfirmingDelete(true)}
-            className="text-sm text-sft-red underline"
-          >
+      {!confirmingDelete ? (
+        <div className="mt-6 flex justify-center gap-3.5 px-4 text-[11px] text-sft-gray">
+          <button onClick={() => supabase.auth.signOut()}>Abmelden</button>
+          <span>·</span>
+          <button onClick={() => setConfirmingDelete(true)} className="text-sft-red">
             Konto löschen
           </button>
-        ) : (
-          <div className="flex flex-col gap-3 rounded-md border border-sft-red/50 p-4 text-sm">
-            <p className="font-medium">Was mit deinen Daten passiert:</p>
-            <ul className="list-disc space-y-1 pl-5 text-sft-gray">
-              <li>
-                Username, Vor- und Nachname, Geburtsdatum sowie alle deine Touranmeldungen
-                (inkl. Fahrzeugdaten und Kennzeichen, auch aus vergangenen Touren) werden
-                vollständig gelöscht.
-              </li>
-              <li>
-                Fremde Touren oder Anmeldungen anderer Nutzer, die du als Admin ggf. erstellt oder
-                bestätigt hast, bleiben bestehen — nur der Verweis auf dich wird entfernt.
-              </li>
-              <li>Vor der endgültigen Löschung werden laufende Anmeldungen storniert, Wartelisten rücken nach.</li>
-              <li>Dein Login ist danach nicht mehr möglich.</li>
-            </ul>
-            <p className="font-medium text-sft-red">Diese Aktion kann nicht rückgängig gemacht werden.</p>
-            {deleteError && <p className="text-sft-red">{deleteError}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
-              >
-                {deleting ? 'Wird gelöscht…' : 'Endgültig löschen'}
-              </button>
-              <button
-                onClick={() => setConfirmingDelete(false)}
-                disabled={deleting}
-                className="rounded-md border border-sft-surface2 px-4 py-2.5 text-sft-gray"
-              >
-                Abbrechen
-              </button>
-            </div>
+        </div>
+      ) : (
+        <div className="mx-3.5 mt-6 flex flex-col gap-3 rounded-2xl border border-sft-red/50 p-4 text-sm">
+          <p className="font-medium">Was mit deinen Daten passiert:</p>
+          <ul className="list-disc space-y-1 pl-5 text-sft-gray">
+            <li>
+              Username, Vor- und Nachname, Geburtsdatum sowie alle deine Touranmeldungen (inkl.
+              Fahrzeugdaten und Kennzeichen, auch aus vergangenen Touren) werden vollständig gelöscht.
+            </li>
+            <li>
+              Fremde Touren oder Anmeldungen anderer Nutzer, die du als Admin ggf. erstellt oder
+              bestätigt hast, bleiben bestehen — nur der Verweis auf dich wird entfernt.
+            </li>
+            <li>Vor der endgültigen Löschung werden laufende Anmeldungen storniert, Wartelisten rücken nach.</li>
+            <li>Dein Login ist danach nicht mehr möglich.</li>
+          </ul>
+          <p className="font-medium text-sft-red">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+          {deleteError && <p className="text-sft-red">{deleteError}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+              className="tap-scale rounded-xl bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
+            >
+              {deleting ? 'Wird gelöscht…' : 'Endgültig löschen'}
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+              className="rounded-xl border border-white/13 px-4 py-2.5 text-sft-gray"
+            >
+              Abbrechen
+            </button>
           </div>
-        )}
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-center gap-3.5 px-4 font-mono text-[11px] text-[#8a8a92]">
+        <Link to="/impressum">Impressum</Link>
+        <Link to="/datenschutz">Datenschutz</Link>
       </div>
     </div>
   )

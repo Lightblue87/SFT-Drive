@@ -86,20 +86,28 @@ export function MonthCalendar({ year, month, tours, selectedDay, onSelectDay, on
   }
 
   return (
-    <div className="px-4 py-3">
-      <div className="mb-2 flex items-center justify-between">
-        <button onClick={onPrevMonth} aria-label="Vorheriger Monat" className="px-2 py-1 text-lg text-sft-gray">
+    <div className="rounded-2xl border border-white/9 bg-sft-card p-2.5 pb-3 animate-fade-in">
+      <div className="mb-2 flex items-center justify-between px-1">
+        <button
+          onClick={onPrevMonth}
+          aria-label="Vorheriger Monat"
+          className="tap-scale px-2 py-1 font-mono text-lg text-sft-gray"
+        >
           ‹
         </button>
-        <div className="text-sm font-medium">
+        <div className="text-sm font-semibold">
           {MONTH_NAMES[month]} {year}
         </div>
-        <button onClick={onNextMonth} aria-label="Nächster Monat" className="px-2 py-1 text-lg text-sft-gray">
+        <button
+          onClick={onNextMonth}
+          aria-label="Nächster Monat"
+          className="tap-scale px-2 py-1 font-mono text-lg text-sft-gray"
+        >
           ›
         </button>
       </div>
 
-      <div className="grid grid-cols-7 text-center text-[11px] text-sft-gray">
+      <div className="grid grid-cols-7 text-center font-mono text-[10px] text-sft-gray-dim">
         {WEEKDAY_LABELS.map((w) => (
           <div key={w} className="py-1">
             {w}
@@ -124,14 +132,14 @@ export function MonthCalendar({ year, month, tours, selectedDay, onSelectDay, on
                     <button
                       key={day.key}
                       onClick={() => handleDayClick(day)}
-                      className={`flex flex-col items-center gap-0.5 rounded py-1 text-xs ${
-                        day.inMonth ? 'text-sft-white' : 'text-sft-gray/40'
+                      className={`tap-scale flex flex-col items-center gap-1 rounded-lg py-1.5 font-mono text-[13px] ${
+                        day.inMonth ? 'text-sft-white' : 'text-white/25'
                       } ${isSelected ? 'bg-sft-surface2' : ''} ${day.isToday ? 'font-semibold text-sft-red' : ''}`}
                     >
                       <span>{day.dayOfMonth}</span>
                       {dayTours.length > 0 && (
                         <span className="flex items-center gap-0.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-sft-red" />
+                          <span className="h-[5px] w-[5px] rounded-sm bg-sft-red" />
                           {dayTours.length > 1 && <span className="text-[10px] text-sft-gray">{dayTours.length}</span>}
                         </span>
                       )}

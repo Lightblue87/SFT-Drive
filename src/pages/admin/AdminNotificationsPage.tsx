@@ -98,77 +98,83 @@ export function AdminNotificationsPage() {
 
   if (loading) return <PageLoading />
 
-  return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Mitteilungen</h1>
+  const recipients =
+    target === 'tour'
+      ? `${tours.find((t) => t.id === tourId)?.title ?? ''} · Nur bestätigte Teilnehmer`
+      : 'Alle registrierten Nutzer'
 
-      <div className="mt-4 flex flex-col gap-4 rounded-md bg-sft-surface p-4 text-sm">
-        <div className="flex gap-2">
+  return (
+    <div className="pt-3">
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="grid grid-cols-2 gap-2 p-3.5 pb-0">
           <button
             onClick={() => setTarget('tour')}
-            className={`flex-1 rounded-md px-3 py-2 ${
-              target === 'tour' ? 'bg-sft-red' : 'border border-sft-surface2 text-sft-gray'
+            className={`rounded-xl border px-3 py-3 text-[13px] font-medium ${
+              target === 'tour' ? 'border-sft-red bg-sft-red text-white' : 'border-white/12 text-[#c9c9ce]'
             }`}
           >
             An eine Tour
           </button>
           <button
             onClick={() => setTarget('broadcast')}
-            className={`flex-1 rounded-md px-3 py-2 ${
-              target === 'broadcast' ? 'bg-sft-red' : 'border border-sft-surface2 text-sft-gray'
+            className={`rounded-xl border px-3 py-3 text-[13px] font-medium ${
+              target === 'broadcast' ? 'border-sft-red bg-sft-red text-white' : 'border-white/12 text-[#c9c9ce]'
             }`}
           >
             An alle Nutzer
           </button>
         </div>
 
-        {target === 'tour' && (
-          <label className="flex flex-col gap-1">
-            Tour
-            <select
-              value={tourId}
-              onChange={(e) => setTourId(e.target.value)}
-              className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-            >
-              {tours.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-sft-gray">
-              Erreicht nur die bestätigten Teilnehmer dieser Tour.
-            </span>
+        <div className="flex flex-col gap-3.5 p-3.5">
+          {target === 'tour' && (
+            <label className="flex flex-col gap-2">
+              <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">TOUR</span>
+              <select
+                value={tourId}
+                onChange={(e) => setTourId(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3.5 text-[15px] font-medium text-sft-white"
+              >
+                {tours.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="font-mono text-[11px] leading-relaxed text-sft-gray">{recipients.toUpperCase()}</p>
+
+          <label className="flex flex-col gap-2">
+            <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">TITEL</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="z. B. Treffpunkt geändert"
+              className="w-full rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3.5 text-[16px] text-sft-white"
+            />
           </label>
-        )}
-        {target === 'broadcast' && (
-          <p className="text-xs text-sft-gray">Erreicht alle registrierten Nutzer.</p>
-        )}
+          <label className="flex flex-col gap-2">
+            <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">TEXT</span>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Neuer Treffpunkt: Parkplatz Nord, 08:45."
+              rows={4}
+              className="w-full resize-none rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3.5 text-[16px] leading-relaxed text-sft-white"
+            />
+          </label>
 
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Titel"
-          className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-        />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Text"
-          rows={4}
-          className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-        />
+          {error && <p className="text-sm text-sft-red">{error}</p>}
+          {sent && <p className="font-mono text-[11px] text-sft-gray">MITTEILUNG GESENDET</p>}
 
-        {error && <p className="text-sft-red">{error}</p>}
-        {sent && <p className="text-sft-gray">Mitteilung gesendet.</p>}
-
-        <button
-          onClick={send}
-          disabled={sending}
-          className="rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
-        >
-          {sending ? 'Wird gesendet…' : 'Senden'}
-        </button>
+          <button
+            onClick={send}
+            disabled={sending}
+            className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-[15px] text-[15px] font-semibold text-white disabled:opacity-60"
+          >
+            {sending ? 'Wird gesendet…' : 'In-App senden · Push falls aktiviert'}
+          </button>
+        </div>
       </div>
     </div>
   )

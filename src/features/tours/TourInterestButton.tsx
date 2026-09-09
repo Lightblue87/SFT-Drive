@@ -55,31 +55,37 @@ export function TourInterestButton({ tourId, registrationOpenAt }: Props) {
   if (interested === null) return null
 
   return (
-    <div className="rounded-md bg-sft-surface p-4 text-sm">
-      <p>
-        Anmeldung öffnet am{' '}
-        {new Date(registrationOpenAt).toLocaleString('de-DE', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
+    <div className="rounded-2xl border border-white/9 bg-sft-card px-4 py-3.5">
+      <p className="font-mono text-[11px] text-sft-gray">
+        ANMELDUNG ÖFFNET AM{' '}
+        {new Date(registrationOpenAt)
+          .toLocaleString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+          .toUpperCase()}
       </p>
 
       {interested ? (
         <>
-          <p className="mt-2 text-sft-red">★ Für diese Tour vorgemerkt</p>
-          <p className="text-sft-gray">Du wirst benachrichtigt, sobald die Anmeldung öffnet.</p>
-          <button onClick={toggle} disabled={submitting} className="mt-2 text-xs underline disabled:opacity-60">
-            Vormerkung entfernen
+          <p className="mt-2.5 text-[14px] font-medium text-sft-red">★ Für diese Tour vorgemerkt</p>
+          <p className="mt-1 text-[13px] text-sft-gray">Du wirst benachrichtigt, sobald die Anmeldung öffnet.</p>
+          <button
+            onClick={toggle}
+            disabled={submitting}
+            className="mt-2.5 font-mono text-[11px] text-sft-gray underline disabled:opacity-60"
+          >
+            VORMERKUNG ENTFERNEN
           </button>
         </>
       ) : (
         <button
           onClick={toggle}
           disabled={submitting}
-          className="mt-2 w-full rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
+          className="tap-scale mt-2.5 w-full rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-[15px] font-semibold text-white disabled:opacity-60"
         >
           Für diese Tour vormerken
         </button>

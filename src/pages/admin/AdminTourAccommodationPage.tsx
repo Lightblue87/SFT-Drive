@@ -25,6 +25,27 @@ interface Participant {
 }
 
 /**
+ * Nacht als Zeitraum darstellen (§36.4: "18./19.06.2027") — ein einzelnes
+ * Datum ist für eine Übernachtung mehrdeutig.
+ */
+function formatNight(night: string): string {
+  const from = parseDateOnly(night)
+  const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(from.getDate())}.${pad(from.getMonth() + 1)}.–${pad(to.getDate())}.${pad(to.getMonth() + 1)}.${to.getFullYear()}`
+}
+
+const EMPTY_SUGGESTION_FORM = { name: '', url: '', address: '', note: '', booking_deadline: '' }
+
+type OverallStatus = 'all' | 'partial' | 'none'
+
+const OVERALL_LABEL: Record<OverallStatus, string> = {
+  all: 'Alle Übernachtungen bestätigt',
+  partial: 'Teilweise bestätigt',
+  none: 'Keine Übernachtung bestätigt',
+}
+
+/**
  * Hotelvorschläge und Übernachtungsbestätigung — Admin-Verwaltung (siehe
  * CLAUDE.md §36). Nächte werden automatisch aus dem Tourzeitraum abgeleitet
  * (letzter Tag hat keine Übernachtung mehr). Pro Nacht: Hotelvorschläge
@@ -42,7 +63,13 @@ export function AdminTourAccommodationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reminderStatus, setReminderStatus] = useState<Record<string, string>>({})
-  const [newForm, setNewForm] = useState<Record<string, { name: string; url: string; address: string; note: string }>>({})
+  const [newForm, setNewForm] = useState<
+    Record<string, { name: string; url: string; address: string; note: string; booking_deadline: string }>
+  >({})
+  // Auswahl der Empfänger je Nacht (§36.10: einzelne oder mehrere offene
+  // Teilnehmer gezielt ansprechen). Leere Auswahl = alle offenen.
+  const [selectedRecipients, setSelectedRecipients] = useState<Record<string, string[]>>({})
+  const [overallFilter, setOverallFilter] = useState<OverallStatus | null>(null)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -96,7 +123,7 @@ export function AdminTourAccommodationPage() {
 
   async function addSuggestion(night: string) {
     if (!id) return
-    const form = newForm[night] ?? { name: '', url: '', address: '', note: '' }
+    const form = newForm[night] ?? EMPTY_SUGGESTION_FORM
     if (!form.name.trim()) return
 
     const { error: dbError } = await supabase.from('tour_hotel_suggestions').insert({
@@ -106,12 +133,13 @@ export function AdminTourAccommodationPage() {
       url: form.url.trim() || null,
       address: form.address.trim() || null,
       note: form.note.trim() || null,
+      booking_deadline: form.booking_deadline || null,
     })
     if (dbError) {
       setError('Hotelvorschlag konnte nicht gespeichert werden.')
       return
     }
-    setNewForm((prev) => ({ ...prev, [night]: { name: '', url: '', address: '', note: '' } }))
+    setNewForm((prev) => ({ ...prev, [night]: EMPTY_SUGGESTION_FORM }))
     load()
   }
 
@@ -147,7 +175,7 @@ export function AdminTourAccommodationPage() {
         tour_id: id,
         user_ids: userIds,
         title: 'Übernachtung noch nicht bestätigt',
-        body: `Bitte bestätige deine Übernachtung vom ${formatDate(night)}.`,
+        body: `Bitte bestätige deine Übernachtung vom ${formatNight(night)}.`,
       },
     })
 
@@ -155,127 +183,229 @@ export function AdminTourAccommodationPage() {
   }
 
   if (loading) return <PageLoading />
-  if (error) return <p className="py-6 text-sm text-sft-red">{error}</p>
+  if (error) return <p className="pt-6 text-sm text-sft-red">{error}</p>
 
   if (nights.length === 0) {
     return (
-      <div className="py-6">
-        <h1 className="text-xl font-semibold">Übernachtungen</h1>
-        <p className="mt-2 text-sm text-sft-gray">
-          Übernachtungen sind nur bei Mehrtagestouren relevant. Diese Tour ist eintägig.
-        </p>
+      <div className="pt-3">
+        <p className="text-sm text-sft-gray">Übernachtungen sind nur bei Mehrtagestouren relevant. Diese Tour ist eintägig.</p>
       </div>
     )
   }
 
-  return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Übernachtungen · {tourTitle}</h1>
-      <p className="mt-1 text-sm text-sft-gray">
-        Hotelvorschläge pro Nacht sind unverbindlich — die Buchung erfolgt außerhalb der App. Teilnehmer
-        bestätigen lediglich, dass ihre Übernachtung organisiert ist.
-      </p>
+  // Gesamtstatus je Teilnehmer über alle Nächte (§36.9).
+  const overallStatusByUser = new Map<string, OverallStatus>()
+  for (const p of participants) {
+    const done = nights.filter((n) =>
+      confirmations.some((c) => c.night_date === n && c.user_id === p.userId),
+    ).length
+    overallStatusByUser.set(
+      p.userId,
+      done === nights.length ? 'all' : done === 0 ? 'none' : 'partial',
+    )
+  }
 
+  const overallCounts: Record<OverallStatus, number> = { all: 0, partial: 0, none: 0 }
+  for (const status of overallStatusByUser.values()) overallCounts[status] += 1
+
+  return (
+    <div className="flex flex-col gap-3.5 pt-3">
+      <div className="font-mono text-[11px] text-sft-gray-dim">{tourTitle.toUpperCase()}</div>
+
+      {participants.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+          <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+            GESAMTSTATUS JE TEILNEHMER
+          </div>
+          <div className="flex flex-wrap gap-2 px-3.5 pb-3.5">
+            {(['all', 'partial', 'none'] as OverallStatus[]).map((status) => (
+              <button
+                key={status}
+                onClick={() => setOverallFilter((prev) => (prev === status ? null : status))}
+                className={`tap-scale rounded-lg border px-2.5 py-1.5 text-[12px] font-medium ${
+                  overallFilter === status
+                    ? 'border-sft-red/55 bg-sft-red/10 text-sft-white'
+                    : 'border-white/12 bg-[#17171b] text-sft-gray'
+                }`}
+              >
+                {OVERALL_LABEL[status]} ({overallCounts[status]})
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {nights.map((night, i) => {
         const nightSuggestions = suggestions.filter((s) => s.night_date === night)
         const confirmedUserIds = new Set(
           confirmations.filter((c) => c.night_date === night).map((c) => c.user_id),
         )
+        // Nur aktuell bestätigte Tourteilnehmer zählen (§36.9) — die
+        // Bestätigungszeilen allein könnten von inzwischen stornierten
+        // Teilnehmern stammen und den Zähler verfälschen.
         const openParticipants = participants.filter((p) => !confirmedUserIds.has(p.userId))
-        const form = newForm[night] ?? { name: '', url: '', address: '', note: '' }
+        const confirmedCount = participants.filter((p) => confirmedUserIds.has(p.userId)).length
+        const selection = (selectedRecipients[night] ?? []).filter((uid) =>
+          openParticipants.some((p) => p.userId === uid),
+        )
+        const shownParticipants = participants.filter(
+          (p) => overallFilter === null || overallStatusByUser.get(p.userId) === overallFilter,
+        )
+        const form = newForm[night] ?? EMPTY_SUGGESTION_FORM
 
         return (
-          <div key={night} className="mt-6 rounded-md bg-sft-surface p-4 text-sm">
-            <h2 className="font-medium">
-              Nacht {i + 1} · {formatDate(night)}
-            </h2>
-
-            <div className="mt-1 text-sft-gray">
-              {confirmedUserIds.size} / {participants.length} bestätigt
+          <div key={night} className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+            <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+              ÜBERNACHTUNG {i + 1} · {formatNight(night)}
             </div>
 
-            {nightSuggestions.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-2">
-                {nightSuggestions.map((s) => (
-                  <li key={s.id} className="rounded-md bg-sft-black p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-medium">{s.name}</div>
-                        {s.address && <div className="text-sft-gray">{s.address}</div>}
-                        {s.note && <div className="text-sft-gray">{s.note}</div>}
-                        {s.url && (
-                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sft-red underline">
-                            Hotel öffnen
-                          </a>
-                        )}
-                        {s.booking_deadline && (
-                          <div className="text-sft-gray">Buchung bis {formatDate(s.booking_deadline)}</div>
-                        )}
-                      </div>
-                      <button onClick={() => deleteSuggestion(s.id)} className="text-xs text-sft-gray underline">
-                        Entfernen
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {nightSuggestions.map((s) => (
+              <div key={s.id} className="border-t border-white/6 px-4 py-3.5">
+                <div className="flex items-baseline justify-between gap-2.5">
+                  <div className="text-[14px] font-semibold">{s.name}</div>
+                  <button onClick={() => deleteSuggestion(s.id)} className="flex-none font-mono text-[10px] text-sft-gray underline">
+                    ENTFERNEN
+                  </button>
+                </div>
+                {(s.address || s.note) && (
+                  <div className="mt-1 font-mono text-[11px] leading-relaxed text-sft-gray">
+                    {s.address}
+                    {s.address && s.note && <br />}
+                    {s.note}
+                  </div>
+                )}
+                {s.url && (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-block text-[13px] font-medium text-sft-red underline">
+                    Hotel öffnen
+                  </a>
+                )}
+                {s.booking_deadline && (
+                  <div className="mt-1 font-mono text-[10px] text-sft-gray-dim">
+                    BUCHUNG BIS {formatDate(s.booking_deadline).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            ))}
 
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="flex flex-col gap-2.5 border-t border-white/6 p-3.5">
               <input
                 value={form.name}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, name: e.target.value } }))}
                 placeholder="Hotelname"
-                className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
               />
               <input
                 value={form.url}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, url: e.target.value } }))}
                 placeholder="Link (optional)"
-                className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 font-mono text-[13px] text-sft-white"
               />
               <input
                 value={form.address}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, address: e.target.value } }))}
                 placeholder="Adresse (optional)"
-                className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
               />
               <input
                 value={form.note}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, note: e.target.value } }))}
                 placeholder="Hinweis (optional)"
-                className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
               />
+              <label className="block min-w-0">
+                <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+                  BUCHUNGSDEADLINE / ABRUFKONTINGENT (OPTIONAL)
+                </span>
+                <input
+                  type="date"
+                  value={form.booking_deadline}
+                  onChange={(e) =>
+                    setNewForm((prev) => ({ ...prev, [night]: { ...form, booking_deadline: e.target.value } }))
+                  }
+                  className="mt-2 w-full min-w-0 rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 font-mono text-[15px] text-sft-white"
+                />
+              </label>
               <button
                 onClick={() => addSuggestion(night)}
-                className="self-start rounded-md bg-sft-red px-4 py-2 font-medium"
+                className="tap-scale rounded-xl border border-white/13 bg-[#17171b] py-3 text-[13px] font-medium"
               >
-                Hotelvorschlag hinzufügen
+                + Hotelvorschlag hinzufügen
               </button>
             </div>
 
-            {participants.length > 0 && (
-              <div className="mt-4">
-                <p className="font-medium">Status der Teilnehmer</p>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {participants.map((p) => (
-                    <li key={p.userId} className="flex items-center justify-between text-sft-gray">
-                      <span>{p.username}</span>
-                      <span>{confirmedUserIds.has(p.userId) ? '✓ bestätigt' : 'Übernachtung noch nicht bestätigt'}</span>
-                    </li>
-                  ))}
-                </ul>
+            {shownParticipants.length > 0 && (
+              <div className="border-t border-white/6 p-3.5">
+                <div className="mb-2 flex items-baseline justify-between font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+                  <span>STATUS</span>
+                  <span className="text-[#5fd3b4]">
+                    {confirmedCount} / {participants.length} BESTÄTIGT
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {shownParticipants.map((p) => {
+                    const done = confirmedUserIds.has(p.userId)
+                    const selected = selection.includes(p.userId)
+                    return (
+                      <button
+                        key={p.userId}
+                        type="button"
+                        disabled={done}
+                        onClick={() =>
+                          setSelectedRecipients((prev) => ({
+                            ...prev,
+                            [night]: selected
+                              ? (prev[night] ?? []).filter((uid) => uid !== p.userId)
+                              : [...(prev[night] ?? []), p.userId],
+                          }))
+                        }
+                        className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-left text-[12px] disabled:opacity-100"
+                      >
+                        {/* Offene Teilnehmer sind einzeln auswählbar (§36.10);
+                            bereits bestätigte brauchen keine Erinnerung. */}
+                        <span
+                          className={`flex h-[15px] w-[15px] flex-none items-center justify-center rounded-[4px] border ${
+                            done
+                              ? 'border-transparent'
+                              : selected
+                                ? 'border-sft-red bg-sft-red'
+                                : 'border-white/25'
+                          }`}
+                        >
+                          {selected && !done && (
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none">
+                              <path d="M4 12.5 9.5 18 20 6" stroke="#fff" strokeWidth="3" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{p.username}</span>
+                        <span className={done ? 'flex-none text-[#5fd3b4]' : 'flex-none text-sft-gray'}>
+                          {done ? '✓ bestätigt' : 'Übernachtung noch nicht bestätigt'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
 
                 {openParticipants.length > 0 && (
-                  <div className="mt-2">
+                  <div className="mt-3">
                     <button
-                      onClick={() => sendReminder(night, openParticipants.map((p) => p.userId))}
-                      className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs"
+                      onClick={() =>
+                        sendReminder(
+                          night,
+                          // Ohne eigene Auswahl gehen die Erinnerungen an alle
+                          // offenen Teilnehmer dieser Nacht.
+                          selection.length > 0 ? selection : openParticipants.map((p) => p.userId),
+                        )
+                      }
+                      className="tap-scale rounded-lg border border-white/13 px-3 py-2 text-xs font-medium"
                     >
-                      Erinnerung an {openParticipants.length} offene Teilnehmer senden
+                      Erinnerung an {selection.length > 0 ? selection.length : openParticipants.length}{' '}
+                      {(selection.length > 0 ? selection.length : openParticipants.length) === 1
+                        ? 'offenen Teilnehmer'
+                        : 'offene Teilnehmer'}{' '}
+                      senden
                     </button>
                     {reminderStatus[night] && (
-                      <p className="mt-1 text-xs text-sft-gray">{reminderStatus[night]}</p>
+                      <p className="mt-1.5 font-mono text-[11px] text-sft-gray">{reminderStatus[night]}</p>
                     )}
                   </div>
                 )}

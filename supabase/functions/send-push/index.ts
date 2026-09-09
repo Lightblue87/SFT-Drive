@@ -27,13 +27,21 @@ import webpush from 'npm:web-push@3.6.7'
 // Erinnerung, siehe CLAUDE.md §36.10) — dort IMMER zusammen mit tour_id, damit
 // serverseitig auf tatsächlich bestätigte Teilnehmer dieser Tour eingeschränkt
 // werden kann statt der Client-Liste blind zu vertrauen (§8.12).
+//
+// `statuses` schränkt bei tour_id ein, welche Anmeldestatus erreicht werden.
+// Standard ist ausschließlich `confirmed` (§27.11). Eine Tourabsage (§8.3) ist
+// die begründete Ausnahme: dort sind auch `pending` und `waitlisted` betroffen,
+// weil auch deren Planung an der Ausfahrt hängt.
 interface RequestBody {
   tour_id?: string
   broadcast?: boolean
   user_ids?: string[]
+  statuses?: string[]
   title: string
   body: string
 }
+
+const ALLOWED_STATUSES = ['confirmed', 'pending', 'waitlisted']
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -56,6 +64,9 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
   }
   if (payload.user_ids && !payload.tour_id) {
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+  }
+  if (payload.statuses && (!payload.tour_id || !payload.statuses.every((s) => ALLOWED_STATUSES.includes(s)))) {
     return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
   }
 
@@ -101,7 +112,7 @@ Deno.serve(async (req: Request) => {
       .from('tour_registrations')
       .select('user_id')
       .eq('tour_id', payload.tour_id!)
-      .eq('status', 'confirmed')
+      .in('status', payload.statuses ?? ['confirmed'])
 
     let userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
     if (payload.user_ids && payload.user_ids.length > 0) {

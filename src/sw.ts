@@ -4,6 +4,22 @@ import { NavigationRoute, registerRoute } from 'workbox-routing'
 
 declare const self: ServiceWorkerGlobalScope
 
+// Ohne diese beiden Zeilen bleibt ein neu deployter Service Worker nach dem
+// Standard-Lifecycle im "waiting"-Zustand hängen, bis der Nutzer wirklich alle
+// Tabs/Instanzen der App schließt — bei einer installierten Standalone-PWA
+// passiert das oft nie durch bloßes Wechseln/Zurückkehren zur App. Neue
+// Deployments (Bugfixes!) wurden dadurch faktisch nie aktiv. `skipWaiting()`
+// aktiviert einen neuen Service Worker sofort nach der Installation,
+// `clients.claim()` übernimmt zusätzlich bereits offene Seiten ohne Reload.
+// Zusammen mit `registerType: 'autoUpdate'` und `registerSW({ immediate: true })`
+// in main.tsx ist das die vom `injectManifest`-Modus erwartete Update-Strategie
+// (vite-plugin-pwa baut das bei `generateSW` automatisch ein, bei einem
+// selbst geschriebenen Service Worker wie hier nicht).
+self.skipWaiting()
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
 // App-Shell und statische Assets cachen (injiziert von vite-plugin-pwa beim Build).
 // Das Splash-Video wird bewusst NICHT precacht: iOS Safari braucht für die
 // Video-Wiedergabe HTTP-Range-Requests, ein precachter Eintrag liefert aber immer

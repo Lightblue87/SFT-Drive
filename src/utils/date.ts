@@ -6,9 +6,20 @@ import { de } from 'date-fns/locale'
  * DATE-Werte — wir parsen sie nie über UTC-Mitternacht, damit der Tag nicht
  * durch Zeitzonenkonvertierung verschoben wird.
  */
-function parseDateOnly(value: string): Date {
+export function parseDateOnly(value: string): Date {
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+/**
+ * Heutiges Datum als DATE-String in lokaler Zeit. Bewusst nicht
+ * `new Date().toISOString().slice(0, 10)`: das liefert das UTC-Datum und steht
+ * in Deutschland rund um Mitternacht noch auf dem Vortag (§19).
+ */
+export function todayKey(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 export function formatDate(value: string): string {

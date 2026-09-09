@@ -1,14 +1,30 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useNotifications } from '@/features/notifications/useNotifications'
 import { PageLoading } from '@/components/PageLoading'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
+import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
 import type { AppNotification } from '@/types/notification'
+
+// created_at ist ein voller Zeitstempel (kein reines Kalenderdatum) — Datum
+// und Uhrzeit müssen deshalb aus derselben lokal umgerechneten Date-Instanz
+// kommen, statt das Datum per String-slice aus dem UTC-Rohwert zu schneiden
+// und nur die Uhrzeit lokal zu formatieren (rund um Mitternacht sonst
+// inkonsistent, siehe formatDate/formatTime in utils/date.ts, die für reine
+// DATE-Spalten ohne Zeitzonenkonvertierung gedacht sind).
+function formatNotificationTimestamp(value: string): string {
+  const d = new Date(value)
+  const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  return `${date} · ${time}`
+}
 
 /** In-App Notification Center (siehe CLAUDE.md §27.13). */
 export function NotificationsPage() {
   const { notifications, loading, reload } = useNotifications()
   const navigate = useNavigate()
+  const [showRegionSettings, setShowRegionSettings] = useState(false)
 
   async function open(notification: AppNotification) {
     if (!notification.read_at) {
@@ -28,30 +44,76 @@ export function NotificationsPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="text-xl font-semibold">Mitteilungen</h1>
+    <div className="pb-[110px]">
+      <div className="flex items-center gap-3 px-4 pb-4 pt-1.5">
+        <button
+          // Zurück in die tatsächliche Herkunft (Profil, Tourübersicht, …)
+          // statt immer auf /tours; nur ohne History-Eintrag auf /tours.
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/tours'))}
+          className="tap-scale flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] border border-white/10 bg-[#131316]"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M15 4 7 12l8 8" stroke="#f5f5f5" strokeWidth="2" />
+          </svg>
+        </button>
+        <div className="flex-1 text-[22px] font-semibold leading-none">Mitteilungen</div>
+        <button
+          onClick={() => setShowRegionSettings((v) => !v)}
+          className={`tap-scale flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] border ${
+            showRegionSettings ? 'border-sft-red/50 bg-sft-red/10' : 'border-white/10 bg-[#131316]'
+          }`}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+              stroke={showRegionSettings ? '#f01a12' : '#c9c9ce'}
+              strokeWidth="1.8"
+            />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+              stroke={showRegionSettings ? '#f01a12' : '#c9c9ce'}
+              strokeWidth="1.8"
+            />
+          </svg>
+        </button>
+      </div>
+
+      {showRegionSettings && (
+        <div className="px-[18px] pb-4">
+          <RegionNotificationPreferences />
+          <button
+            onClick={() => setShowRegionSettings(false)}
+            className="tap-scale mt-2.5 w-full rounded-xl border border-white/12 py-2.5 text-[13px] font-medium text-sft-gray"
+          >
+            Fertig
+          </button>
+        </div>
+      )}
 
       {notifications.length === 0 ? (
-        <p className="mt-4 text-sm text-sft-gray">Noch keine Mitteilungen.</p>
+        <p className="px-[18px] text-sm text-sft-gray">Noch keine Mitteilungen.</p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {notifications.map((n) => (
-            <li key={n.id}>
-              <SwipeToDelete onDelete={() => remove(n.id)}>
-                <button
-                  onClick={() => open(n)}
-                  className="flex w-full items-start gap-2 p-3 text-left text-sm"
-                >
-                  {!n.read_at && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-sft-red" />}
-                  <div className={n.read_at ? 'text-sft-gray' : undefined}>
-                    <div className="font-medium text-sft-white">{n.title}</div>
-                    <div className="text-sft-gray">{n.body}</div>
-                  </div>
-                </button>
-              </SwipeToDelete>
-            </li>
-          ))}
-        </ul>
+        notifications.map((n) => (
+          <SwipeToDelete key={n.id} onDelete={() => remove(n.id)}>
+            <button
+              onClick={() => open(n)}
+              className={`flex w-full items-start gap-3 border-t border-white/7 px-[18px] py-3.5 text-left ${
+                n.read_at ? '' : 'bg-sft-red/[0.05]'
+              }`}
+            >
+              <span
+                className={`mt-[5px] h-2 w-2 flex-none rounded-sm ${n.read_at ? 'bg-white/20' : 'bg-sft-red'}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-semibold leading-tight">{n.title}</div>
+                <div className="mt-1.5 text-pretty text-[13px] leading-relaxed text-sft-gray">{n.body}</div>
+                <div className="mt-1.5 font-mono text-[10px] tracking-[0.1em] text-[#8a8a92]">
+                  {formatNotificationTimestamp(n.created_at)}
+                </div>
+              </div>
+            </button>
+          </SwipeToDelete>
+        ))
       )}
     </div>
   )

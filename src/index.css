@@ -1,9 +1,43 @@
+/* Selbst gehostet statt extern von fonts.googleapis.com geladen (siehe
+   Datenschutzerklärung — dort werden bewusst nur Supabase und Cloudflare als
+   externe Infrastruktur genannt). @fontsource liefert dieselben Schriften
+   als Build-Abhängigkeit, ausgeliefert über die eigene Cloudflare-Pages-Domain. */
+@import '@fontsource/archivo/400.css';
+@import '@fontsource/archivo/500.css';
+@import '@fontsource/archivo/600.css';
+@import '@fontsource/archivo/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html {
   color-scheme: dark;
+  overflow-x: hidden;
+  /* Verhindert, dass Chrome unter Android die native Overscroll-Pull-to-
+     Refresh-Geste am oberen Rand auslöst, wenn die App (noch) im normalen
+     Browser-Tab statt installiert läuft — das eigene PullToRefresh würde
+     sonst gegen Chromes eigene Geste laufen. Auf iOS Safari ohne Wirkung,
+     dort gibt es diese native Geste im Tab ohnehin nicht in gleicher Form. */
+  overscroll-behavior-y: contain;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* #root statt body: manche WebKit-Versionen respektieren overflow-x:hidden auf
+   html/body nicht zuverlässig für Layout-Überlauf, der von tief verschachtelten
+   nativen Formularelementen (date/datetime-local) verursacht wird — der Wert
+   auf einem tatsächlichen Block-Container mit eigenem Layout-Kontext ist die
+   robustere Absicherung. */
+#root {
+  overflow-x: hidden;
+  width: 100%;
 }
 
 /* Verhindert automatisches Hineinzoomen von iOS Safari beim Fokussieren von
@@ -13,4 +47,90 @@ input,
 textarea,
 select {
   font-size: 16px;
+}
+
+/* iOS Safari kann nativen date/datetime-local-Controls trotz width:100%
+   eine größere intrinsische Breite geben. Reines Box-Sizing (width/max-width/
+   min-width) reicht dafür nachweislich NICHT aus — der Überlauf trat
+   weiterhin auch bei einem einzelnen, freistehenden date-Feld ohne jede
+   Flex-/Grid-Verschachtelung auf (Geburtsdatum im öffentlichen
+   Anmeldeformular). Das deutet auf eine reine Rendering-Eigenheit der
+   nativen WebKit-Widget-Darstellung hin, die sich nur über
+   -webkit-appearance:none umgehen lässt — der native Date-/Zeit-Picker
+   (Scroll-Rad) bleibt dabei erhalten, nur das Eingabefeld selbst wird nicht
+   mehr in WebKits eigenem Widget-Layout, sondern wie ein normales Textfeld
+   dargestellt.
+
+   Bewusst über @supports (-webkit-touch-callout: none) auf iOS Safari
+   beschränkt (dort als Feature-Detection etabliert, weil -webkit-touch-callout
+   ausschließlich von WebKit auf iOS unterstützt wird, nicht von Chrome unter
+   Android). Chrome für Android hat den beschriebenen Breiten-Bug nicht — dort
+   entfernt appearance:none stattdessen das native Kalender-Icon und die
+   Tippfläche zum Öffnen des Pickers, das Feld würde zu einem reinen Textfeld
+   ohne Picker-Zugriff degradieren. Deshalb dort das native Rendering
+   unangetastet lassen. */
+@supports (-webkit-touch-callout: none) {
+  input[type='date'],
+  input[type='datetime-local'] {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    /* Ohne -webkit-appearance schrumpft ein LEERES date-/datetime-local-Feld
+       in WebKit auf eine geringere Höhe als dasselbe Feld mit gesetztem Wert
+       (die eigene vertikale Innenabstand-Klasse allein reicht nicht) — als
+       feste Untergrenze auf die übliche Feldhöhe geklemmt, damit leer und
+       befüllt gleich hoch bleiben. */
+    min-height: 3.375rem;
+    line-height: 1.5;
+  }
+}
+
+/* Android Chrome braucht die obige Breiten-Korrektur nicht, aber min-height
+   sorgt dort ebenfalls dafür, dass ein leeres date-/datetime-local-Feld nicht
+   niedriger wirkt als ein befülltes — ohne das native appearance anzutasten. */
+input[type='date'],
+input[type='datetime-local'] {
+  min-height: 3.375rem;
+}
+
+@layer utilities {
+  .tap-scale {
+    transition: transform 120ms ease;
+  }
+  .tap-scale:active {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.animate-fade-in {
+  animation: fade-in 160ms ease;
 }

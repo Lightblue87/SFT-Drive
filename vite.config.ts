@@ -21,6 +21,16 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         scope: '/',
+        // Kein eigener `purpose: 'maskable'`-Eintrag: Android beschneidet ein
+        // als maskable deklariertes Icon auf eine zentrierte ~80%-Sicherheitszone
+        // (Kreis/Squircle/Teardrop je nach Launcher). Das vorhandene Artwork
+        // reicht bis auf < 1% an drei Bildrändern heran (nur oben ~0,8%, rechts
+        // ~0,4%, unten ~0,4% Rand) und würde dadurch sichtbar beschnitten auf
+        // dem Android-Homescreen erscheinen — ein rein Android-spezifisches
+        // Problem, iOS wendet dieses Zuschnittsystem nicht an. Ohne separates,
+        // mit ausreichendem Sicherheitsabstand neu erstelltes maskable-Artwork
+        // bleibt es deshalb bei der einzigen `any`-Variante; Android verwendet
+        // dafür seine eigene, deutlich mildere Standardmaskierung.
         icons: [
           {
             src: '/icons/icon-192.png',
@@ -31,12 +41,6 @@ export default defineConfig({
             src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
           },
         ],
       },

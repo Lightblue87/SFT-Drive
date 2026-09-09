@@ -16,6 +16,10 @@ interface OrderRow {
   items: { name: string; quantity: number; note: string | null }[]
 }
 
+const fieldLabel = 'font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim'
+const fieldInput =
+  'mt-2 w-full rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white outline-none focus:border-sft-red/60'
+
 /** Settings-Form braucht lokale Datetime-local-Konvertierung (§19, wie an anderer Stelle im Admin-Bereich). */
 function toDatetimeLocal(iso: string | null): string {
   if (!iso) return ''
@@ -44,6 +48,8 @@ export function AdminRestaurantStopPage() {
 
   const [items, setItems] = useState<MenuItem[]>([])
   const [newItemName, setNewItemName] = useState('')
+  const [menuError, setMenuError] = useState<string | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
 
   const [orders, setOrders] = useState<OrderRow[]>([])
 
@@ -68,7 +74,7 @@ export function AdminRestaurantStopPage() {
     const { data: orderRows } = await supabase
       .from('meal_orders')
       .select(
-        'id, registration_id, status, tour_registrations(id, vehicle_manufacturer, vehicle_model), meal_order_items(quantity, note, menu_items(name))',
+        'id, registration_id, status, tour_registrations(id, status, vehicle_manufacturer, vehicle_model), meal_order_items(quantity, note, menu_items(name))',
       )
       .eq('restaurant_stop_id', stopId)
       .eq('status', 'submitted')
@@ -90,24 +96,35 @@ export function AdminRestaurantStopPage() {
       id: string
       registration_id: string
       status: string
-      tour_registrations: { vehicle_manufacturer: string; vehicle_model: string } | null
+      tour_registrations: {
+        status: string
+        vehicle_manufacturer: string
+        vehicle_model: string
+      } | null
       meal_order_items: { quantity: number; note: string | null; menu_items: { name: string } | null }[]
     }
 
+    // Nur Bestellungen aktuell bestätigter Teilnehmer zählen: storniert ein
+    // Fahrer nach dem Bestellen, darf sein Essen nicht weiter in Gesamtmenge
+    // und CSV-Export auftauchen (§27.9). Ein DB-Trigger storniert solche
+    // Bestellungen inzwischen zwar mit, dieser Filter bleibt als zweite
+    // Absicherung für Altbestände bestehen.
     setOrders(
-      ((orderRows ?? []) as unknown as RawOrderRow[]).map((o) => ({
-        order_id: o.id,
-        registration_id: o.registration_id,
-        status: o.status,
-        username: usernameByUserId.get(regUserId.get(o.registration_id) ?? '') ?? '—',
-        vehicle_manufacturer: o.tour_registrations?.vehicle_manufacturer ?? '',
-        vehicle_model: o.tour_registrations?.vehicle_model ?? '',
-        items: (o.meal_order_items ?? []).map((i) => ({
-          name: i.menu_items?.name ?? '—',
-          quantity: i.quantity,
-          note: i.note,
+      ((orderRows ?? []) as unknown as RawOrderRow[])
+        .filter((o) => o.tour_registrations?.status === 'confirmed')
+        .map((o) => ({
+          order_id: o.id,
+          registration_id: o.registration_id,
+          status: o.status,
+          username: usernameByUserId.get(regUserId.get(o.registration_id) ?? '') ?? '—',
+          vehicle_manufacturer: o.tour_registrations?.vehicle_manufacturer ?? '',
+          vehicle_model: o.tour_registrations?.vehicle_model ?? '',
+          items: (o.meal_order_items ?? []).map((i) => ({
+            name: i.menu_items?.name ?? '—',
+            quantity: i.quantity,
+            note: i.note,
+          })),
         })),
-      })),
     )
 
     setLoading(false)
@@ -119,6 +136,15 @@ export function AdminRestaurantStopPage() {
 
   async function saveSettings() {
     if (!stopId) return
+
+    // Bestellschluss vor Bestellstart ist fachlich unmöglich; die DB weist es
+    // seit 20260909020000 ebenfalls ab.
+    if (openAt && deadlineAt && deadlineAt < openAt) {
+      setSettingsError('Der Bestellschluss darf nicht vor dem Bestellstart liegen.')
+      return
+    }
+    setSettingsError(null)
+
     setSavingSettings(true)
     await supabase.from('restaurant_stop_settings').upsert({
       tour_stop_id: stopId,
@@ -144,12 +170,27 @@ export function AdminRestaurantStopPage() {
   }
 
   async function toggleAvailable(item: MenuItem) {
+    setMenuError(null)
     await supabase.from('menu_items').update({ is_available: !item.is_available }).eq('id', item.id)
     load()
   }
 
+  /**
+   * Echtes Löschen ist per Fremdschlüssel (ON DELETE RESTRICT) nur möglich,
+   * solange das Gericht in keiner Bestellung vorkommt — sonst würden fremde
+   * Bestellungen stillschweigend verändert (§27.4). In dem Fall bleibt
+   * "Deaktivieren": das Gericht ist nicht mehr wählbar, bestehende
+   * Bestellungen bleiben aber nachvollziehbar.
+   */
   async function removeMenuItem(itemId: string) {
-    await supabase.from('menu_items').delete().eq('id', itemId)
+    setMenuError(null)
+    const { error } = await supabase.from('menu_items').delete().eq('id', itemId)
+    if (error) {
+      setMenuError(
+        'Dieses Gericht wurde bereits bestellt und kann nicht gelöscht werden. Du kannst es stattdessen deaktivieren.',
+      )
+      return
+    }
     load()
   }
 
@@ -191,100 +232,118 @@ export function AdminRestaurantStopPage() {
   }
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Restaurant-Bestellung</h1>
-
-      <div className="mt-4 flex flex-col gap-3 rounded-md bg-sft-surface p-4 text-sm">
-        <p className="font-medium">Bestellkonfiguration</p>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={orderingEnabled} onChange={(e) => setOrderingEnabled(e.target.checked)} />
-          Essensbestellung aktiviert
-        </label>
-        <label className="flex flex-col gap-1">
-          Bestellung möglich ab
+    <div className="flex flex-col gap-3.5 pt-3">
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card p-3.5">
+        <div className="mb-2.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">BESTELLFENSTER</div>
+        <button
+          type="button"
+          onClick={() => setOrderingEnabled((v) => !v)}
+          className="mb-3.5 flex w-full items-center justify-between gap-3 rounded-xl border border-white/9 bg-[#0f0f12] px-3.5 py-3 text-left"
+        >
+          <span className="text-[13px] font-medium">Essensbestellung aktiviert</span>
+          <span
+            className={`relative h-7 w-[46px] flex-none rounded-full ${orderingEnabled ? 'bg-sft-red' : 'bg-white/14'}`}
+          >
+            <span
+              className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white transition-[left] ${
+                orderingEnabled ? 'left-[21px]' : 'left-[3px]'
+              }`}
+            />
+          </span>
+        </button>
+        <label className="min-w-0 block">
+          <span className={fieldLabel}>ÖFFNET</span>
           <input
             type="datetime-local"
             value={openAt}
             onChange={(e) => setOpenAt(e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+            className={`${fieldInput} font-mono`}
           />
         </label>
-        <label className="flex flex-col gap-1">
-          Bestellfrist
+        <label className="mt-3.5 block min-w-0">
+          <span className={fieldLabel}>SCHLIESST</span>
           <input
             type="datetime-local"
             value={deadlineAt}
             onChange={(e) => setDeadlineAt(e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+            className={`${fieldInput} font-mono`}
           />
         </label>
-        <label className="flex flex-col gap-1">
-          Hinweis (z. B. Öffnungszeiten)
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
-          />
+        <label className="mt-3.5 block min-w-0">
+          <span className={fieldLabel}>HINWEIS (Z. B. ÖFFNUNGSZEITEN)</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} className={fieldInput} />
         </label>
+        {settingsError && (
+          <p className="mt-3.5 rounded-xl border border-sft-red/40 bg-sft-red/8 px-3.5 py-3 text-[12px] font-medium text-[#ff8b84]">
+            {settingsError}
+          </p>
+        )}
         <button
           onClick={saveSettings}
           disabled={savingSettings}
-          className="self-start rounded-md bg-sft-red px-4 py-2 font-medium disabled:opacity-60"
+          className="tap-scale mt-3.5 w-full rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3 text-[14px] font-semibold text-white disabled:opacity-60"
         >
           {savingSettings ? 'Wird gespeichert…' : 'Speichern'}
         </button>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 rounded-md bg-sft-surface p-4 text-sm">
-        <p className="font-medium">Speisekarte</p>
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <li key={item.id} className="flex items-center justify-between gap-2">
-              <span className={item.is_available ? undefined : 'text-sft-gray line-through'}>{item.name}</span>
-              <div className="flex shrink-0 gap-2">
-                <button onClick={() => toggleAvailable(item)} className="text-xs underline">
-                  {item.is_available ? 'Deaktivieren' : 'Aktivieren'}
-                </button>
-                <button onClick={() => removeMenuItem(item.id)} className="text-xs text-sft-red underline">
-                  Löschen
-                </button>
-              </div>
-            </li>
-          ))}
-          {items.length === 0 && <p className="text-sft-gray">Noch keine Gerichte angelegt.</p>}
-        </ul>
-        <div className="flex gap-2">
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">SPEISEKARTE</div>
+        {menuError && (
+          <p className="mx-4 mb-2.5 rounded-xl border border-sft-amber/30 bg-sft-amber/[0.07] px-3.5 py-3 text-xs leading-relaxed text-[#e6c07a]">
+            {menuError}
+          </p>
+        )}
+        {items.map((item) => (
+          <div key={item.id} className="flex items-center gap-2.5 border-t border-white/6 px-4 py-3">
+            <span className={`flex-1 text-[13px] font-medium ${item.is_available ? '' : 'text-sft-gray line-through'}`}>
+              {item.name}
+            </span>
+            <button onClick={() => toggleAvailable(item)} className="flex-none font-mono text-[10px] text-sft-gray underline">
+              {item.is_available ? 'DEAKTIVIEREN' : 'AKTIVIEREN'}
+            </button>
+            <button onClick={() => removeMenuItem(item.id)} className="flex-none font-mono text-[10px] text-[#ff6b63] underline">
+              LÖSCHEN
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="px-4 pb-3 text-sm text-sft-gray">Noch keine Gerichte angelegt.</p>}
+        <div className="flex gap-2 border-t border-white/6 p-3.5">
           <input
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
             placeholder="Neues Gericht"
-            className="flex-1 rounded-md border border-sft-surface2 bg-sft-black px-3 py-2 text-sft-white"
+            className="flex-1 rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-2.5 text-[15px] text-sft-white"
           />
-          <button onClick={addMenuItem} className="rounded-md bg-sft-red px-4 py-2 font-medium">
-            Hinzufügen
+          <button onClick={addMenuItem} className="tap-scale rounded-xl bg-sft-red px-4 py-2.5 text-sm font-medium">
+            +
           </button>
         </div>
       </div>
 
-      <div className="mt-4 rounded-md bg-sft-surface p-4 text-sm">
-        <p className="font-medium">Gesamtbestellung</p>
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+          GESAMTBESTELLUNG
+        </div>
         {totals.size === 0 ? (
-          <p className="mt-2 text-sft-gray">Noch keine Bestellungen.</p>
+          <p className="px-4 pb-3.5 text-sm text-sft-gray">Noch keine Bestellungen.</p>
         ) : (
           <>
-            <ul className="mt-2 flex flex-col gap-1">
-              {[...totals.entries()].map(([name, qty]) => (
-                <li key={name}>
-                  {qty} × {name}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-sft-gray">Gesamt: {totalDishes} Gerichte</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button onClick={exportCsv} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
+            {[...totals.entries()].map(([name, qty]) => (
+              <div key={name} className="flex items-center justify-between border-t border-white/6 px-4 py-2.5">
+                <span className="text-[13px] font-medium">{name}</span>
+                <span className="font-mono text-[15px] font-bold">{qty}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between border-t border-white/6 px-4 py-2.5 font-mono text-[11px] text-sft-gray">
+              GESAMT
+              <span className="font-bold text-sft-white">{totalDishes} GERICHTE</span>
+            </div>
+            <div className="flex flex-wrap gap-2 p-3.5">
+              <button onClick={exportCsv} className="tap-scale rounded-lg border border-white/13 px-3 py-2 text-xs font-medium">
                 CSV exportieren
               </button>
-              <button onClick={shareSummary} className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs">
+              <button onClick={shareSummary} className="tap-scale rounded-lg border border-white/13 px-3 py-2 text-xs font-medium">
                 Zusammenfassung teilen
               </button>
             </div>
@@ -292,28 +351,28 @@ export function AdminRestaurantStopPage() {
         )}
       </div>
 
-      <div className="mt-4 rounded-md bg-sft-surface p-4 text-sm">
-        <p className="font-medium">Fahrzeugbezogene Bestellungen</p>
+      <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+        <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+          FAHRZEUGBEZOGENE BESTELLUNGEN
+        </div>
         {orders.length === 0 ? (
-          <p className="mt-2 text-sft-gray">Noch keine Bestellungen.</p>
+          <p className="px-4 pb-3.5 text-sm text-sft-gray">Noch keine Bestellungen.</p>
         ) : (
-          <ul className="mt-2 flex flex-col gap-3">
-            {orders.map((o) => (
-              <li key={o.order_id}>
-                <div className="font-medium">
-                  {o.username} · {o.vehicle_manufacturer} {o.vehicle_model}
-                </div>
-                <ul className="text-sft-gray">
-                  {o.items.map((i, idx) => (
-                    <li key={idx}>
-                      {i.quantity} × {i.name}
-                      {i.note && ` (${i.note})`}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
+          orders.map((o) => (
+            <div key={o.order_id} className="border-t border-white/6 px-4 py-3">
+              <div className="text-[13px] font-semibold">
+                {o.username} · {o.vehicle_manufacturer} {o.vehicle_model}
+              </div>
+              <div className="mt-1 font-mono text-[11px] text-sft-gray">
+                {o.items.map((i, idx) => (
+                  <div key={idx}>
+                    {i.quantity} × {i.name}
+                    {i.note && ` (${i.note})`}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

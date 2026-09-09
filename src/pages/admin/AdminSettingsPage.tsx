@@ -22,6 +22,10 @@ const EMPTY: SiteSettings = {
   phone: '',
 }
 
+const fieldLabel = 'font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim'
+const fieldInput =
+  'mt-2 w-full rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3.5 text-[16px] text-sft-white outline-none focus:border-sft-red/60'
+
 /**
  * Angaben für Impressum/Datenschutzerklärung (siehe CLAUDE.md §7). Zentral
  * hier gepflegt, damit z. B. bei einem Zuständigkeits- oder Adresswechsel
@@ -92,74 +96,78 @@ export function AdminSettingsPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Angaben für Impressum &amp; Datenschutz</h1>
-      <p className="mt-2 text-sm text-sft-gray">
-        Diese Angaben erscheinen öffentlich auf den Seiten „Impressum" und „Datenschutzerklärung".
-      </p>
+    <div className="pt-3">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-3.5 rounded-2xl border border-white/9 bg-sft-card p-3.5"
+      >
+        <p className="text-[12px] leading-relaxed text-sft-gray">
+          Diese Angaben erscheinen öffentlich auf „Impressum" und „Datenschutzerklärung".
+        </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-        <label className="flex flex-col gap-1 text-sm">
-          Verein / Organisation
+        <label>
+          <span className={fieldLabel}>VEREIN / ORGANISATION</span>
           <input
             value={form.organization_name}
             onChange={(e) => set('organization_name', e.target.value)}
-            className={inputClass}
+            className={fieldInput}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Verantwortliche Person (§ 5 TMG)
+        <label>
+          <span className={fieldLabel}>VERANTWORTLICH (§ 5 TMG)</span>
           <input
             value={form.responsible_name}
             onChange={(e) => set('responsible_name', e.target.value)}
-            className={inputClass}
+            className={fieldInput}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Straße &amp; Hausnummer
-          <input value={form.street} onChange={(e) => set('street', e.target.value)} className={inputClass} />
+        <label>
+          <span className={fieldLabel}>STRASSE &amp; HAUSNUMMER</span>
+          <input value={form.street} onChange={(e) => set('street', e.target.value)} className={fieldInput} />
         </label>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="flex flex-col gap-1 text-sm">
-            PLZ
+        <div className="grid grid-cols-[100px_1fr] gap-[11px]">
+          <label>
+            <span className={fieldLabel}>PLZ</span>
             <input
               value={form.postal_code}
               onChange={(e) => set('postal_code', e.target.value)}
-              className={inputClass}
+              className={`${fieldInput} font-mono font-medium`}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Ort
-            <input value={form.city} onChange={(e) => set('city', e.target.value)} className={inputClass} />
+          <label>
+            <span className={fieldLabel}>ORT</span>
+            <input value={form.city} onChange={(e) => set('city', e.target.value)} className={fieldInput} />
           </label>
         </div>
-        <label className="flex flex-col gap-1 text-sm">
-          Kontakt-E-Mail
+        <label>
+          <span className={fieldLabel}>KONTAKT-E-MAIL</span>
           <input
             type="email"
             value={form.contact_email}
             onChange={(e) => set('contact_email', e.target.value)}
-            className={inputClass}
+            className={fieldInput}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Telefon (optional)
-          <input value={form.phone} onChange={(e) => set('phone', e.target.value)} className={inputClass} />
+        <label>
+          <span className={fieldLabel}>TELEFON (OPTIONAL)</span>
+          <input
+            value={form.phone}
+            onChange={(e) => set('phone', e.target.value)}
+            className={`${fieldInput} font-mono font-medium`}
+          />
         </label>
 
         {error && <p className="text-sm text-sft-red">{error}</p>}
+        {saved && <p className="font-mono text-[11px] text-sft-gray">GESPEICHERT</p>}
 
         <button
           type="submit"
           disabled={saving}
-          className="mt-2 rounded-md bg-sft-red px-4 py-2.5 font-medium disabled:opacity-60"
+          className="tap-scale mt-1 rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-[15px] text-[15px] font-semibold text-white disabled:opacity-60"
         >
           {saving ? 'Wird gespeichert…' : 'Speichern'}
         </button>
-        {saved && <p className="text-sm text-sft-gray">Gespeichert.</p>}
       </form>
     </div>
   )
 }
-
-const inputClass = 'rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white'

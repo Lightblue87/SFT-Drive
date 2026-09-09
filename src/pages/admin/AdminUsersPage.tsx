@@ -14,6 +14,10 @@ interface UserRow {
   is_banned: boolean
 }
 
+function initials(name: string): string {
+  return name.replace('@', '').slice(0, 2).toUpperCase()
+}
+
 /**
  * Admin-Verwaltung anderer Nutzer (siehe CLAUDE.md §21.3, §27.20): Admin-
  * Rolle vergeben/entziehen (z. B. für eine Admin-Übergabe), Details ansehen,
@@ -119,14 +123,12 @@ export function AdminUsersPage() {
   if (loading) return <PageLoading />
 
   return (
-    <div className="py-6">
-      <h1 className="text-xl font-semibold">Nutzerverwaltung</h1>
-
+    <div className="pt-3">
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Suche nach Username, Name oder E-Mail"
-        className="mt-4 w-full rounded-md border border-sft-surface2 bg-sft-surface px-3 py-2 text-sft-white"
+        placeholder="Username, Name oder E-Mail"
+        className="w-full rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[16px] text-sft-white"
       />
 
       {loadError && (
@@ -134,79 +136,92 @@ export function AdminUsersPage() {
       )}
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
 
-      <ul className="mt-4 flex flex-col gap-2">
+      <div className="mt-3.5 flex flex-col gap-2.5">
         {filteredUsers.map((user) => (
-          <li key={user.id} className="flex flex-col gap-2 rounded-md bg-sft-surface p-3 text-sm">
-            <div>
-              <div className="flex flex-wrap items-center gap-2 break-all font-medium">
-                {user.username}
-                {user.is_admin && (
-                  <span className="shrink-0 rounded bg-sft-red px-1.5 py-0.5 text-[11px]">Admin</span>
-                )}
-                {user.is_banned && (
-                  <span className="shrink-0 rounded bg-sft-surface2 px-1.5 py-0.5 text-[11px] text-sft-gray">
-                    Gesperrt
-                  </span>
-                )}
+          <div key={user.id} className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+            <div className="flex items-center gap-2.5 px-[15px] py-3.5">
+              <div
+                className={`flex h-9 w-9 flex-none items-center justify-center rounded-[10px] font-mono text-xs font-bold ${
+                  user.is_admin ? 'bg-sft-red text-white' : user.is_banned ? 'bg-white/4 text-[#c9c9ce]' : 'bg-white/7 text-[#c9c9ce]'
+                }`}
+              >
+                {initials(user.username)}
               </div>
-              <div className="text-sft-gray">
-                {user.first_name} {user.last_name}
-              </div>
-              <div className="break-all text-sft-gray">{user.email}</div>
-              <div className="text-sft-gray">
-                Registriert seit{' '}
-                {new Date(user.created_at).toLocaleDateString('de-DE', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                })}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[14px] font-semibold">{user.username}</span>
+                  {user.is_admin && (
+                    <span className="flex-none rounded-md bg-sft-red/18 px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-[0.1em] text-[#ff6b63]">
+                      ADMIN
+                    </span>
+                  )}
+                  {user.is_banned && (
+                    <span className="flex-none rounded-md bg-sft-amber/16 px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-[0.1em] text-sft-amber">
+                      GESPERRT
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 break-all font-mono text-[11px] leading-relaxed text-sft-gray">
+                  {user.first_name} {user.last_name}
+                  <br />
+                  {user.email}
+                </div>
+                <div className="mt-1 font-mono text-[10px] text-[#8a8a92]">
+                  SEIT{' '}
+                  {new Date(user.created_at).toLocaleDateString('de-DE', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  })}
+                </div>
               </div>
             </div>
-
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 gap-px border-t border-white/6 bg-white/6">
               <button
                 onClick={() => toggleAdmin(user)}
                 disabled={pendingId === user.id}
-                className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs disabled:opacity-60"
+                className="bg-sft-card px-2 py-2.5 text-[11px] font-medium text-[#c9c9ce] disabled:opacity-60"
               >
-                {user.is_admin ? 'Admin entfernen' : 'Zum Admin machen'}
+                {user.is_admin ? 'Admin entfernen' : 'Zum Admin'}
               </button>
               <button
                 onClick={() => toggleBan(user)}
                 disabled={pendingId === user.id}
-                className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs disabled:opacity-60"
+                className="bg-sft-card px-2 py-2.5 text-[11px] font-medium text-[#c9c9ce] disabled:opacity-60"
               >
                 {user.is_banned ? 'Entsperren' : 'Sperren'}
               </button>
+              {/* Kontolöschung ist endgültig — die Bestätigung braucht deshalb
+                  einen sichtbaren Weg zurück, nicht nur "Wirklich?". */}
               {confirmDeleteId === user.id ? (
-                <>
-                  <button
-                    onClick={() => deleteUser(user)}
-                    disabled={pendingId === user.id}
-                    className="rounded-md bg-sft-red px-3 py-1.5 text-xs disabled:opacity-60"
-                  >
-                    Wirklich löschen?
-                  </button>
+                <div className="flex bg-sft-card">
                   <button
                     onClick={() => setConfirmDeleteId(null)}
-                    className="rounded-md border border-sft-surface2 px-3 py-1.5 text-xs text-sft-gray"
+                    className="flex-1 px-2 py-2.5 text-[11px] font-medium text-[#c9c9ce]"
                   >
                     Abbrechen
                   </button>
-                </>
+                  <button
+                    onClick={() => deleteUser(user)}
+                    disabled={pendingId === user.id}
+                    className="flex-1 bg-sft-red px-2 py-2.5 text-[11px] font-medium text-white disabled:opacity-60"
+                  >
+                    Endgültig löschen
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(user.id)}
-                  className="rounded-md border border-sft-red/50 px-3 py-1.5 text-xs text-sft-red"
+                  className="bg-sft-card px-2 py-2.5 text-[11px] font-medium text-[#ff6b63]"
                 >
-                  Konto löschen
+                  Löschen
                 </button>
               )}
             </div>
-          </li>
+          </div>
         ))}
         {filteredUsers.length === 0 && <p className="text-sm text-sft-gray">Keine Nutzer gefunden.</p>}
-      </ul>
+      </div>
     </div>
   )
 }

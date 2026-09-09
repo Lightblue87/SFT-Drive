@@ -14,9 +14,9 @@ export function DatenschutzPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 text-sm leading-relaxed">
-      <h1 className="text-xl font-semibold">Datenschutzerklärung</h1>
+      <h1 className="text-2xl font-semibold">Datenschutzerklärung</h1>
 
-      <p className="mt-4 rounded-md bg-sft-surface p-3 text-sft-gray">
+      <p className="mt-4 rounded-2xl border border-white/9 bg-sft-card p-3.5 text-sft-gray">
         Hinweis: Dies ist eine Vorlage auf Basis der tatsächlich in SFT Drive verarbeiteten Daten.
         Sie ersetzt keine individuelle Rechtsberatung.
       </p>
@@ -44,6 +44,19 @@ export function DatenschutzPage() {
           Bei Touranmeldung: Fahrzeughersteller, -modell, Leistung in PS, optional Kennzeichen,
           Anzahl Beifahrer
         </li>
+        <li>
+          In deiner Fahrzeuggarage gespeicherte Fahrzeuge (Hersteller, Modell, Leistung, optional
+          Kennzeichen)
+        </li>
+        <li>Freundschaftsanfragen und bestehende Freundschaften zu anderen Nutzern</li>
+        <li>Zeitpunkt deines Check-ins am Treffpunkt, sofern eine Tour Check-in nutzt</li>
+        <li>Essensvorbestellungen zu Restaurant-Stopps inklusive deiner Anmerkungen</li>
+        <li>Bestätigungen, dass du deine Übernachtung für eine Tournacht organisiert hast</li>
+        <li>
+          Deine Benachrichtigungseinstellungen (abonnierte Regionen) sowie – falls du Push
+          aktivierst – die technischen Zugangsdaten deiner Geräte-Push-Verbindung
+        </li>
+        <li>Mitteilungen, die dir in der App zugestellt wurden</li>
         <li>Von dir hochgeladene Tour-Coverbilder (nur durch Admins)</li>
       </ul>
 
@@ -51,15 +64,21 @@ export function DatenschutzPage() {
       <p className="mt-2 text-sft-gray">
         Ausschließlich zur Organisation und Durchführung gemeinsamer Ausfahrten: Anmeldung zu
         Touren, Kapazitätsverwaltung, Wartelisten, Kommunikation vor/während der Fahrt sowie
-        organisatorische Planung (z. B. Restaurantreservierungen anhand der Personenzahl). Keine
+        organisatorische Planung (z. B. Restaurantreservierungen anhand der Personenzahl,
+        Übernachtungsplanung bei Mehrtagestouren) sowie Mitteilungen zu deinen Ausfahrten. Keine
         Weitergabe zu Werbezwecken.
       </p>
 
       <h2 className="mt-6 font-medium">4. Sichtbarkeit deiner Daten für andere Nutzer</h2>
       <p className="mt-2 text-sft-gray">
-        Dein Vor- und Nachname sowie Kennzeichen und Personenzahl sind für andere Teilnehmer
-        niemals sichtbar. Bestätigte Mitfahrer einer Tour sehen von dir ausschließlich deinen
-        Username sowie Fahrzeughersteller, -modell und Leistung.
+        Dein Vor- und Nachname sind für andere Teilnehmer standardmäßig nicht sichtbar. Bestätigte
+        Mitfahrer einer Tour sehen von dir ausschließlich deinen Username sowie Fahrzeughersteller,
+        -modell und Leistung. Nimmst du eine Freundschaftsanfrage eines anderen Nutzers an, geben
+        sich beide Seiten damit gegenseitig ihren Vor- und Nachnamen frei; das lässt sich jederzeit
+        durch Beenden der Freundschaft rückgängig machen. Kennzeichen und Personenzahl sind für
+        andere Teilnehmer immer unsichtbar, unabhängig von einer Freundschaft. Deine
+        Essensvorbestellung, dein Check-in-Zeitpunkt und deine Übernachtungsbestätigungen sind nur
+        für dich selbst und die Tourleitung sichtbar.
       </p>
 
       <h2 className="mt-6 font-medium">5. Auftragsverarbeiter / Hosting</h2>
