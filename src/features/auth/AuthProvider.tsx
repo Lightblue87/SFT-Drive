@@ -20,7 +20,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) {
+        // getSession() liest nur den lokal gespeicherten Token, ohne den
+        // Server zu fragen. Wurde der zugehörige Account inzwischen gelöscht
+        // (z. B. administrativ über /admin/users), bliebe die App fälschlich
+        // im "eingeloggt"-Zustand, während jede echte Anfrage im Hintergrund
+        // mit "user_not_found" fehlschlägt, ohne den Nutzer je zum erneuten
+        // Login aufzufordern. getUser() validiert serverseitig — bei diesem
+        // konkreten Fehler wird die tote Session aktiv beendet.
+        const { error } = await supabase.auth.getUser()
+        if ((error as { code?: string } | null)?.code === 'user_not_found') {
+          await supabase.auth.signOut()
+          setSession(null)
+          setLoading(false)
+          return
+        }
+      }
       setSession(data.session)
       setLoading(false)
     })
