@@ -157,6 +157,8 @@ export function AdminTourFormPage() {
   const [cancelReason, setCancelReason] = useState('')
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showGallery, setShowGallery] = useState(false)
@@ -421,6 +423,46 @@ export function AdminTourFormPage() {
     })
 
     setForm((prev) => ({ ...prev, status: 'cancelled' }))
+    navigate('/admin/tours')
+  }
+
+  /**
+   * Vollständiges Löschen einer Tour (nur Entwurf/Abgesagt, siehe CLAUDE.md
+   * "Entwicklungsphase 20" / `admin_delete_tour`). Anders als eine Absage ist
+   * das nicht umkehrbar — deshalb eine eigene, deutliche Bestätigung.
+   */
+  async function handleDeleteTour() {
+    if (!id) return
+    if (
+      !window.confirm(
+        'Diese Tour inklusive aller zugehörigen Daten (Anmeldungen, Stopps, Tagesrouten, Hotelvorschläge) endgültig löschen? Das kann nicht rückgängig gemacht werden.',
+      )
+    ) {
+      return
+    }
+
+    setDeleteError(null)
+    setDeleting(true)
+    const { data, error: rpcError } = await supabase.rpc('admin_delete_tour', { p_tour_id: id })
+    setDeleting(false)
+
+    if (rpcError) {
+      setDeleteError('Löschen fehlgeschlagen. Bitte versuche es erneut.')
+      return
+    }
+
+    const result = data as RegistrationResult
+    if (result.code !== 'OK') {
+      setDeleteError(rpcErrorMessage(result.code))
+      return
+    }
+
+    try {
+      localStorage.removeItem(draftKey)
+    } catch {
+      // ignorieren
+    }
+
     navigate('/admin/tours')
   }
 
@@ -926,6 +968,25 @@ export function AdminTourFormPage() {
               className="tap-scale rounded-xl border border-sft-red/45 bg-sft-red/8 py-3.5 text-[15px] font-semibold text-[#ff6b63] disabled:opacity-60"
             >
               {cancelling ? 'Wird abgesagt…' : 'Tour absagen'}
+            </button>
+          </Section>
+        )}
+
+        {id && (form.status === 'draft' || form.status === 'cancelled') && (
+          <Section title="Tour löschen">
+            <p className="text-[11px] leading-relaxed text-[#8e8e96]">
+              Löscht diese Tour endgültig, inklusive aller Anmeldungen, Stopps, Tagesrouten und
+              Hotelvorschläge. Nur möglich im Status Entwurf oder Abgesagt. Das kann nicht
+              rückgängig gemacht werden.
+            </p>
+            {deleteError && <p className="text-sm text-sft-red">{deleteError}</p>}
+            <button
+              type="button"
+              onClick={handleDeleteTour}
+              disabled={deleting}
+              className="tap-scale rounded-xl border border-sft-red/45 bg-sft-red/8 py-3.5 text-[15px] font-semibold text-[#ff6b63] disabled:opacity-60"
+            >
+              {deleting ? 'Wird gelöscht…' : 'Tour endgültig löschen'}
             </button>
           </Section>
         )}

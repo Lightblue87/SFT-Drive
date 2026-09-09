@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import type { Tour } from '@/types/tour'
+import type { RegistrationResult, Tour } from '@/types/tour'
+import { rpcErrorMessage } from '@/types/tour'
 import { PageLoading } from '@/components/PageLoading'
+import { SwipeToDelete } from '@/components/SwipeToDelete'
 import { formatDateRange } from '@/utils/date'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -27,6 +29,7 @@ export function AdminToursPage() {
   const [tours, setTours] = useState<Tour[]>([])
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -38,6 +41,37 @@ export function AdminToursPage() {
         setLoading(false)
       })
   }, [])
+
+  /**
+   * Wischen-zum-Löschen, analog zu den Mitteilungen (§27.20), aber mit
+   * Bestätigung — anders als eine einzelne Mitteilung ist eine Tour inklusive
+   * aller abhängigen Daten nicht trivial wiederherstellbar. Nur für
+   * `draft`/`cancelled` überhaupt aufrufbar (siehe `admin_delete_tour`).
+   */
+  async function deleteTour(tour: Tour) {
+    if (
+      !window.confirm(
+        `„${tour.title}" inklusive aller zugehörigen Daten endgültig löschen? Das kann nicht rückgängig gemacht werden.`,
+      )
+    ) {
+      return
+    }
+
+    setDeleteError(null)
+    const { data, error: rpcError } = await supabase.rpc('admin_delete_tour', { p_tour_id: tour.id })
+    if (rpcError) {
+      setDeleteError('Löschen fehlgeschlagen. Bitte versuche es erneut.')
+      return
+    }
+
+    const result = data as RegistrationResult
+    if (result.code !== 'OK') {
+      setDeleteError(rpcErrorMessage(result.code))
+      return
+    }
+
+    setTours((prev) => prev.filter((t) => t.id !== tour.id))
+  }
 
   if (loading) return <PageLoading />
 
@@ -78,14 +112,17 @@ export function AdminToursPage() {
         </button>
       )}
 
+      {deleteError && <p className="mt-3.5 text-sm text-sft-red">{deleteError}</p>}
+
       {visibleTours.length === 0 ? (
         <p className="mt-4 text-sm text-sft-gray">Noch keine Touren vorhanden.</p>
       ) : (
         <div className="mt-3.5 flex flex-col gap-2.5">
           {visibleTours.map((tour) => {
             const multiDay = tour.end_date > tour.start_date
-            return (
-              <div key={tour.id} className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+            const deletable = tour.status === 'draft' || tour.status === 'cancelled'
+            const card = (
+              <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
                 <Link
                   to={`/admin/tours/${tour.id}/edit`}
                   className="tap-scale flex items-center gap-3 px-[15px] py-3.5"
@@ -147,6 +184,14 @@ export function AdminToursPage() {
                   </Link>
                 </div>
               </div>
+            )
+
+            return deletable ? (
+              <SwipeToDelete key={tour.id} onDelete={() => deleteTour(tour)}>
+                {card}
+              </SwipeToDelete>
+            ) : (
+              <div key={tour.id}>{card}</div>
             )
           })}
         </div>

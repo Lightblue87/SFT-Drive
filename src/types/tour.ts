@@ -145,6 +145,7 @@ export type RpcResultCode =
   | 'MENU_ITEM_INVALID'
   | 'NOT_MULTIDAY_TOUR'
   | 'INVALID_NIGHT_DATE'
+  | 'TOUR_NOT_DELETABLE'
 
 export interface RegistrationResult {
   code: RpcResultCode
@@ -189,6 +190,7 @@ export const RPC_ERROR_MESSAGES: Record<string, string> = {
   CHECK_IN_CLOSED: 'Der Check-in-Zeitraum ist bereits abgelaufen.',
   NOT_MULTIDAY_TOUR: 'Übernachtungen sind nur bei Mehrtagestouren relevant.',
   INVALID_NIGHT_DATE: 'Diese Nacht liegt nicht im Zeitraum dieser Tour.',
+  TOUR_NOT_DELETABLE: 'Nur Touren im Status Entwurf oder Abgesagt können gelöscht werden.',
 }
 
 export function rpcErrorMessage(code: string): string {
