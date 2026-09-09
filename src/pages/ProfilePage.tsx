@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { usePushSubscription } from '@/features/notifications/usePushSubscription'
 import type { ArchiveEntry } from '@/types/tour'
 import type { Vehicle } from '@/types/vehicle'
+import type { Friendship } from '@/types/friend'
 
 interface Profile {
   username: string
@@ -30,6 +31,7 @@ export function ProfilePage() {
   } = usePushSubscription()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [archive, setArchive] = useState<ArchiveEntry[]>([])
+  const [pendingFriendRequests, setPendingFriendRequests] = useState(0)
   const [defaultVehicle, setDefaultVehicle] = useState<Vehicle | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -52,6 +54,13 @@ export function ProfilePage() {
       .then(({ data }) => setProfile(data))
 
     supabase.rpc('get_my_tour_archive').then(({ data }) => setArchive((data as ArchiveEntry[]) ?? []))
+
+    supabase.rpc('list_my_friendships').then(({ data }) => {
+      const rows = (data as Friendship[]) ?? []
+      setPendingFriendRequests(
+        rows.filter((f) => f.status === 'pending' && f.direction === 'incoming').length,
+      )
+    })
 
     supabase
       .from('vehicles')
@@ -115,7 +124,11 @@ export function ProfilePage() {
   const links = [
     { label: 'Meine Touren', to: '/profile/tours' },
     { label: 'Tourenarchiv', to: '/profile/archive', meta: String(archive.length) },
-    { label: 'Freunde', to: '/profile/friends' },
+    {
+      label: 'Freunde',
+      to: '/profile/friends',
+      badge: pendingFriendRequests > 0 ? pendingFriendRequests : undefined,
+    },
     { label: 'Meine Fahrzeuge', to: '/profile/vehicles' },
     { label: 'Mitteilungen', to: '/notifications' },
     ...(isAdmin ? [{ label: 'Admin-Bereich', to: '/admin', meta: 'TOURLEITER' }] : []),
@@ -162,7 +175,14 @@ export function ProfilePage() {
           >
             <span className="text-sm font-medium">{l.label}</span>
             <span className="flex items-center gap-2.5">
-              {l.meta && <span className="font-mono text-[11px] text-sft-gray-dim">{l.meta}</span>}
+              {'meta' in l && l.meta && (
+                <span className="font-mono text-[11px] text-sft-gray-dim">{l.meta}</span>
+              )}
+              {'badge' in l && l.badge && (
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-md bg-sft-red px-1 font-mono text-[9px] font-bold text-white">
+                  {l.badge > 9 ? '9+' : l.badge}
+                </span>
+              )}
               <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
                 <path d="M1 1l6 6-6 6" stroke="#5e5e66" strokeWidth="1.8" />
               </svg>
