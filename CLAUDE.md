@@ -2418,14 +2418,46 @@ Gegenprüfung eingeführt hätten:
   Seitenrand kollidieren. iOS Safari kennt diese native Tab-Geste in gleicher Form nicht. Fix:
   `overscroll-behavior-y: contain` auf `html` in `src/index.css`.
 
-Offener, bewusst nicht in dieser Runde behobener Punkt: Bottom-Sheets
-(`src/components/BottomSheet.tsx`, u. a. Anmeldeformular, Admin-Teilnehmer-hinzufügen) legen
-beim Öffnen keinen eigenen History-Eintrag an. Auf Android schließt der Zurück-Button/die
-Zurück-Geste ein offenes Sheet deshalb nicht, sondern verlässt die zugrunde liegende Seite bzw.
-bei fehlender History die App — auf iOS ohne Hardware-/Geste-Zurück-Erwartung kein Thema. Eine
-saubere Lösung braucht History-State-Integration über alle Sheet-Nutzungen hinweg und ist damit
-eine eigene, in sich abgeschlossene Änderung (§23/§31), keine kleine Bugfix-Ergänzung — für eine
-spätere Entscheidung dokumentiert statt ungefragt breit umgesetzt.
+**Bottom-Sheets und Android-Zurück-Geste (behoben):** Ursprünglich legten Bottom-Sheets
+(`src/components/BottomSheet.tsx`, u. a. Anmeldeformular, Admin-Teilnehmer-hinzufügen) beim
+Öffnen keinen eigenen History-Eintrag an. Auf Android schloss der Zurück-Button/die
+Zurück-Geste ein offenes Sheet deshalb nicht, sondern verließ die zugrunde liegende Seite bzw.
+bei fehlender History die App — auf iOS ohne Hardware-/Geste-Zurück-Erwartung kein Thema. Fix:
+`BottomSheet` pusht beim Mount einen eigenen `history.pushState`-Eintrag und schließt sich über
+`onClose()` bei einem `popstate`-Event (Zurück-Taste/-Geste). Wird das Sheet stattdessen über
+Button/Backdrop geschlossen, entfernt das Cleanup den zuvor gepushten Eintrag wieder
+(`history.back()`), damit der nächste Zurück-Tap nicht ins Leere geht, statt zur eigentlich
+erwarteten vorherigen Seite zu führen. Da alle Sheets diese eine gemeinsame Komponente nutzen,
+war keine Änderung an den einzelnen Sheet-Inhalten nötig.
+
+Zusätzlich als PR-Review-Feedback vom Repository-Inhaber eingegangen (Android-/PWA-
+Kompatibilitätsreview) und geprüft:
+
+- **Landscape-Display-Cutout links/rechts:** `viewport-fit=cover` deckte bisher nur oben/unten
+  über `env(safe-area-inset-top/bottom)` ab. Header und Bottom-Navigation berücksichtigen jetzt
+  zusätzlich `env(safe-area-inset-left/right)`, damit sie auf Android-Geräten mit
+  Kamera-Cutout im Querformat nicht seitlich dahinter verschwinden.
+- **Virtuelle Tastatur über fixed UI:** `interactive-widget=resizes-content` im
+  Viewport-Meta-Tag ergänzt, damit aktuelles Chrome für Android den Layout-Viewport bei
+  geöffneter Tastatur tatsächlich verkleinert, statt fixed positionierte Bottom-Sheets/
+  Bottom-Nav darunter zu verdecken. Für Browser ohne Unterstützung (u. a. iOS Safari) ohne
+  Wirkung.
+
+Bewusst **nicht** in dieser Runde umgesetzt, weil dafür entweder echtes Android-Gerät oder neues
+Design-Artwork nötig ist, das nicht ungefragt erzeugt werden soll:
+
+- **Eigenes maskable Icon mit Sicherheitsabstand:** siehe oben — der fehlerhafte
+  `maskable`-Eintrag wurde entfernt, ein neues, mit ausreichendem Sicherheitsabstand
+  gestaltetes 512×512-Artwork für `purpose: maskable` steht noch aus.
+- **Eigenes Notification-Badge-Asset:** der Service Worker verwendet für Web-Push aktuell
+  `icon-192.png` sowohl als `icon` als auch als `badge`. Android erwartet für `badge`
+  bevorzugt ein einfaches monochromes/transparentes Statusleisten-Symbol; ein komplexes
+  Icon kann dort je nach Hersteller schlecht aussehen. Braucht ein eigenes kleines
+  Asset, keine Code-Änderung.
+- **Verifikation auf echten Android-Geräten** (Gesture- vs. 3-Button-Navigation, virtuelle
+  Tastatur, Push-Zustellung/-Tap, Add-to-Home-Screen-Icon-Darstellung je Launcher, Portrait/
+  Landscape): in dieser Session mangels physischem Gerät nicht möglich, siehe oben
+  "Ohne eigenes Android-Testgerät".
 
 ---
 

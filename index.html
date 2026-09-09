@@ -2,7 +2,12 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: aktuelles Chrome für Android kann sonst die
+         virtuelle Tastatur über fixed positionierten UI-Elementen (Bottom-Sheets,
+         Bottom-Nav) öffnen, ohne den Layout-Viewport anzupassen — der Content-Bereich
+         soll sich stattdessen tatsächlich verkleinern. Für Browser ohne Unterstützung
+         (u. a. iOS Safari) ohne Wirkung, dort ohne bekannte Regression. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0a0a0a" />
     <meta name="description" content="SFT Drive by Sportfahrer Treff — gemeinsame Sportwagen-Ausfahrten organisieren und anmelden." />
 

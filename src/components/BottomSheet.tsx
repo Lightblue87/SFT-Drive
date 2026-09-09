@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 
 interface Props {
@@ -7,8 +8,35 @@ interface Props {
   children: ReactNode
 }
 
-/** Wiederverwendbares Bottom-Sheet für mobile Formulare (PWA-Muster, siehe CLAUDE.md §22). */
+/**
+ * Wiederverwendbares Bottom-Sheet für mobile Formulare (PWA-Muster, siehe CLAUDE.md §22).
+ *
+ * Legt beim Öffnen einen eigenen History-Eintrag an: ohne das schließt Androids
+ * System-Zurück/Zurück-Geste das Sheet nicht, sondern verlässt direkt die
+ * zugrunde liegende Seite bzw. die installierte PWA (siehe CLAUDE.md §16
+ * "Android-Chrome-Eigenheiten", vormals als offener Punkt dokumentiert).
+ */
 export function BottomSheet({ title, subtitle, onClose, children }: Props) {
+  useEffect(() => {
+    window.history.pushState({ sftSheet: true }, '')
+
+    function onPopState() {
+      onClose()
+    }
+    window.addEventListener('popstate', onPopState)
+
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      // Wurde das Sheet über Button/Backdrop statt über Zurück geschlossen, den
+      // zuvor gepushten Eintrag wieder entfernen — sonst führt der nächste
+      // Zurück-Tap ins Leere statt zur eigentlich erwarteten vorherigen Seite.
+      if ((window.history.state as { sftSheet?: boolean } | null)?.sftSheet) {
+        window.history.back()
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="fixed inset-0 z-30">
       <div onClick={onClose} className="absolute inset-0 animate-fade-in bg-black/65 backdrop-blur-[2px]" />

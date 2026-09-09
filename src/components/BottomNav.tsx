@@ -68,7 +68,13 @@ export function BottomNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-10 flex border-t border-white/8 bg-sft-black/95 backdrop-blur-md"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        // Landscape-Kameraausschnitt auf Android (§16 "Android-Chrome-Eigenheiten"):
+        // ohne das würden die äußeren Nav-Punkte im Querformat in den Cutout laufen.
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)',
+      }}
     >
       <NavLink to="/tours" className={itemClass}>
         <ToursIcon />

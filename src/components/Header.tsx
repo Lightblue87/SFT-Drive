@@ -7,8 +7,16 @@ export function Header() {
 
   return (
     <header
-      className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-sft-black/95 px-4 backdrop-blur-md"
-      style={{ height: 'calc(4rem + env(safe-area-inset-top))', paddingTop: 'env(safe-area-inset-top)' }}
+      className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-sft-black/95 backdrop-blur-md"
+      style={{
+        height: 'calc(4rem + env(safe-area-inset-top))',
+        paddingTop: 'env(safe-area-inset-top)',
+        // max(1rem, safe-area-inset) statt reinem Tailwind px-4: auf Android-Geräten
+        // mit Kameraausschnitt im Querformat (§16 "Android-Chrome-Eigenheiten")
+        // sonst Gefahr, dass der Header links/rechts in den Cutout läuft.
+        paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right))',
+      }}
     >
       <Link to="/" className="flex items-center gap-2.5">
         <img src="/icons/icon-192.png" alt="" className="h-7 w-7 rounded-lg" />
