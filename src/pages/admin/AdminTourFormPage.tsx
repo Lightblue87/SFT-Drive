@@ -813,7 +813,7 @@ export function AdminTourFormPage() {
           <p className="text-[11px] leading-relaxed text-[#8e8e96]">{STATUS_HINT[form.status]}</p>
         </Section>
 
-        {id && form.status !== 'cancelled' && (
+        {id && (form.status === 'published' || form.status === 'registration_closed') && (
           <Section title="Tour absagen">
             <p className="text-[11px] leading-relaxed text-[#8e8e96]">
               Die Ausfahrt entfällt. Alle angemeldeten Teilnehmer (bestätigt, Freigabe offen und

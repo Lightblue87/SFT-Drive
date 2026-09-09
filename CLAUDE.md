@@ -4291,6 +4291,30 @@ diesen Stellen:
 Bereits produktiv angewendete Migrationen niemals nachträglich umschreiben —
 Änderungen immer als neue Migration ergänzen.
 
+Weitere Korrekturen aus einem automatisierten PR-Review (`20260909040000_second_review_fixes.sql`),
+lokal gegen eine echte `authenticated`-Rolle bestätigt:
+
+- `register_for_tour()`: Die in `20260907081100_rejected_requires_manual_reapproval.sql`
+  eingeführte Ausnahme für zuvor abgelehnte Registrierungen (immer `pending`, nie
+  automatisch `confirmed`/`waitlisted`) war beim Umschreiben in
+  `20260909020000_review_fixes.sql` versehentlich verloren gegangen — ein vom Admin
+  abgelehnter User konnte sich in einer automatisch bestätigenden Tour mit freier
+  Kapazität direkt wieder selbst bestätigen. Wiederhergestellt.
+- `admin_add_registration()`: Die Admin-Ausnahme (§8.3) übergeht ausdrücklich nur
+  Anmeldefenster sowie Leistungs-/Altersanforderungen — die Kennzeichenpflicht gehörte
+  nie dazu, wurde bei einem administrativen Nachtrag aber nicht geprüft. Ein vom Admin
+  ausgewähltes Garage-Fahrzeug ohne Kennzeichen konnte dadurch eine bestätigte
+  Registrierung erzeugen, obwohl die Tour ein Kennzeichen verlangt. Fix: dieselbe
+  `LICENSE_PLATE_REQUIRED`-Prüfung wie in `register_for_tour()`.
+- `admin_cancel_tour()`: prüfte bisher nur, ob die Tour bereits `cancelled` war. Dadurch
+  ließ sich auch eine `completed`/`archived` Tour nachträglich absagen (verfälscht die
+  Historie, benachrichtigt ehemalige Teilnehmer erneut) oder eine `draft`-Tour direkt in
+  den öffentlich sichtbaren `cancelled`-Zustand versetzen, ohne je veröffentlicht gewesen
+  zu sein. Auf `published`/`registration_closed` beschränkt — die einzigen Zustände, in
+  denen eine Absage fachlich sinnvoll ist. Der „Tour absagen"-Bereich im Admin-Tourformular
+  (`AdminTourFormPage`) wird passend dazu nur noch für diese beiden Status angezeigt statt
+  für jeden Status außer `cancelled`.
+
 `restaurant_stop_settings` besitzt neben `push_sent_at` zusätzlich
 `reminder_sent_at TIMESTAMPTZ NULL`, um `RESTAURANT_ORDER_OPEN` und
 `RESTAURANT_ORDER_REMINDER` unabhängig voneinander vor Doppelversand zu
