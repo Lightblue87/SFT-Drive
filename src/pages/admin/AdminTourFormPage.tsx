@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { PageLoading } from '@/components/PageLoading'
@@ -31,6 +31,8 @@ interface FormState {
   check_in_close_minutes_after: string
   status: TourStatus
   cover_image_url: string
+  youtube_url: string
+  youtube_embed: boolean
   member_description: string
   participant_description: string
   meeting_point_private: string
@@ -64,6 +66,8 @@ const EMPTY: FormState = {
   check_in_close_minutes_after: '15',
   status: 'draft',
   cover_image_url: '',
+  youtube_url: '',
+  youtube_embed: true,
   member_description: '',
   participant_description: '',
   meeting_point_private: '',
@@ -133,6 +137,11 @@ function buildSlug(title: string, startDate: string): string {
  */
 export function AdminTourFormPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  // `?duplicate=<id>` befüllt das Neu-Anlegen-Formular aus einer bestehenden
+  // Tour vor (siehe CLAUDE.md "Entwicklungsphase 20") — erlaubt nur, wenn
+  // wirklich eine neue Tour angelegt wird, nicht beim Bearbeiten.
+  const duplicateId = !id ? searchParams.get('duplicate') : null
   const navigate = useNavigate()
   const { user } = useAuth()
 
@@ -142,7 +151,7 @@ export function AdminTourFormPage() {
   // einer bereits veröffentlichten Tour den Veröffentlichungszeitpunkt auf
   // "jetzt" zurücksetzen (§8.3).
   const [originalPublishedAt, setOriginalPublishedAt] = useState<string | null>(null)
-  const [loading, setLoading] = useState(!!id)
+  const [loading, setLoading] = useState(!!id || !!duplicateId)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
@@ -160,14 +169,18 @@ export function AdminTourFormPage() {
   // wird deshalb bei jeder Änderung lokal gesichert und nach einem Neustart
   // wiederhergestellt (nimmt Vorrang vor dem aus der DB geladenen Stand, da er
   // den zuletzt eingegebenen, noch nicht gespeicherten Stand darstellt).
-  const draftKey = `sft-drive-tour-draft-${id ?? 'new'}`
+  const draftKey = `sft-drive-tour-draft-${id ?? (duplicateId ? `duplicate-${duplicateId}` : 'new')}`
 
   useEffect(() => {
     if (loading) return
     try {
       const saved = localStorage.getItem(draftKey)
       if (saved) {
-        setForm(JSON.parse(saved))
+        // Über EMPTY mergen statt vollständig zu ersetzen: ein vor diesem
+        // Deployment lokal gespeicherter Entwurf kennt neu hinzugekommene
+        // Felder (z. B. youtube_url/youtube_embed) noch nicht und würde sie
+        // beim Absenden sonst als `undefined` an z. B. `.trim()` übergeben.
+        setForm((f) => ({ ...EMPTY, ...f, ...JSON.parse(saved) }))
       }
     } catch {
       // localStorage nicht verfügbar (z. B. privater Modus) oder Entwurf beschädigt — ignorieren.
@@ -227,6 +240,8 @@ export function AdminTourFormPage() {
         check_in_close_minutes_after: tour.check_in_close_minutes_after.toString(),
         status: tour.status,
         cover_image_url: tour.cover_image_url ?? '',
+        youtube_url: tour.youtube_url ?? '',
+        youtube_embed: tour.youtube_embed,
         member_description: member?.member_description ?? '',
         participant_description: participant?.participant_description ?? '',
         meeting_point_private: participant?.meeting_point_private ?? '',
@@ -239,6 +254,62 @@ export function AdminTourFormPage() {
 
     load()
   }, [id])
+
+  // Tour duplizieren (§21.3-Erweiterung, "Entwicklungsphase 20"): übernimmt die
+  // Inhalte einer bestehenden Tour in das Formular für eine neue Tour, damit
+  // der Admin sie danach nur noch anpassen muss. Bewusst NICHT übernommen:
+  // Status (immer wieder `draft`), Zeitraum, Treffpunktzeit, Anmeldefenster,
+  // Personenzahl-Deadline und Slug — das sind Entscheidungen für die neue Tour,
+  // keine Kopie der alten. Registrierungen, Stopps, Etappen und
+  // Hotelvorschläge werden ebenfalls nicht kopiert.
+  useEffect(() => {
+    if (id || !duplicateId) return
+
+    async function loadDuplicate() {
+      const [{ data: tour }, { data: member }, { data: participant }] = await Promise.all([
+        supabase.from('tours').select('*').eq('id', duplicateId).single(),
+        supabase.from('tour_member_details').select('*').eq('tour_id', duplicateId).maybeSingle(),
+        supabase.from('tour_participant_details').select('*').eq('tour_id', duplicateId).maybeSingle(),
+      ])
+
+      if (!tour) {
+        setError('Tour konnte nicht geladen werden.')
+        setLoading(false)
+        return
+      }
+
+      setForm({
+        ...EMPTY,
+        title: `${tour.title} (Kopie)`,
+        short_description: tour.short_description ?? '',
+        public_description: tour.public_description ?? '',
+        region: tour.region,
+        route_length_km: tour.route_length_km?.toString() ?? '',
+        meeting_point_public: tour.meeting_point_public ?? '',
+        max_vehicles: tour.max_vehicles.toString(),
+        confirmation_mode: tour.confirmation_mode,
+        license_plate_required: tour.license_plate_required,
+        min_power_ps: tour.min_power_ps?.toString() ?? '',
+        max_power_ps: tour.max_power_ps?.toString() ?? '',
+        min_driver_age: tour.min_driver_age?.toString() ?? '',
+        check_in_enabled: tour.check_in_enabled,
+        check_in_open_minutes_before: tour.check_in_open_minutes_before.toString(),
+        check_in_close_minutes_after: tour.check_in_close_minutes_after.toString(),
+        cover_image_url: tour.cover_image_url ?? '',
+        youtube_url: tour.youtube_url ?? '',
+        youtube_embed: tour.youtube_embed,
+        member_description: member?.member_description ?? '',
+        participant_description: participant?.participant_description ?? '',
+        meeting_point_private: participant?.meeting_point_private ?? '',
+        kurviger_url: participant?.kurviger_url ?? '',
+        zello_url: participant?.zello_url ?? '',
+        whatsapp_group_url: participant?.whatsapp_group_url ?? '',
+      })
+      setLoading(false)
+    }
+
+    loadDuplicate()
+  }, [id, duplicateId])
 
   // Der Slug ist rein intern (URL-Baustein) und wird automatisch aus Titel und
   // Startdatum abgeleitet — kein sichtbares/editierbares Feld. Bei bestehenden
@@ -411,6 +482,8 @@ export function AdminTourFormPage() {
       check_in_close_minutes_after: Number(form.check_in_close_minutes_after) || 0,
       status: form.status,
       cover_image_url: form.cover_image_url || null,
+      youtube_url: form.youtube_url.trim() || null,
+      youtube_embed: form.youtube_embed,
       published_at:
         form.status === 'published' ? (originalPublishedAt ?? new Date().toISOString()) : null,
     }
@@ -585,6 +658,22 @@ export function AdminTourFormPage() {
               </details>
             </div>
           </Field>
+          <Field label="YouTube-Video-URL">
+            <input
+              value={form.youtube_url}
+              onChange={(e) => set('youtube_url', e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…"
+              className={`${inputClass} font-mono font-medium`}
+            />
+          </Field>
+          {form.youtube_url && (
+            <Toggle
+              label="Video eingebettet anzeigen"
+              hint="Sonst nur als Link zu YouTube. Wird auf der Tourseite erst nach Klick geladen."
+              checked={form.youtube_embed}
+              onChange={(v) => set('youtube_embed', v)}
+            />
+          )}
         </Section>
 
         <Section title="Zeitraum & Treffpunkt">
