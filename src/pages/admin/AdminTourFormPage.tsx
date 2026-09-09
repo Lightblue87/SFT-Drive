@@ -151,12 +151,22 @@ export function AdminTourFormPage() {
   // einer bereits veröffentlichten Tour den Veröffentlichungszeitpunkt auf
   // "jetzt" zurücksetzen (§8.3).
   const [originalPublishedAt, setOriginalPublishedAt] = useState<string | null>(null)
+  // Für die Sichtbarkeit von "Tour löschen" (§37.3) bewusst getrennt von
+  // `form.status`: sonst würde ein im Formular noch ungespeichert auf
+  // draft/cancelled umgestellter Status den Löschbereich zeigen, obwohl die
+  // Tour in der Datenbank noch published ist (die RPC würde das zwar korrekt
+  // mit TOUR_NOT_DELETABLE ablehnen, aber der Button sollte dann gar nicht
+  // erst erscheinen) — und umgekehrt könnte er verschwinden, obwohl der
+  // gespeicherte Status weiterhin löschbar wäre.
+  const [originalStatus, setOriginalStatus] = useState<TourStatus | null>(null)
   const [loading, setLoading] = useState(!!id || !!duplicateId)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showGallery, setShowGallery] = useState(false)
@@ -215,6 +225,7 @@ export function AdminTourFormPage() {
 
       setOriginalMaxVehicles(tour.max_vehicles)
       setOriginalPublishedAt(tour.published_at ?? null)
+      setOriginalStatus(tour.status)
       setForm({
         slug: tour.slug,
         title: tour.title,
@@ -421,6 +432,46 @@ export function AdminTourFormPage() {
     })
 
     setForm((prev) => ({ ...prev, status: 'cancelled' }))
+    navigate('/admin/tours')
+  }
+
+  /**
+   * Vollständiges Löschen einer Tour (nur Entwurf/Abgesagt, siehe CLAUDE.md
+   * "Entwicklungsphase 20" / `admin_delete_tour`). Anders als eine Absage ist
+   * das nicht umkehrbar — deshalb eine eigene, deutliche Bestätigung.
+   */
+  async function handleDeleteTour() {
+    if (!id) return
+    if (
+      !window.confirm(
+        'Diese Tour inklusive aller zugehörigen Daten (Anmeldungen, Stopps, Tagesrouten, Hotelvorschläge) endgültig löschen? Das kann nicht rückgängig gemacht werden.',
+      )
+    ) {
+      return
+    }
+
+    setDeleteError(null)
+    setDeleting(true)
+    const { data, error: rpcError } = await supabase.rpc('admin_delete_tour', { p_tour_id: id })
+    setDeleting(false)
+
+    if (rpcError) {
+      setDeleteError('Löschen fehlgeschlagen. Bitte versuche es erneut.')
+      return
+    }
+
+    const result = data as RegistrationResult
+    if (result.code !== 'OK') {
+      setDeleteError(rpcErrorMessage(result.code))
+      return
+    }
+
+    try {
+      localStorage.removeItem(draftKey)
+    } catch {
+      // ignorieren
+    }
+
     navigate('/admin/tours')
   }
 
@@ -926,6 +977,26 @@ export function AdminTourFormPage() {
               className="tap-scale rounded-xl border border-sft-red/45 bg-sft-red/8 py-3.5 text-[15px] font-semibold text-[#ff6b63] disabled:opacity-60"
             >
               {cancelling ? 'Wird abgesagt…' : 'Tour absagen'}
+            </button>
+          </Section>
+        )}
+
+        {id && (originalStatus === 'draft' || originalStatus === 'cancelled') && (
+          <Section title="Tour löschen">
+            <p className="text-[11px] leading-relaxed text-[#8e8e96]">
+              Löscht die Tour und ihre organisatorischen Tourdaten (Anmeldungen, Stopps,
+              Tagesrouten, Hotelvorschläge) endgültig. Bereits versendete Mitteilungen und Bilder
+              in der Mediengalerie bleiben erhalten. Nur möglich im Status Entwurf oder Abgesagt.
+              Das kann nicht rückgängig gemacht werden.
+            </p>
+            {deleteError && <p className="text-sm text-sft-red">{deleteError}</p>}
+            <button
+              type="button"
+              onClick={handleDeleteTour}
+              disabled={deleting}
+              className="tap-scale rounded-xl border border-sft-red/45 bg-sft-red/8 py-3.5 text-[15px] font-semibold text-[#ff6b63] disabled:opacity-60"
+            >
+              {deleting ? 'Wird gelöscht…' : 'Tour endgültig löschen'}
             </button>
           </Section>
         )}

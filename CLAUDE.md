@@ -5744,3 +5744,75 @@ Umsetzung:
 
 Kosten: Keine — YouTube-Einbettung ist kostenlos, `youtube-nocookie.com` ist
 YouTubes eigener datensparsamerer Embed-Host und erfordert keinen API-Key.
+
+### 37.3 Tour löschen (Entwurf/Abgesagt)
+
+Ziel ist, dass ein Admin eine Tour, die nie über den Entwurfsstatus
+hinauskam oder inzwischen abgesagt wurde, aus der Tourenverwaltung entfernen
+kann, statt sie dauerhaft liegen zu lassen. Gelöscht werden die Tour und
+ihre organisatorischen Tourdaten (Anmeldungen, Stopps/Speisekarte/
+Bestellungen, Tagesetappen, Hotelvorschläge/-bestätigungen, Vormerkungen) —
+bewusst **nicht**: bereits versendete Mitteilungen (bleiben erhalten, siehe
+unten) und hochgeladene Coverbilder im gemeinsamen `tour-covers`-Storage
+(unabhängig von der Tour, ggf. von anderen/duplizierten Touren
+weiterverwendet).
+
+Bewusst nur in genau diesen beiden Status möglich:
+
+```text
+draft
+cancelled
+```
+
+`published`, `registration_closed`, `completed` und `archived` bleiben
+ausdrücklich nicht löschbar — dort gilt weiterhin §23.14 ("bereits
+gespeicherte historische Daten dürfen nicht unbeabsichtigt überschrieben
+oder gelöscht werden"). Eine abgesagte Tour zu löschen ist eine bewusste,
+zusätzliche Aufräummöglichkeit für den Admin (ausdrücklicher Wunsch des
+Projektinhabers) — im Normalfall archiviert `apply_tour_lifecycle()` (§8.3)
+eine abgesagte Tour ohnehin automatisch nach ihrem Starttag.
+
+Umsetzung (Migration `20260909060000_admin_delete_tour.sql`):
+
+- `admin_delete_tour(p_tour_id)`: prüft `is_admin()` und den Status, löscht
+  dann explizit in Abhängigkeitsreihenfolge — `tour_member_details`,
+  `tour_participant_details`, `tour_stages`, `tour_registrations`,
+  `tour_hotel_suggestions`, `tour_accommodation_confirmations`,
+  `tour_interests` sowie unter den Tour-Stopps `meal_order_items`,
+  `meal_orders`, `menu_items`, `restaurant_stop_settings`, `tour_stops` —
+  bevor die `tours`-Zeile selbst gelöscht wird. Notifications mit Bezug auf
+  die Tour bleiben erhalten und verlieren nur ihren Tourbezug (bereits
+  bestehende `on delete set null`-Regel auf `notifications.tour_id`) — ihr
+  `target_path` (typischerweise `/tours/<slug>`) wird dabei zusätzlich
+  geleert, damit eine alte Mitteilung nach dem Löschen nicht auf eine nicht
+  mehr existierende Tour verlinkt.
+- Die explizite Reihenfolge ist nötig, weil `meal_order_items.menu_item_id`
+  seit 20260909020000 bewusst `ON DELETE RESTRICT` verwendet (§27.21) — ein
+  einfaches `DELETE FROM tours` und reines Verlassen auf FK-Kaskaden könnte
+  daran scheitern, solange noch Bestellpositionen auf ein Menügericht dieser
+  Tour verweisen. Lokal gegen eine echte `authenticated`-Rolle mit einer
+  Tour samt vollständig befüllten Abhängigkeiten (Registrierung,
+  Restaurant-Stopp mit Menü/Bestellung/Bestellposition, Etappe,
+  Hotelvorschlag, Übernachtungsbestätigung, Mitteilung) getestet: löscht
+  restlos, ohne FK-Fehler; eine `published`-Tour und eine nicht existierende
+  Tour-ID werden korrekt mit `TOUR_NOT_DELETABLE` bzw. `TOUR_NOT_FOUND`
+  abgelehnt, ein nicht-Admin mit `FORBIDDEN`.
+- Admin-Tourformular (`AdminTourFormPage`, nur im Bearbeiten-Fall): eigener
+  Abschnitt „Tour löschen" mit Bestätigungsdialog (`window.confirm`, analog
+  zu „Tour absagen"). Die Sichtbarkeit richtet sich bewusst nach dem beim
+  Laden gespeicherten `originalStatus` und nicht nach dem gerade im
+  Formular bearbeiteten, noch ungespeicherten `form.status` — sonst könnte
+  der Abschnitt kurzzeitig erscheinen, während eine tatsächlich noch
+  `published`e Tour im Formular erst auf Entwurf umgestellt, aber noch
+  nicht gespeichert wurde (oder umgekehrt verschwinden, obwohl der
+  gespeicherte Status weiterhin löschbar ist).
+- Tourenverwaltung (`/admin/tours`): Wischen-zum-Löschen (bestehende
+  `SwipeToDelete`-Komponente, gleiches Muster wie bei Mitteilungen, §27.20),
+  ebenfalls mit Bestätigungsdialog — anders als eine einzelne Mitteilung ist
+  eine Tour inklusive ihrer organisatorischen Daten nicht trivial
+  wiederherstellbar. Nur Tourzeilen mit Status Entwurf oder Abgesagt sind
+  wischbar; alle anderen bleiben unverändert nur per Tap erreichbar. Ein
+  `deletingId`-State deaktiviert die betroffene Tourkarte während die RPC
+  läuft (verhindert Doppelauslösung) und entfernt nach Erfolg zusätzlich
+  einen eventuell noch vorhandenen lokalen `localStorage`-Formularentwurf
+  dieser Tour.
