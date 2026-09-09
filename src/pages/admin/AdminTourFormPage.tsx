@@ -151,6 +151,14 @@ export function AdminTourFormPage() {
   // einer bereits veröffentlichten Tour den Veröffentlichungszeitpunkt auf
   // "jetzt" zurücksetzen (§8.3).
   const [originalPublishedAt, setOriginalPublishedAt] = useState<string | null>(null)
+  // Für die Sichtbarkeit von "Tour löschen" (§37.3) bewusst getrennt von
+  // `form.status`: sonst würde ein im Formular noch ungespeichert auf
+  // draft/cancelled umgestellter Status den Löschbereich zeigen, obwohl die
+  // Tour in der Datenbank noch published ist (die RPC würde das zwar korrekt
+  // mit TOUR_NOT_DELETABLE ablehnen, aber der Button sollte dann gar nicht
+  // erst erscheinen) — und umgekehrt könnte er verschwinden, obwohl der
+  // gespeicherte Status weiterhin löschbar wäre.
+  const [originalStatus, setOriginalStatus] = useState<TourStatus | null>(null)
   const [loading, setLoading] = useState(!!id || !!duplicateId)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -217,6 +225,7 @@ export function AdminTourFormPage() {
 
       setOriginalMaxVehicles(tour.max_vehicles)
       setOriginalPublishedAt(tour.published_at ?? null)
+      setOriginalStatus(tour.status)
       setForm({
         slug: tour.slug,
         title: tour.title,
@@ -972,12 +981,13 @@ export function AdminTourFormPage() {
           </Section>
         )}
 
-        {id && (form.status === 'draft' || form.status === 'cancelled') && (
+        {id && (originalStatus === 'draft' || originalStatus === 'cancelled') && (
           <Section title="Tour löschen">
             <p className="text-[11px] leading-relaxed text-[#8e8e96]">
-              Löscht diese Tour endgültig, inklusive aller Anmeldungen, Stopps, Tagesrouten und
-              Hotelvorschläge. Nur möglich im Status Entwurf oder Abgesagt. Das kann nicht
-              rückgängig gemacht werden.
+              Löscht die Tour und ihre organisatorischen Tourdaten (Anmeldungen, Stopps,
+              Tagesrouten, Hotelvorschläge) endgültig. Bereits versendete Mitteilungen und Bilder
+              in der Mediengalerie bleiben erhalten. Nur möglich im Status Entwurf oder Abgesagt.
+              Das kann nicht rückgängig gemacht werden.
             </p>
             {deleteError && <p className="text-sm text-sft-red">{deleteError}</p>}
             <button

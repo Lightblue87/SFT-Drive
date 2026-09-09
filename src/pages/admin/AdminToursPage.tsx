@@ -30,6 +30,7 @@ export function AdminToursPage() {
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -49,16 +50,20 @@ export function AdminToursPage() {
    * `draft`/`cancelled` überhaupt aufrufbar (siehe `admin_delete_tour`).
    */
   async function deleteTour(tour: Tour) {
+    if (deletingId) return // Löschung läuft bereits (z. B. erneutes Wischen während der Anfrage)
     if (
       !window.confirm(
-        `„${tour.title}" inklusive aller zugehörigen Daten endgültig löschen? Das kann nicht rückgängig gemacht werden.`,
+        `„${tour.title}" und ihre organisatorischen Tourdaten endgültig löschen? Bereits versendete Mitteilungen und Bilder in der Mediengalerie bleiben erhalten. Das kann nicht rückgängig gemacht werden.`,
       )
     ) {
       return
     }
 
     setDeleteError(null)
+    setDeletingId(tour.id)
     const { data, error: rpcError } = await supabase.rpc('admin_delete_tour', { p_tour_id: tour.id })
+    setDeletingId(null)
+
     if (rpcError) {
       setDeleteError('Löschen fehlgeschlagen. Bitte versuche es erneut.')
       return
@@ -68,6 +73,12 @@ export function AdminToursPage() {
     if (result.code !== 'OK') {
       setDeleteError(rpcErrorMessage(result.code))
       return
+    }
+
+    try {
+      localStorage.removeItem(`sft-drive-tour-draft-${tour.id}`)
+    } catch {
+      // ignorieren
     }
 
     setTours((prev) => prev.filter((t) => t.id !== tour.id))
@@ -121,8 +132,13 @@ export function AdminToursPage() {
           {visibleTours.map((tour) => {
             const multiDay = tour.end_date > tour.start_date
             const deletable = tour.status === 'draft' || tour.status === 'cancelled'
+            const isDeleting = deletingId === tour.id
             const card = (
-              <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+              <div
+                className={`overflow-hidden rounded-2xl border border-white/9 bg-sft-card ${
+                  isDeleting ? 'pointer-events-none opacity-50' : ''
+                }`}
+              >
                 <Link
                   to={`/admin/tours/${tour.id}/edit`}
                   className="tap-scale flex items-center gap-3 px-[15px] py-3.5"

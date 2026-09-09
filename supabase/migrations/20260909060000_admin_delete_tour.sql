@@ -63,7 +63,12 @@ begin
 
   -- Mitteilungen (z. B. eine frühere Absagebenachrichtigung) bleiben erhalten
   -- und verlieren nur den Tourbezug — bereits durch die bestehende
-  -- `on delete set null`-Regel auf `notifications.tour_id` abgedeckt.
+  -- `on delete set null`-Regel auf `notifications.tour_id` abgedeckt. Der
+  -- gespeicherte `target_path` verweist aber weiterhin auf die Tour-URL
+  -- (z. B. `/tours/<slug>`) und würde nach dem Löschen ins Leere führen —
+  -- deshalb wird er hier zusätzlich geleert, bevor die Tour verschwindet.
+  update public.notifications set target_path = null where tour_id = p_tour_id;
+
   delete from public.tours where id = p_tour_id;
 
   return ('OK', null, null)::public.registration_result;
