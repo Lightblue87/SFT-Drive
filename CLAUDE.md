@@ -2443,7 +2443,26 @@ Kompatibilitätsreview) und geprüft:
   Bottom-Nav darunter zu verdecken. Für Browser ohne Unterstützung (u. a. iOS Safari) ohne
   Wirkung.
 
-Bewusst **nicht** in dieser Runde umgesetzt, weil dafür entweder echtes Android-Gerät oder neues
+Zweite Review-Runde desselben PR-Kompatibilitätsreviews (Stand `dc457d9`), ebenfalls
+umgesetzt:
+
+- **Pull-to-Refresh in kurzen Bottom-Sheets:** `PullToRefresh` erkannte einen Sheet-Inhalt
+  bisher nur dann als eigenen Scroll-Container, wenn `scrollHeight > clientHeight` galt —
+  ein kurzes, noch nicht selbst scrollbares Sheet zählte also nicht, und ein Herunterwischen
+  darin bei `window.scrollY === 0` konnte den globalen Reload auslösen und eine
+  unabgeschickte Eingabe verwerfen. Fix: `BottomSheet`s Scroll-Container trägt jetzt
+  `data-pull-to-refresh-ignore`, und `startedInsideScrollContainer()` in `PullToRefresh.tsx`
+  erkennt dieses Attribut unabhängig von der tatsächlichen Scrollbarkeit.
+- **Fehlende Safe-Area am unteren Sheet-Rand:** Der Content-Bereich von `BottomSheet` endete
+  bisher mit festem `pb-6`. Auf Android Edge-to-Edge/Gesture-Navigation konnte der letzte
+  Button dadurch zu nah an der System-Gestenfläche liegen. Fix: Bottom-Padding auf
+  `calc(1.5rem + env(safe-area-inset-bottom))` erweitert, analog zu `BottomNav`.
+- **History-State beim Sheet-Öffnen überschrieben:** `BottomSheet` pushte bisher
+  `{ sftSheet: true }` ohne den zuvor vorhandenen `history.state` (u. a. von React Router)
+  zu erhalten. Fix: der vorhandene State wird jetzt in den gepushten State übernommen
+  (`{ ...previousState, sftSheet: true }`).
+
+Bewusst **nicht** umgesetzt, weil dafür entweder echtes Android-Gerät oder neues
 Design-Artwork nötig ist, das nicht ungefragt erzeugt werden soll:
 
 - **Eigenes maskable Icon mit Sicherheitsabstand:** siehe oben — der fehlerhafte

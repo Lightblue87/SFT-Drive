@@ -8,10 +8,16 @@ const MAX_PULL = 110
  * (z. B. BottomSheet mit overflow-y-auto) — dort soll die Abwärtsgeste dem
  * Container selbst gehören, nicht dem globalen Pull-to-Refresh, sonst kann
  * eine Wischgeste im gescrollten Sheet versehentlich einen Reload auslösen.
+ *
+ * Ein Container mit `data-pull-to-refresh-ignore` (z. B. BottomSheet) zählt
+ * immer, unabhängig von `scrollHeight > clientHeight` — ein kurzes Sheet ist
+ * zwar noch nicht selbst scrollbar, ein Herunterwischen darin soll trotzdem
+ * nie den globalen Reload auslösen (§16 "Android-Chrome-Eigenheiten").
  */
 function startedInsideScrollContainer(target: EventTarget | null): boolean {
   let el = target instanceof Element ? target : null
   while (el && el !== document.body) {
+    if (el.hasAttribute('data-pull-to-refresh-ignore')) return true
     const style = window.getComputedStyle(el)
     if (
       (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
