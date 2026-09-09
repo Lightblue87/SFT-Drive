@@ -39,8 +39,9 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [checkingUsername, setCheckingUsername] = useState(false)
 
-  function goNext() {
+  async function goNext() {
     setError(null)
 
     if (step === 1) {
@@ -61,6 +62,25 @@ export function RegisterPage() {
         setError('Bitte Vorname, Nachname und Username angeben.')
         return
       }
+
+      // Ohne diese Prüfung würde ein bereits vergebener Username (case-
+      // insensitiv, §8.1) erst ganz am Ende von Schritt 3 auffallen: der
+      // Insert in profiles läuft innerhalb derselben Transaktion wie
+      // signUp(), GoTrue gibt den konkreten Postgres-Fehler dabei aber nicht
+      // an den Client weiter. Der Nutzer sähe dann eine unspezifische
+      // Fehlermeldung unter dem Fahrzeug-Formular, ohne zu erfahren, dass der
+      // Username in Schritt 2 das eigentliche Problem war.
+      setCheckingUsername(true)
+      const { data: available, error: checkError } = await supabase.rpc('is_username_available', {
+        p_username: username.trim(),
+      })
+      setCheckingUsername(false)
+
+      if (!checkError && available === false) {
+        setError('Dieser Username ist bereits vergeben. Bitte wähle einen anderen.')
+        return
+      }
+
       setStep(3)
       return
     }
@@ -102,7 +122,12 @@ export function RegisterPage() {
     setSubmitting(false)
 
     if (signUpError) {
-      setError('Registrierung fehlgeschlagen. Bitte Angaben prüfen.')
+      const msg = signUpError.message?.toLowerCase() ?? ''
+      if (msg.includes('already registered') || msg.includes('already exists')) {
+        setError('Diese E-Mail-Adresse ist bereits registriert. Bitte melde dich an oder setze dein Passwort zurück.')
+      } else {
+        setError('Registrierung fehlgeschlagen. Bitte Angaben prüfen.')
+      }
       return
     }
 
@@ -297,10 +322,16 @@ export function RegisterPage() {
       >
         <button
           onClick={goNext}
-          disabled={submitting}
+          disabled={submitting || checkingUsername}
           className="tap-scale w-full rounded-2xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-[17px] text-[16px] font-semibold text-white shadow-[0_12px_26px_-12px_#e10600] disabled:opacity-60"
         >
-          {submitting ? 'Wird gesendet…' : step === 3 ? 'Konto anlegen' : 'Weiter'}
+          {submitting
+            ? 'Wird gesendet…'
+            : checkingUsername
+              ? 'Wird geprüft…'
+              : step === 3
+                ? 'Konto anlegen'
+                : 'Weiter'}
         </button>
       </div>
 

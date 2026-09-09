@@ -4246,6 +4246,15 @@ Selbstlöschung über diesen Weg sind verboten; der letzte verbleibende Admin
 kann sich die Rolle nicht selbst entziehen und nicht administrativ gelöscht
 werden.
 
+Jede Zeile in `/admin/users` ist zusätzlich per Pfeil zu einer Detailansicht
+`/admin/users/:id` (`AdminUserDetailPage`) verlinkt, die neben den bereits
+in der Liste sichtbaren Stammdaten die persönliche Fahrzeuggarage (§34.2)
+des Nutzers anzeigt — dieselbe bereits bestehende `admin_get_user_vehicles`-
+RPC, die auch `AddRegistrationSheet` beim administrativen Nachtragen einer
+Registrierung verwendet (§8.3), hier aber für die vollständige Garage statt
+nur das Standardfahrzeug. Keine neue Migration nötig, da die RPC (inklusive
+`is_admin()`-Prüfung) bereits seit Phase-13-Umsetzung existiert.
+
 ### 27.21 Weitere Ergänzungen (nachträglich dokumentiert)
 
 Migrationen, die zum produktiven Stand von Phase 9–11 gehören, über die in

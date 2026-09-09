@@ -24,6 +24,7 @@ import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
 import { AdminToursPage } from '@/pages/admin/AdminToursPage'
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
+import { AdminUserDetailPage } from '@/pages/admin/AdminUserDetailPage'
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
 import { AdminTourFormPage } from '@/pages/admin/AdminTourFormPage'
 import { AdminTourRegistrationsPage } from '@/pages/admin/AdminTourRegistrationsPage'
@@ -120,6 +121,7 @@ export const router = createBrowserRouter([
           { path: 'tours/:id/hotels', element: <AdminTourAccommodationPage /> },
           { path: 'settings', element: <AdminSettingsPage /> },
           { path: 'users', element: <AdminUsersPage /> },
+          { path: 'users/:id', element: <AdminUserDetailPage /> },
           { path: 'notifications', element: <AdminNotificationsPage /> },
         ],
       },

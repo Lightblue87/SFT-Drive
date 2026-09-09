@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import { rpcErrorMessage } from '@/types/tour'
@@ -139,7 +140,7 @@ export function AdminUsersPage() {
       <div className="mt-3.5 flex flex-col gap-2.5">
         {filteredUsers.map((user) => (
           <div key={user.id} className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
-            <div className="flex items-center gap-2.5 px-[15px] py-3.5">
+            <Link to={`/admin/users/${user.id}`} className="tap-scale flex items-center gap-2.5 px-[15px] py-3.5">
               <div
                 className={`flex h-9 w-9 flex-none items-center justify-center rounded-[10px] font-mono text-xs font-bold ${
                   user.is_admin ? 'bg-sft-red text-white' : user.is_banned ? 'bg-white/4 text-[#c9c9ce]' : 'bg-white/7 text-[#c9c9ce]'
@@ -175,7 +176,10 @@ export function AdminUsersPage() {
                   })}
                 </div>
               </div>
-            </div>
+              <svg width="9" height="14" viewBox="0 0 9 14" fill="none" className="flex-none text-sft-gray">
+                <path d="M1 1l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
             <div className="grid grid-cols-3 gap-px border-t border-white/6 bg-white/6">
               <button
                 onClick={() => toggleAdmin(user)}
