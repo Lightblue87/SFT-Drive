@@ -89,8 +89,10 @@ export function ToursPage() {
     .sort((a, b) => b.tour.end_date.localeCompare(a.tour.end_date))
 
   const upcomingList = [...running, ...upcoming]
+  // Eine abgesagte Ausfahrt ist nicht "die nächste Ausfahrt" — sie bleibt in
+  // der Liste sichtbar, taugt aber nicht als Aufmacher.
   const heroTour = [...tours]
-    .filter((t) => t.tour.end_date >= todayKey)
+    .filter((t) => t.tour.end_date >= todayKey && t.tour.status !== 'cancelled')
     .sort((a, b) => a.tour.start_date.localeCompare(b.tour.start_date))[0]
 
   return (

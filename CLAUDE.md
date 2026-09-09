@@ -99,10 +99,10 @@ Diese Regeln sind für das MVP verbindlich:
 - Touren werden darunter chronologisch nach Startdatum angezeigt.
 - Die nächste relevante Tour steht oben.
 - Laufende Mehrtagestouren stehen oberhalb noch nicht gestarteter Touren.
-- Jede Tour erhält eine quadratische 1:1-Kachel mit Tourtitel darüber.
-- Die Kachel nutzt auf Mobilgeräten nahezu die gesamte verfügbare Displaybreite.
-- Auf jeder Kachel müssen freie Fahrzeugplätze sichtbar sein.
-- Als Kachelbild kann ein Tourlogo, Eventdesign, Fahrzeugfoto oder Routen-Screenshot verwendet werden.
+- Die nächste Ausfahrt erscheint als hervorgehobene Hero-Kachel, alle weiteren als kompakte Tourzeilen mit quadratischem Vorschaubild (siehe §13.10).
+- Die Liste nutzt auf Mobilgeräten nahezu die gesamte verfügbare Displaybreite.
+- Auf jeder Tourzeile müssen freie Fahrzeugplätze sichtbar sein.
+- Als Tourbild kann ein Tourlogo, Eventdesign, Fahrzeugfoto oder Routen-Screenshot verwendet werden.
 
 ---
 
@@ -269,7 +269,7 @@ Darf zusätzlich:
 - Touren erstellen
 - Touren bearbeiten
 - Touren veröffentlichen
-- Touren absagen
+- Touren absagen (über `admin_cancel_tour`, benachrichtigt die Teilnehmer)
 - Touren archivieren
 - maximale Fahrzeugzahl festlegen
 - Bestätigungsmodus festlegen
@@ -555,6 +555,69 @@ Regeln:
 - Fahrzeugkapazität niemals aus einer vom Client gelieferten Zahl ableiten.
 - `passenger_edit_deadline_at` darf unabhängig vom Ende des normalen Anmeldezeitraums gesetzt werden.
 - Keine exakten privaten Treffpunkte, Kurviger-Links, Zello-Links oder internen Participant-Texte in dieser Tabelle speichern.
+
+### Lebenszyklus der Tourstatus
+
+Verbindliche Ausarbeitung, wie die einzelnen Status entstehen und was sie für
+Sichtbarkeit und Anmeldung bedeuten (Migration
+`20260909010000_tour_lifecycle.sql`).
+
+Ursprünglich gab die RLS ausschließlich `status = 'published'` frei. Eine Tour
+verschwand dadurch beim Statuswechsel schlagartig komplett — auch für bereits
+angemeldete Teilnehmer und aus `/profile/tours`. Das war nicht gewollt.
+
+Sichtbar für Visitor und normale User sind:
+
+```text
+published            sichtbar, Anmeldung im Anmeldefenster möglich
+registration_closed  sichtbar, keine Anmeldung mehr möglich
+completed            sichtbar, keine Anmeldung mehr möglich
+cancelled            sichtbar bis einschließlich start_date
+draft                nicht sichtbar
+archived             nicht sichtbar
+```
+
+Die Regel liegt zentral in `tour_is_visible(status, start_date)` und wird von
+der `tours`-Policy, der `tour_member_details`-Policy und
+`get_public_tour_stats()` gemeinsam verwendet — keine dieser Stellen darf
+eine eigene abweichende Statusliste führen.
+
+Automatische Übergänge (`apply_tour_lifecycle()`, per `pg_cron` alle 15
+Minuten; die Funktion ist idempotent und braucht keinen eigenen Zustand):
+
+```text
+published           -> registration_closed   sobald registration_close_at vorbei ist
+published/closed    -> completed             sobald end_date vorbei ist
+cancelled           -> archived              sobald start_date vorbei ist
+```
+
+`draft`, `cancelled` und `archived` werden nie automatisch überschrieben — eine
+Absage bleibt eine Absage.
+
+Weitere Regeln:
+
+- Nach Anmeldeschluss (`registration_closed`) kann ausschließlich der Admin noch
+  jemanden aufnehmen, über `admin_add_registration()`. Anmeldefenster sowie
+  Leistungs- und Altersanforderungen werden dabei bewusst übergangen, die
+  Fahrzeugkapazität dagegen **nicht** (§12) — ist die Tour voll, entsteht ein
+  Wartelisteneintrag.
+- Eine Absage erfolgt ausschließlich manuell über `admin_cancel_tour()` und ist
+  im Statusfeld des Tourformulars deshalb nicht direkt wählbar. Die RPC
+  benachrichtigt alle Registrierungen mit `confirmed`, `pending` oder
+  `waitlisted` über die bestehende Notification-Infrastruktur (Typ
+  `TOUR_CANCELLED`); der zusätzliche Web-Push wird wie überall vom Client über
+  `send-push` ausgelöst (§27.16). `send-push` akzeptiert dafür ein optionales
+  `statuses`-Feld (Standard weiterhin nur `confirmed`, §27.11) — eine Absage
+  ist die begründete Ausnahme, weil auch `pending` und `waitlisted` betroffen
+  sind.
+- Eine abgesagte Tour wird nach ihrem Starttag archiviert und damit aus allen
+  normalen Ansichten entfernt. Sie wird bewusst **nicht** gelöscht: das wäre
+  nicht umkehrbar und würde §23.14 verletzen.
+- Das UI leitet den tatsächlichen Anmeldezustand zusätzlich aus den Zeitstempeln
+  ab (`registrationPhase()` in `src/utils/tourStatus.ts`), damit zwischen
+  Anmeldeschluss und dem nächsten Joblauf kein Anmeldeformular angeboten wird,
+  das die RPC anschließend ablehnt. Die verbindliche Prüfung bleibt
+  serverseitig in `register_for_tour` (§9.2).
 
 ### Umsetzungsentscheidung: Slug ist kein Admin-Eingabefeld
 
@@ -1413,6 +1476,9 @@ Admin kann mindestens:
 - Pending ablehnen
 - bestätigte Teilnahme administrativ stornieren
 - Wartelistenreihenfolge sehen
+- Teilnehmer administrativ nachtragen (`admin_add_registration`, siehe §8.3
+  "Lebenszyklus der Tourstatus") — nach Anmeldeschluss der einzige verbleibende
+  Weg, jemanden aufzunehmen
 
 Wichtig:
 
@@ -1672,30 +1738,45 @@ Die Tagesnummer darf aus Datum und Zeitraum berechnet werden.
 
 ---
 
-### 13.10 Tour-Kachel
+### 13.10 Tourliste und Hero-Kachel
 
-Jede Tour besitzt eine große visuelle Kachel.
+**Diese Vorgabe wurde mit dem Cockpit-Board-Redesign überarbeitet.** Ursprünglich
+war für jede Tour eine große quadratische 1:1-Kachel mit Titel darüber
+vorgesehen. In der Praxis passte damit auf ein Smartphone nur eine einzige
+Tour auf den Bildschirm — Kalender, aktive Filterinformation und die zweite
+Ausfahrt lagen dauerhaft unterhalb der Falz. Das widersprach dem primären
+UX-Ziel aus §13 ("App öffnen → nächste Ausfahrten sofort erkennen").
 
-Aufbau:
+Verbindlich ist deshalb eine zweistufige Darstellung:
+
+**1. Hero-Kachel der nächsten Ausfahrt**
+
+Ganz oben steht genau eine hervorgehobene Karte für die nächste relevante
+Ausfahrt (laufend oder als nächstes startend). Sie zeigt:
 
 ```text
+NÄCHSTE AUSFAHRT                    [Statusbadge]
+
 Tourtitel
+Region · Datum bzw. Zeitraum
 
-[ quadratisches 1:1 Tourbild ]
+STRECKE      FAHRZEUGE      TREFFEN
+285 km       14/20          09:00
+
+[ Tour öffnen ]
 ```
 
-Der Titel steht immer oberhalb der Grafik.
+Eine abgesagte Ausfahrt wird nie als Hero-Kachel verwendet.
 
-Die Grafik nutzt:
+**2. Kompakte Tourzeilen**
 
-```css
-width: 100%;
-aspect-ratio: 1 / 1;
-```
+Alle übrigen Touren erscheinen als kompakte Zeilen mit quadratischem
+Vorschaubild links (das Coverbild aus §13.11, weiterhin `object-fit: cover`)
+und den Informationen aus §13.12 rechts daneben. Mehrere Ausfahrten sind damit
+gleichzeitig sichtbar.
 
-Auf Smartphones soll sie nahezu die gesamte verfügbare Displaybreite einnehmen.
-
-Auf größeren Displays darf die zentrale Content-Spalte begrenzt werden, beispielsweise auf ca. 700–800 px.
+Auf größeren Displays darf die zentrale Content-Spalte begrenzt werden,
+beispielsweise auf ca. 700–800 px.
 
 Die mobile Darstellung besitzt Priorität.
 
@@ -1850,7 +1931,7 @@ Der allgemeine Kapazitätsstatus bleibt trotzdem sichtbar.
 
 ### 13.15 Interaktion
 
-Die gesamte quadratische Tourkachel ist antippbar.
+Die gesamte Tourzeile bzw. Hero-Kachel ist antippbar.
 
 Tap führt zu:
 
@@ -1860,7 +1941,7 @@ Tap führt zu:
 
 Keine kleinen `Mehr erfahren` Buttons als alleinige Interaktionsfläche.
 
-Die komplette Kachel muss als großes Touch-Ziel funktionieren.
+Die komplette Zeile muss als großes Touch-Ziel funktionieren.
 
 ---
 
@@ -2304,8 +2385,8 @@ Kein übertriebener "Gaming"- oder Neon-Look.
 - Wochentage und Tageszahlen müssen auch auf kleinen Displays lesbar bleiben.
 - Mehrtagestour-Balken dürfen die Tageszahlen nicht unlesbar machen.
 - parallele Tourzeiträume müssen visuell stapelbar sein.
-- Tourkacheln verwenden mobil `aspect-ratio: 1 / 1`.
-- Tourtitel steht oberhalb der Kachel.
+- Das Tourbild in der Tourzeile bleibt quadratisch (`aspect-ratio: 1 / 1`).
+- Tourtitel steht in der Zeile neben dem Bild, in der Hero-Kachel darüber.
 - freie Plätze müssen ohne Öffnen der Detailseite sichtbar sein.
 - gesamte Kachel ist ein Touch-Ziel.
 - Informationen über dem Bild nicht unnötig duplizieren.
@@ -3357,7 +3438,7 @@ Die Phasen 1–8 sind umgesetzt. Die folgende Auflistung bleibt als Architektur-
 - Monatswechsel bei Mehrtagestouren
 - Tagesfilter
 - laufende Touren priorisieren
-- 1:1 Tourkacheln
+- Hero-Kachel und kompakte Tourzeilen
 - Tour-Coverbilder
 - freie Plätze direkt auf Kacheln
 - Tourdetail
@@ -3464,6 +3545,12 @@ rekonstruiert werden muss.
 - Bei `SECURITY DEFINER`-Funktionen mit `RETURNS TABLE`, die Spalten aus
   `auth.users` ausgeben (z. B. `email`), diese explizit auf `text` casten
   (`u.email::text`) — siehe §8.12 "Praxis-Falle bei `RETURN QUERY`".
+- Der `pg_cron`-Job für den Tour-Lebenszyklus (§8.3) wird abweichend davon
+  direkt in der Migration `20260909010000_tour_lifecycle.sql` angelegt: er ruft
+  reines SQL auf, keine Edge Function, und braucht deshalb keinen
+  Service-Role-Key. Nach dem Einspielen dieser Migration muss zusätzlich die
+  Edge Function `send-push` neu deployed werden — sie hat ein neues optionales
+  `statuses`-Feld für die Tourabsage bekommen.
 - Der PWA-Build läuft seit Phase 9 über vite-plugin-pwas `injectManifest`-
   Strategie mit eigenem Service Worker (`src/sw.ts`), nicht mehr über
   `generateSW` — nötig für die `push`/`notificationclick`-Handler von Web
@@ -3744,6 +3831,7 @@ DEPARTURE_REMINDER
 WEATHER_WARNING
 ADMIN_MESSAGE
 NEW_TOUR_IN_REGION
+TOUR_CANCELLED
 ```
 
 Die Infrastruktur ist bewusst nicht ausschließlich für Restaurants gebaut.
@@ -4181,9 +4269,9 @@ Das MVP gilt erst als fertig, wenn:
 56. der Tagesfilter Mehrtagestouren an jedem Tag ihres Zeitraums findet
 57. beim Öffnen sinnvoll der aktuelle Monat oder der Monat der nächsten Tour angezeigt wird
 58. laufende Mehrtagestouren oberhalb zukünftiger Touren stehen
-59. jede Tour eine mobile 1:1-Kachel besitzt
-60. Tourtitel oberhalb der Kachel dargestellt wird
-61. freie Fahrzeugplätze direkt auf jeder Kachel sichtbar sind
+59. die nächste Ausfahrt als Hero-Kachel und alle weiteren als kompakte Tourzeilen dargestellt werden (§13.10)
+60. das Tourbild in der Tourzeile quadratisch bleibt
+61. freie Fahrzeugplätze direkt in jeder Tourzeile sichtbar sind
 62. Touren standardmäßig nach Startdatum sortiert werden
 63. Mehrtagestouren eine verständliche Zeitraumdarstellung erhalten
 64. die Sitemap entsprechend dieser Spezifikation umgesetzt ist
@@ -4258,7 +4346,7 @@ Keine unnötige Enterprise-Architektur für ein kleines Community-Projekt aufbau
 
 ## 33. Aktuelle Kernanforderung in einem Satz
 
-Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, jede Tour als große quadratische 1:1-Kachel mit freien Fahrzeugplätzen erscheint, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
+Baue und entwickle **SFT Drive** als sichere, mobile und installierbare Web-App für Sportwagen-Ausfahrten weiter, in der öffentliche Tourinformationen frei sichtbar sind, eintägige und mehrtägige Touren über einen Monatskalender entdeckt und gefiltert werden können, die nächste Ausfahrt als Hero-Kachel und alle weiteren als kompakte Tourzeilen mit freien Fahrzeugplätzen erscheinen, registrierte Nutzer sich mit einem konkreten Fahrzeug anmelden, Tourkapazitäten ausschließlich in Fahrzeugen verwaltet werden, Beifahrer für organisatorische Personenzahlen erfasst werden, automatische oder manuelle Bestätigung sowie eine sichere Warteliste möglich sind, bestätigte Fahrer die mitfahrenden Fahrzeuge samt Username, aber keine Klarnamen oder Kennzeichen anderer Teilnehmer sehen können, jeder User ein privates Archiv seiner vergangenen bestätigten Tourteilnahmen mit historischem Fahrzeug-Snapshot besitzt und SFT Drive zusätzlich Tour-Stopps, In-App-/Push-Mitteilungen sowie Restaurant-Essensvorbestellungen für bestätigte Teilnehmer bereitstellt.
 
 ---
 

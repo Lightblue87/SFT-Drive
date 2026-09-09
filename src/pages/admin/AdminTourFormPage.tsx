@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { PageLoading } from '@/components/PageLoading'
-import type { TourStatus, ConfirmationMode } from '@/types/tour'
+import type { TourStatus, ConfirmationMode, RegistrationResult } from '@/types/tour'
+import { rpcErrorMessage } from '@/types/tour'
 
 interface FormState {
   slug: string
@@ -71,18 +72,18 @@ const EMPTY: FormState = {
   whatsapp_group_url: '',
 }
 
-// Beschreibt bewusst das tatsächliche Verhalten, nicht die Wunschvorstellung:
-// öffentlich lesbar ist per RLS ausschließlich `published` — jeder andere
-// Status blendet die Tour für normale Nutzer komplett aus. Und ein Statuswechsel
-// löst von sich aus weder Benachrichtigungen noch Stornierungen aus.
+// Statusbedeutung gemäß Lebenszyklus (CLAUDE.md §8.3). `registration_closed`
+// und `completed` setzt normalerweise der zeitgesteuerte Job automatisch —
+// hier stehen sie für den seltenen Fall einer manuellen Korrektur.
 const STATUS_HINT: Record<TourStatus, string> = {
   draft: 'Nur für Admins sichtbar, keine Anmeldung möglich.',
   published: 'Öffentlich sichtbar, Anmeldung im Anmeldefenster möglich.',
-  registration_closed: 'Nur noch für Admins sichtbar, keine neuen Anmeldungen.',
+  registration_closed:
+    'Weiterhin für alle sichtbar, aber keine neuen Anmeldungen. Wird automatisch gesetzt, sobald der Anmeldeschluss erreicht ist — nur der Admin kann dann noch jemanden nachtragen.',
   cancelled:
-    'Nur noch für Admins sichtbar. Teilnehmer werden nicht automatisch informiert — bitte über Mitteilungen benachrichtigen.',
+    'Wird über "Tour absagen" gesetzt, nicht hier. Angemeldete Teilnehmer werden dabei benachrichtigt.',
   completed:
-    'Nur noch für Admins sichtbar. Vergangene bestätigte Teilnahmen stehen unabhängig davon im Tourenarchiv.',
+    'Weiterhin sichtbar, keine Anmeldung mehr. Wird automatisch gesetzt, sobald der letzte Tourtag vorbei ist.',
   archived: 'In Übersicht und Tourenverwaltung ausgeblendet.',
 }
 
@@ -144,6 +145,9 @@ export function AdminTourFormPage() {
   const [loading, setLoading] = useState(!!id)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showGallery, setShowGallery] = useState(false)
@@ -303,6 +307,50 @@ export function AdminTourFormPage() {
       })),
     )
     setGalleryLoading(false)
+  }
+
+  /**
+   * Absage über die kontrollierte RPC (§8.3): sie setzt den Status und legt
+   * für alle noch angemeldeten Teilnehmer eine Mitteilung an. Der Push ist wie
+   * überall rein zusätzlich (§27.16).
+   */
+  async function handleCancelTour() {
+    if (!id) return
+    if (!window.confirm('Diese Ausfahrt wirklich absagen? Alle angemeldeten Teilnehmer werden benachrichtigt.')) {
+      return
+    }
+
+    setCancelError(null)
+    setCancelling(true)
+    const { data, error: rpcError } = await supabase.rpc('admin_cancel_tour', {
+      p_tour_id: id,
+      p_reason: cancelReason.trim() || null,
+    })
+    setCancelling(false)
+
+    if (rpcError) {
+      setCancelError('Absage fehlgeschlagen. Bitte versuche es erneut.')
+      return
+    }
+
+    const result = data as RegistrationResult
+    if (result.code !== 'OK') {
+      setCancelError(rpcErrorMessage(result.code))
+      return
+    }
+
+    void supabase.functions.invoke('send-push', {
+      body: {
+        tour_id: id,
+        // Auch pending/waitlisted — sie sind von der Absage genauso betroffen.
+        statuses: ['confirmed', 'pending', 'waitlisted'],
+        title: 'Ausfahrt abgesagt',
+        body: `Die Ausfahrt "${form.title}" wurde abgesagt.`,
+      },
+    })
+
+    setForm((prev) => ({ ...prev, status: 'cancelled' }))
+    navigate('/admin/tours')
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -727,12 +775,42 @@ export function AdminTourFormPage() {
             <option value="draft">Entwurf</option>
             <option value="published">Veröffentlicht</option>
             <option value="registration_closed">Anmeldung geschlossen</option>
-            <option value="cancelled">Abgesagt</option>
             <option value="completed">Abgeschlossen</option>
             <option value="archived">Archiviert</option>
+            {/* "Abgesagt" bewusst nicht wählbar: eine Absage muss die Teilnehmer
+                benachrichtigen und läuft deshalb über admin_cancel_tour(). */}
+            {form.status === 'cancelled' && <option value="cancelled">Abgesagt</option>}
           </select>
           <p className="text-[11px] leading-relaxed text-[#8e8e96]">{STATUS_HINT[form.status]}</p>
         </Section>
+
+        {id && form.status !== 'cancelled' && (
+          <Section title="Tour absagen">
+            <p className="text-[11px] leading-relaxed text-[#8e8e96]">
+              Die Ausfahrt entfällt. Alle angemeldeten Teilnehmer (bestätigt, Freigabe offen und
+              Warteliste) erhalten eine Mitteilung und – sofern aktiviert – einen Push. Die
+              abgesagte Ausfahrt bleibt bis zu ihrem Starttag sichtbar und wird danach automatisch
+              archiviert.
+            </p>
+            <Field label="GRUND (OPTIONAL, WIRD MITGESENDET)">
+              <input
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Wetterlage"
+                className={inputClass}
+              />
+            </Field>
+            {cancelError && <p className="text-sm text-sft-red">{cancelError}</p>}
+            <button
+              type="button"
+              onClick={handleCancelTour}
+              disabled={cancelling}
+              className="tap-scale rounded-xl border border-sft-red/45 bg-sft-red/8 py-3.5 text-[15px] font-semibold text-[#ff6b63] disabled:opacity-60"
+            >
+              {cancelling ? 'Wird abgesagt…' : 'Tour absagen'}
+            </button>
+          </Section>
+        )}
 
         {error && <p className="text-sm text-sft-red">{error}</p>}
 

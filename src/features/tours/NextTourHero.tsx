@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { TourWithStats } from '@/features/tours/useTours'
 import { freeSlotsLabel } from '@/utils/capacity'
+import { registrationPhase, tourPhaseBadge } from '@/utils/tourStatus'
 import { formatDateRange, formatTime, isMultiDayTour, tourDayCount } from '@/utils/date'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -12,8 +13,10 @@ const STATUS_LABEL: Record<string, string> = {
 /** Hero-Kachel der nächsten laufenden/anstehenden Ausfahrt auf der Tourübersicht. */
 export function NextTourHero({ tour, stats, ownStatus }: TourWithStats) {
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
+  const phase = registrationPhase(tour)
   const statusLabel =
     (ownStatus ? STATUS_LABEL[ownStatus] : null) ||
+    tourPhaseBadge(phase) ||
     (stats ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full) : null)
   const statusActive = ownStatus === 'confirmed'
 

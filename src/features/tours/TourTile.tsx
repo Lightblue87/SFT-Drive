@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { TourWithStats } from '@/features/tours/useTours'
 import { formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
 import { freeSlotsLabel } from '@/utils/capacity'
+import { registrationPhase, tourPhaseBadge } from '@/utils/tourStatus'
 
 const OWN_STATUS_LABEL: Record<string, string> = {
   confirmed: 'DU BIST DABEI',
@@ -30,8 +31,17 @@ export function TourTile({ tour, stats, ownStatus }: TourWithStats) {
   const ownLabel = ownStatus ? OWN_STATUS_LABEL[ownStatus] : null
   const ownClass = (ownStatus && OWN_STATUS_CLASS[ownStatus]) || 'bg-white/6 text-sft-gray'
 
-  const slotsLabel = stats ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full) : null
-  const slotsClass = stats?.is_full ? 'bg-white/6 text-sft-gray' : 'bg-white/6 text-[#c9c9ce]'
+  // Ist die Tour nicht mehr buchbar (Anmeldeschluss, abgesagt, beendet), tritt
+  // das an die Stelle der freien Plätze — die Zahl wäre dort irreführend.
+  const phase = registrationPhase(tour)
+  const phaseLabel = tourPhaseBadge(phase)
+  const slotsLabel = phaseLabel ?? (stats ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full) : null)
+  const slotsClass =
+    phase === 'cancelled'
+      ? 'bg-sft-red/16 text-[#ff6b63]'
+      : phaseLabel || stats?.is_full
+        ? 'bg-white/6 text-sft-gray'
+        : 'bg-white/6 text-[#c9c9ce]'
 
   return (
     <Link

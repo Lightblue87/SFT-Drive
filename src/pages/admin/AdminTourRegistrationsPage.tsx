@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { AddRegistrationSheet } from '@/features/admin/AddRegistrationSheet'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
@@ -84,6 +85,7 @@ export function AdminTourRegistrationsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [includePrivateExportFields, setIncludePrivateExportFields] = useState(false)
   const [shareStatus, setShareStatus] = useState<string | null>(null)
+  const [addSheetOpen, setAddSheetOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -251,6 +253,15 @@ export function AdminTourRegistrationsPage() {
           </div>
         )}
       </div>
+
+      {/* Nach Anmeldeschluss ist das der einzige verbleibende Weg, jemanden
+          aufzunehmen (§8.3) — davor ebenso nutzbar für Nachträge. */}
+      <button
+        onClick={() => setAddSheetOpen(true)}
+        className="tap-scale mt-3.5 w-full rounded-xl border border-white/13 bg-[#17171b] py-3 text-[14px] font-medium"
+      >
+        + Teilnehmer hinzufügen
+      </button>
 
       {actionError && <p className="mt-3 text-sm text-sft-red">{actionError}</p>}
 
@@ -460,6 +471,18 @@ export function AdminTourRegistrationsPage() {
       >
         Mitteilung an diese Tour
       </Link>
+      {addSheetOpen && id && (
+        <AddRegistrationSheet
+          tourId={id}
+          tourTitle={tourTitle}
+          onClose={() => setAddSheetOpen(false)}
+          onAdded={() => {
+            setAddSheetOpen(false)
+            load()
+          }}
+        />
+      )}
+
     </div>
   )
 }

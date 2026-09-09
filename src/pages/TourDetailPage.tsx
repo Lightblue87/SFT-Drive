@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { formatDate, formatDateRange, isMultiDayTour, tourDayCount, currentTourDay } from '@/utils/date'
 import { freeSlotsLabel } from '@/utils/capacity'
 import { routeButtonLabel } from '@/utils/routeLink'
+import { registrationPhase, tourPhaseBadge, tourPhaseMessage } from '@/utils/tourStatus'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 import { TOUR_STOP_TYPE_LABELS } from '@/types/tourStop'
@@ -95,10 +96,13 @@ export function TourDetailPage() {
   const multiDay = isMultiDayTour(tour.start_date, tour.end_date)
   const dayInfo = multiDay ? currentTourDay(tour.start_date, tour.end_date) : null
   const returnTo = encodeURIComponent(`/tours/${tour.slug}`)
-  const registrationNotYetOpen = Boolean(
-    tour.registration_open_at && new Date(tour.registration_open_at) > new Date(),
-  )
-  const canRegister = Boolean(user && memberDetails && !activeRegistration && !registrationNotYetOpen)
+  // Der Anmeldezustand kommt zentral aus registrationPhase() (§8.3) und nicht
+  // mehr nur aus registration_open_at: eine geschlossene, abgesagte oder
+  // beendete Tour bleibt sichtbar, darf aber kein Anmeldeformular anbieten.
+  const phase = registrationPhase(tour)
+  const registrationNotYetOpen = phase === 'not_yet'
+  const phaseMessage = tourPhaseMessage(phase)
+  const canRegister = Boolean(user && memberDetails && !activeRegistration && phase === 'open')
 
   async function handleCancel() {
     setCancelError(null)
@@ -133,9 +137,8 @@ export function TourDetailPage() {
             >
               {confirmed
                 ? 'DU BIST DABEI'
-                : stats
-                  ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full)
-                  : ''}
+                : (tourPhaseBadge(phase) ??
+                  (stats ? freeSlotsLabel(stats.free_vehicle_slots, stats.is_full) : ''))}
             </span>
             {multiDay && (
               <span className="rounded-md bg-white/12 px-2.5 py-1 font-mono text-[10px] font-medium tracking-[0.1em] text-sft-white backdrop-blur">
@@ -227,6 +230,18 @@ export function TourDetailPage() {
         {!user && (
           <div className="mt-3.5 rounded-2xl border border-dashed border-white/14 px-4 py-3.5 text-xs leading-relaxed text-[#8e8e96]">
             Treffpunkt-Adresse, Route und Teilnehmerliste werden nach bestätigter Anmeldung sichtbar.
+          </div>
+        )}
+
+        {phaseMessage && (
+          <div
+            className={`mt-3.5 rounded-2xl border px-4 py-3.5 text-[13px] leading-relaxed ${
+              phase === 'cancelled'
+                ? 'border-sft-red/40 bg-sft-red/8 text-[#ff8b84]'
+                : 'border-white/10 bg-sft-card text-sft-gray'
+            }`}
+          >
+            {phaseMessage}
           </div>
         )}
 
@@ -469,7 +484,9 @@ export function TourDetailPage() {
         )}
       </div>
 
-      {!user && (
+      {/* Für Visitor nur anbieten, solange die Anmeldung tatsächlich offen ist —
+          sonst führt der Login-Umweg auf eine Seite ohne Anmeldemöglichkeit. */}
+      {!user && (phase === 'open' || phase === 'not_yet') && (
         <div className="fixed inset-x-0 bottom-[92px] z-10 bg-gradient-to-t from-sft-black via-sft-black/90 to-transparent px-3.5 pb-2.5 pt-6">
           <Link
             to={`/login?returnTo=${returnTo}`}
