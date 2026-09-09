@@ -122,9 +122,23 @@ export function RegisterPage() {
     setSubmitting(false)
 
     if (signUpError) {
+      // Vollständigen Fehler immer loggen (§18: nicht nur Konsole, aber die
+      // konkrete Ursache muss zumindest dort nachvollziehbar sein) — GoTrue
+      // liefert seit auth-js v2 einen stabilen `code`, der Message-Text kann
+      // sich je Server-Version unterscheiden.
+      console.error('Registrierung fehlgeschlagen:', signUpError)
+
+      const code = (signUpError as { code?: string }).code
       const msg = signUpError.message?.toLowerCase() ?? ''
-      if (msg.includes('already registered') || msg.includes('already exists')) {
+
+      if (code === 'user_already_exists' || code === 'email_exists' || msg.includes('already registered')) {
         setError('Diese E-Mail-Adresse ist bereits registriert. Bitte melde dich an oder setze dein Passwort zurück.')
+      } else if (code === 'weak_password') {
+        setError('Das Passwort ist zu schwach (z. B. zu leicht zu erraten). Bitte ein anderes Passwort wählen.')
+      } else if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') {
+        setError('Zu viele Versuche in kurzer Zeit. Bitte warte einen Moment und versuche es erneut.')
+      } else if (code === 'email_address_invalid' || code === 'email_address_not_authorized') {
+        setError('Diese E-Mail-Adresse wird leider nicht akzeptiert. Bitte eine andere verwenden.')
       } else {
         setError('Registrierung fehlgeschlagen. Bitte Angaben prüfen.')
       }
