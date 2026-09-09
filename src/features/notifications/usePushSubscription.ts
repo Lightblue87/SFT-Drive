@@ -72,6 +72,17 @@ export function usePushSubscription() {
       if (permissionResult !== 'granted') return
 
       const registration = await navigator.serviceWorker.ready
+
+      // Eine Push-Subscription (inkl. `endpoint`) gehört zu Browser/Gerät,
+      // nicht zum eingeloggten Account. War auf diesem Gerät zuvor ein
+      // anderer User angemeldet und hat Push aktiviert, liefert der Browser
+      // beim erneuten subscribe() sonst denselben endpoint zurück — der
+      // Upsert unten schlägt dann an der RLS-Policy ab (§27.15: nur eigene
+      // Subscription), weil die Zeile noch dem alten User gehört. Erst
+      // abmelden erzwingt einen neuen, garantiert eindeutigen endpoint.
+      const existing = await registration.pushManager.getSubscription()
+      if (existing) await existing.unsubscribe()
+
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as BufferSource,
