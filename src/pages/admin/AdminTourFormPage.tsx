@@ -176,7 +176,11 @@ export function AdminTourFormPage() {
     try {
       const saved = localStorage.getItem(draftKey)
       if (saved) {
-        setForm(JSON.parse(saved))
+        // Über EMPTY mergen statt vollständig zu ersetzen: ein vor diesem
+        // Deployment lokal gespeicherter Entwurf kennt neu hinzugekommene
+        // Felder (z. B. youtube_url/youtube_embed) noch nicht und würde sie
+        // beim Absenden sonst als `undefined` an z. B. `.trim()` übergeben.
+        setForm((f) => ({ ...EMPTY, ...f, ...JSON.parse(saved) }))
       }
     } catch {
       // localStorage nicht verfügbar (z. B. privater Modus) oder Entwurf beschädigt — ignorieren.
