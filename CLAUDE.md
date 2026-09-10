@@ -6723,7 +6723,7 @@ technischen Entscheidungen vor Beginn von Phase M1 klären:
 
 ### 40.10 Implementierung im Ordner `macos/` (10.09.2026)
 
-Der native Quellcode und das Xcode-Projekt werden nun implementiert.
+Der native Quellcode und das Xcode-Projekt sind in `macos/` auf `main` implementiert.
 Die älteren Formulierungen „geplant, noch nicht umgesetzt“ in §38–40
 beschreiben die ursprüngliche Planungsphase. Dieser Abschnitt unterscheidet
 Implementierung, automatisierte Prüfung und produktive Bereitstellung.
@@ -6737,10 +6737,19 @@ Implementierung, automatisierte Prüfung und produktive Bereitstellung.
 - M9: lokaler Universal-Release-Build mit Ad-hoc-Signatur und ZIP/Prüfsumme;
   keine Developer-ID, Notarisierung oder Veröffentlichung in einem App Store.
 - Neue gemeinsame Backend-RPCs: `admin_get_tour_planning_summary`,
-  `admin_save_tour`, `admin_save_tour_resource`, `admin_delete_tour_resource`.
+  `admin_save_tour`, `admin_save_tour_resource`, `admin_delete_tour_resource`,
+  `admin_replace_meal_order` und `admin_create_restaurant`.
   Die Schreibpfade verwenden weiterhin bestehende RLS und prüfen vollständige
   gelesene Zeilenstände, statt unzuverlässige Client-Zeitstempel vorauszusetzen.
-- **Abnahme noch nicht als abgeschlossen markieren:** Mac-Build/Tests,
-  tatsächliche Backend-Bereitstellung, manuelle UI-/Login-/Offline-Prüfung
+- Automatisierte Prüfung am 10.09.2026: 47 PostgreSQL-Vertrags-/RLS-Prüfungen
+  mit synthetischen Daten und echter `authenticated`-Rolle erfolgreich.
+  Alle Migrationen werden unverändert in einer isolierten Testdatenbank geladen.
+  12 Swift-Tests, nativer Debug-Build und Universal-Release-Build (arm64/x86_64)
+  bestehen auf dem macOS-15-Runner mit Xcode 16.4. Die Ad-hoc-Signatur wird
+  geprüft; ZIP, SHA-256-Prüfsumme und Versionshinweis sind als Workflow-Artefakt
+  `SFTDriveAdmin-macOS15` verfügbar (Aufbewahrung: sieben Tage).
+  Testlauf: https://github.com/Lightblue87/SFT-Drive/actions/runs/34521285203
+- **Abnahme noch nicht als abgeschlossen markieren:** tatsächliche
+  Backend-Bereitstellung, manuelle UI-/Login-/Offline-Prüfung
   und Installation auf einem zweiten Mac separat dokumentieren. Ein
   Repository-Commit ist kein Nachweis für produktiv eingespielte Migrationen.
