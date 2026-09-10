@@ -5852,9 +5852,12 @@ macOS-App mit nativen Fenstern, Tabellen, Sidebars, Tastaturbedienung,
 Drag & Drop, macOS Keychain usw.
 
 Die Desktop-App arbeitet mit dem gleichen Supabase-Projekt und damit
-demselben Datenbestand wie SFT Drive. Eine in der PWA vorgenommene
-Änderung ist anschließend unmittelbar auch in der Mac-App sichtbar und
-umgekehrt.
+demselben Datenbestand wie SFT Drive. Änderungen werden nach erfolgreichem
+Speichern und erneutem Laden im jeweils anderen Client sichtbar. Derselbe
+Datenbestand allein garantiert keine Echtzeit-Synchronisation: beim Öffnen,
+Reaktivieren und nach Schreibaktionen aktualisieren; optional gezielte
+Realtime-Abonnements für sichtbare Daten, mit erneutem Laden nach Reconnect.
+Letzten Aktualisierungszeitpunkt und veraltete Daten sichtbar kennzeichnen.
 
 Wichtig: „Direkter Datenbankzugriff" bedeutet dabei **nicht**, dass
 Datenbankpasswort oder Supabase-Service-Role-Key in die App eingebaut
@@ -5900,6 +5903,13 @@ Berechtigung für die Mac-App.
 Sessions und Zugangsdaten werden ausschließlich sicher im macOS Keychain
 gespeichert.
 
+Der eigene Login ist eine eigene Oberfläche, kein zweites Auth-System und
+keine eigene Registrierung. Supabase kann normale Nutzer authentifizieren;
+erst die anschließende Rollenprüfung verweigert ihnen die Mac-App. Jede
+administrative Datenoperation bleibt zusätzlich serverseitig geschützt
+(§40.6). Passwörter nicht speichern; nur Session-/Refresh-Tokens und explizit
+eingegebene Provider-Credentials im Keychain ablegen.
+
 ### 38.3 Desktop-optimiertes Design
 
 Das Design soll eindeutig zu SFT Drive gehören und sich an der
@@ -5936,6 +5946,23 @@ größere Planungsübersichten
 
 Damit können beispielsweise Teilnehmerliste und ausgewählter Teilnehmer
 gleichzeitig dargestellt werden.
+
+Für die erste Desktop-Version verbindlich:
+
+- Native Sidebar, Tabelle und Inspector mit sichtbarer Tour-/Auswahlzuordnung;
+  Filter, Sortierung und Spaltenbreiten dürfen lokal erhalten bleiben.
+- Tastaturbedienung, sichtbarer Fokus, VoiceOver-Beschriftungen, ausreichende
+  Kontraste und reduzierte Bewegung; Status nie ausschließlich farblich anzeigen.
+- Ungespeicherte Änderungen beim Fenster-/Tourwechsel behandeln; Speichern,
+  Verwerfen und Abbrechen klar unterscheiden. Offline zunächst keine
+  Schreibwarteschlange und keine automatische spätere Übernahme anbieten.
+- Mehrfachaktionen zeigen Zielmenge und Folgen vor Ausführung sowie Ergebnis
+  je Datensatz. Teilerfolge nicht als Gesamterfolg darstellen; Löschaktionen
+  gemäß §37.3 bestätigen, kein unbelegtes Rückgängig-Versprechen.
+- Laden, leere Liste, fehlende Berechtigung, Verbindungsfehler und veraltete
+  Daten getrennt anzeigen. Lange Abfragen/KI-Analysen müssen abbrechbar sein.
+- Export über nativen Speicherdialog/Teilen; Datensparsamkeit aus §35.1 und
+  Schutz vor CSV-Formelausführung auch im Mac-Export berücksichtigen.
 
 ### 38.4 Administrativer Gesamtumfang
 
@@ -5986,6 +6013,14 @@ Beispielsweise kann eine Tour auf einem Bildschirm zusammengeführt werden:
 4 Vormerkungen
 2 offene Admin-Aufgaben
 ```
+
+Die Zahlen sind beispielhaft. Übernachtungsbestätigungen pro gültiger Nacht,
+eingereichte Essensbestellungen pro Restaurant-Stopp und Check-ins jeweils
+gegen aktuell bestätigte Registrierungen zählen; Fahrzeuge, Personen und
+Gerichte getrennt beschriften. Eine Gesamt-Hotelquote muss ausdrücklich
+„alle Nächte bestätigt“ bedeuten, nicht beliebige Einzelbestätigungen.
+„Offene Admin-Aufgaben“ zunächst nur aus definierten, nachvollziehbaren
+Planungshinweisen ableiten; es existiert dafür keine eigene Aufgabenverwaltung.
 
 Dazu kommen Filter und Auswertungen nach Fahrzeug, Personen, Status,
 Übernachtung, Restaurant, Check-in usw.
@@ -6067,6 +6102,20 @@ Eine Restaurant-Mail könnte beispielsweise extrahieren:
 Die Anwendung übersetzt dieses definierte Schema anschließend in die
 entsprechenden SFT-Drive-Felder.
 
+Die Beispiele sind Extraktionsentwürfe, keine Datenbank-Payloads. Im Mailtext
+fehlt das Jahr: `2027` darf nur aus ausdrücklich gewähltem Tourkontext stammen
+und muss als Ergänzung markiert werden; sonst bleibt das Datum ungeklärt.
+Fehlende/mehrdeutige Werte als `null` bzw. offene Rückfrage behandeln, nicht
+erraten. Feldweise Quelltextbelege und abgeleitete Werte in der Vorschau zeigen.
+
+Für `hotel_offer` nur passende Felder aus §36.5 übernehmen: `hotel` → `name`,
+`notes` → geprüfte `note`, `booking_deadline` → Datum; gültige `night_date` aus
+bestätigtem An-/Abreisezeitraum und ausgewählter Tour ableiten. `rooms` bleibt
+eine Angebotsinformation im Entwurf und erzeugt weder Zimmerkontingent noch
+Teilnehmer-Buchungsdaten oder Übernachtungsbestätigungen (§36.3/§36.6).
+Restaurantdaten gezielt auf `tour_stops`, `restaurant_stop_settings` und
+`menu_items` abbilden; keine Tabellen/Felder für KI-Beispiele erfinden.
+
 ### 39.3 KI darf nicht ungeprüft schreiben
 
 Ein wichtiger Architekturpunkt:
@@ -6093,8 +6142,18 @@ normale SFT-Drive-RPC/API
 Datenbank
 ```
 
-Dadurch kann ein Modell weder versehentlich Touren verändern noch Daten
-erfinden und ungeprüft speichern.
+Dadurch schreibt ein Modell nicht selbst in die Datenbank. Es kann trotzdem
+inhaltlich falsche, formal gültige Daten liefern; Schema-Validierung ersetzt
+weder Quellenprüfung durch den Admin noch serverseitige Geschäftsregeln.
+
+Eingefügte E-Mails und Modellantworten sind nicht vertrauenswürdige Daten:
+enthaltene Anweisungen nicht ausführen, keine Tools/SQL/Shell-Aufrufe und
+kein automatisches Öffnen von Links oder Nachladen von Anhängen erlauben.
+Die KI erhält weder Supabase-Tokens noch Datenbank-Credentials. Nur explizit
+zugelassene Felder übernehmen; IDs, Rollen, SQL oder Aktionsnamen aus einer
+Modellantwort dürfen keinen Datenzugriff steuern. Ziel-Tour/-Stopp wählt der
+Admin unabhängig vom Modell. Neben JSON-Typen auch Datumsbereiche (§19),
+Längen, Mengen, Preise und URL-Schemata prüfen; unbekannte Felder ablehnen.
 
 Ideal wäre eine Änderungsansicht wie:
 
@@ -6133,6 +6192,9 @@ Fallback
 Kein administrativer Kernworkflow darf von der Verfügbarkeit eines
 KI-Anbieters abhängig sein.
 
+KI und Fallback sind standardmäßig aus. Analyse startet ausschließlich durch
+eine bewusste Aktion mit dem ausgewählten Text, niemals beim Einfügen allein.
+
 ### 39.5 Provider-Abstraktion
 
 Die Anwendung soll nicht auf einen einzelnen Anbieter fest programmiert
@@ -6161,6 +6223,13 @@ spätere Anbieter
 Damit kann ein Modell ausgetauscht werden, ohne die Planungslogik
 umzubauen.
 
+Provider melden Fähigkeiten (z. B. JSON-Schema-Unterstützung), Ausführungsort
+(lokal/eigener Server/Cloud) und Limits explizit. „OpenAI-kompatibel“ garantiert
+keine identischen Schema-, Fehler- oder Streaming-Funktionen. Adapter liefern
+ein versioniertes, anbieterneutrales Ergebnis mit Modell-/Providerkennung,
+Validierungsfehlern und, soweit verfügbar, Verbrauchsdaten. Timeout, Abbruch,
+Eingabe-/Ausgabegrenzen und normalisierte Fehler gehören zum Vertrag.
+
 ### 39.6 Ollama als bevorzugte kostenlose/lokale Option
 
 Ollama soll ausdrücklich als unterstützte Variante vorgesehen werden.
@@ -6185,6 +6254,26 @@ Modell: <ausgewähltes Modell>
 Damit kann ein Modell lokal auf dem Mac oder auf einem eigenen
 Rechner/Server laufen.
 
+„Ollama“ oder `localhost` allein beweist keine lokale Inferenz: Ollama kann
+Cloud-Modelle verwenden. Für den lokalen Modus lokale Modelle verwenden und
+Cloud-Funktionen deaktivieren (z. B. `OLLAMA_NO_CLOUD=1`, anschließend Neustart);
+unbekannten Ausführungsort nicht als lokal kennzeichnen. Siehe
+[Ollama FAQ](https://docs.ollama.com/faq) und
+[Cloud-Modelle](https://docs.ollama.com/cloud) (geprüft am 10.09.2026).
+
+Unverschlüsseltes HTTP nur für Loopback erlauben. Eigene Netzwerk-Endpunkte
+benötigen HTTPS mit gültiger Zertifikatsprüfung und vorgeschaltete Authentifizierung;
+den standardmäßig unauthentifizierten Ollama-Port nicht öffentlich freigeben.
+Endpoints nur aus Admin-Einstellungen übernehmen, nie aus Mail/Modellantwort;
+Credentials an den konfigurierten Ursprung binden und nicht über Redirects
+an andere Hosts weiterreichen. Keine globale Abschaltung von macOS ATS/TLS.
+
+Lokale Inferenz vermeidet Anbietergebühren, benötigt aber geeigneten RAM,
+Speicherplatz und Rechenleistung/Strom. Modelllizenz, Extraktionsqualität und
+Latenz auf den vorgesehenen Macs prüfen. Modelle nicht ungefragt herunterladen
+oder Ollama automatisch installieren; fehlenden Dienst und fehlendes Modell
+mit verständlicher Einrichtungshilfe anzeigen.
+
 ### 39.7 Flexible Modellauswahl und Fallback
 
 Mehrere Modelle können konfiguriert werden.
@@ -6206,6 +6295,14 @@ an einen externen Dienst übertragen würden.
 
 Ein solcher Cloud-Fallback muss vom Admin ausdrücklich erlaubt sein.
 
+Pro Analyse höchstens ein Versuch je freigegebenem Modell, mit gemeinsamer
+Zeit-/Verbrauchsgrenze; keine zyklischen Wiederholungen. Nur Verfügbarkeits-
+und vorübergehende Limitfehler erlauben Fallback. Abbruch, Authentifizierungs-,
+Datenschutz-, Budget- oder Validierungsfehler beenden die Kette. Ein Timeout
+kann bereits Kosten verursacht haben. Jeder neue Cloud-Empfänger benötigt
+vor Versand dieser Analyse eine Freigabe mit Zielanbieter, Modell und Payload;
+Ablehnen beendet den Wechsel und erhält die manuelle Bearbeitung.
+
 ### 39.8 Datenschutz und Secrets
 
 Gerade E-Mail-Kommunikation kann Namen, E-Mail-Adressen,
@@ -6214,12 +6311,22 @@ Buchungsinformationen und andere personenbezogene Inhalte enthalten.
 Daher:
 
 ```text
-lokale KI:  Daten verlassen das eigene System nicht
-Cloud-KI:   vor Verarbeitung klare Kennzeichnung
+lokale Inferenz ohne Cloud-Weiterleitung: Analyse bleibt auf dem Mac
+eigener Server: Analyse verlässt den Mac, Ziel ausdrücklich anzeigen
+Cloud-KI: vor Versand Empfänger und tatsächlich gesendeten Text anzeigen
 ```
 
 Es sollen nur die für die Planung notwendigen Daten an das Modell
 geschickt werden.
+
+Signaturen, fremde Mailverläufe, Buchungsnummern und unnötige personenbezogene
+Angaben vor Versand entfernen; keine vollständigen Teilnehmerlisten mitsenden.
+Rohmails und Modellantworten standardmäßig nur im Arbeitsspeicher halten und
+beim Verwerfen/Logout entfernen. Keine Inhalte, Tokens oder Keys in Logs,
+Crashreports oder Telemetrie. Persistente Entwürfe nur nach eigener Entscheidung
+mit festgelegter Aufbewahrung und geschützter Speicherung. Für Cloudbetrieb
+vor Freigabe Datenverarbeitung, Aufbewahrung und Vertragsbedingungen des
+konkreten Anbieters prüfen; eine UI-Bestätigung allein klärt diese Fragen nicht.
 
 **Verbindliche Korrektur/Präzisierung gegenüber einer früheren
 Gesprächsformulierung:** API-Keys werden **niemals fest in die App
@@ -6254,6 +6361,13 @@ KI aktiviert/deaktiviert
 ```
 
 Credentials/API-Schlüssel dagegen ausschließlich im Keychain (§39.8).
+
+Cloudbetrieb bleibt gemäß §4 eine gesonderte Kostenentscheidung. Vor M8
+Budget pro Analyse/Zeitraum, Eingabe-/Ausgabelimits und Kostenanzeige festlegen;
+bei unbekannter Preisgrundlage keine behauptete Kostengarantie. Lokale Zähler
+decken andere Geräte/Anwendungen desselben API-Keys nicht ab; verfügbare
+anbieterweite Limits zusätzlich nutzen. Keine neue gemeinsame Proxy- oder
+Billing-Infrastruktur allein für diese optionale Funktion einführen.
 
 ### 39.10 Langfristiges Ziel
 
@@ -6298,11 +6412,12 @@ tatsächlich gebaut sind — analog zu §26/§34/§35/§37.
 Die Mac-App ist ein eigenständiges Xcode-Projekt in einem **eigenen
 Repository** (z. B. `sft-drive-mac`), nicht Teil von `SFT-Drive`. Gründe:
 
-- Ein Vite/React-Repo und ein Xcode-Projekt teilen sich kein Tooling
-  (kein gemeinsames `package.json`, kein gemeinsamer CI-Lauf sinnvoll).
+- Vite/React und Xcode erhalten getrennte Build- und Release-Prozesse.
+  Ein Mono-Repo wäre technisch möglich; die Trennung ist hier eine
+  organisatorische Entscheidung, keine technische Notwendigkeit.
 - Cloudflare Pages baut aus `SFT-Drive` automatisch bei jedem Push auf
   `main` — ein zusätzliches `.xcodeproj` im selben Repo würde diesen Build
-  nicht stören, aber auch keinerlei Nutzen stiften.
+  nicht stören; getrennte Repositories halten die Release-Zuständigkeiten klar.
 - `CLAUDE.md` bleibt trotzdem die **eine** Produktspezifikation für beide
   Anwendungen (§23.15) — das neue Repository bekommt keine eigene,
   konkurrierende Spezifikationsdatei, sondern verweist in seiner README auf
@@ -6310,6 +6425,14 @@ Repository** (z. B. `sft-drive-mac`), nicht Teil von `SFT-Drive`. Gründe:
 
 Gemeinsam genutzt werden ausschließlich die Supabase-Projekt-ID, die
 Datenbank/RLS/RPCs und die Auth-Nutzerkonten — nicht der Code selbst.
+
+Backend-Migrationen und Edge Functions bleiben in `SFT-Drive`; das Mac-Repo
+verweist auf den unterstützten Commit-/Migrationsstand dieser Spezifikation.
+API-Verträge über repräsentative JSON-Testdaten und dokumentierte RPC-Signaturen
+abgleichen. Backend zuerst additiv bereitstellen, danach Clients aktualisieren;
+ältere verteilte Mac-Versionen müssen weiterhin funktionieren. Entwicklung und
+Tests verwenden lokale Supabase-Daten bzw. freigegebene Testumgebungen mit
+synthetischen Daten, nicht ungeprüft das gemeinsame Produktivprojekt.
 
 ### 40.2 Projektstruktur
 
@@ -6323,7 +6446,7 @@ SFTDriveAdmin/
 │   │   ├── AuthManager.swift             (Login, Session, admin-Check)
 │   │   └── KeychainStore.swift           (Session + KI-Credentials)
 │   ├── Data/
-│   │   ├── SupabaseClient.swift          (zentraler Client, ein Singleton)
+│   │   ├── SupabaseClient.swift          (zentral erzeugt, injizierbar)
 │   │   ├── Models/                       (Codable-Structs je Tabelle/RPC)
 │   │   └── Repositories/                 (ein Repository je fachlichem Bereich:
 │   │                                       ToursRepository, RegistrationsRepository,
@@ -6349,8 +6472,11 @@ SFTDriveAdmin/
 Architekturmuster: **MVVM**, ein `ObservableObject`-ViewModel pro Feature-
 Screen, das über sein Repository lädt/schreibt. Repositories kapseln jeden
 Supabase-Zugriff — eine View ruft nie direkt den Supabase-Client auf,
-analog dazu, wie die PWA jeden Zugriff über `src/features/*` bzw. RPCs
-kapselt statt direkter Tabellenzugriffe verstreut über Components.
+damit Repositories unabhängig testbar bleiben. Die PWA enthält derzeit auch
+direkte Zugriffe in `src/pages/admin/*`; die Repository-Schicht ist eine
+Vorgabe für die Mac-App und keine Behauptung über vorhandene PWA-Kapselung.
+Client und Provider injizieren, UI-Zustand auf dem Main Actor verwalten und
+laufende Tasks beim Kontextwechsel abbrechen; keine Netzwerkarbeit im UI-Thread.
 
 ### 40.3 Supabase-Anbindung
 
@@ -6364,8 +6490,12 @@ kapselt statt direkter Tabellenzugriffe verstreut über Components.
 - Authentifizierung läuft über `supabase.auth.signIn(email:password:)`; die
   zurückgegebene Session wird nicht in `UserDefaults`, sondern ausschließlich
   im **macOS Keychain** gespeichert (`KeychainStore`, §38.2).
-- Adminprüfung nach Login: Aufruf einer vorhandenen oder neu zu ergänzenden
-  RPC, die `is_admin()` serverseitig auswertet (siehe §40.6) — niemals nur
+- SDK-Version festlegen und dessen Auth-Storage ausdrücklich auf den Keychain
+  konfigurieren; eine nachträgliche Kopie der Session reicht nicht. Refresh,
+  Rotation und Löschen müssen denselben Speicher nutzen. Einträge nach
+  Supabase-Projekt/Account bzw. Provider/Endpoint trennen, ohne iCloud-Sync.
+- Adminprüfung nach Login: Aufruf der bereits vorhandenen RPC
+  `is_admin()` (siehe §40.6) — niemals nur
   `user_metadata` oder ein lokal zwischengespeichertes Flag prüfen.
 - Datenzugriff ausschließlich über bestehende RLS-Policies und die bereits
   in `supabase/migrations/` definierten Admin-RPCs (`admin_list_users`,
@@ -6376,6 +6506,31 @@ kapselt statt direkter Tabellenzugriffe verstreut über Components.
   Logik wie die PWA (§8.12: „keine generischen Admin-Bypass-Funktionen
   bauen").
 
+Zum vorhandenen Zugriff gehören auch RLS-geschütztes CRUD (z. B.
+`tour_hotel_suggestions`), Supabase Storage für Coverbilder und die
+benutzerautorisierten Edge Functions `admin-manage-user` und `send-push`.
+Auth-Admin-API und Cron-Functions niemals direkt vom Mac mit privilegierten
+Schlüsseln aufrufen. Push-Versand an PWA-Geräte wiederverwenden; der Empfang
+nativer Mac-Pushes wäre ein eigener, bislang nicht geplanter Integrationsumfang.
+
+Vor M3 jeden Schreibworkflow gegen den Bestand abgleichen: Kapazitätsänderung
+über `admin_update_max_vehicles`, Absage über `admin_cancel_tour`, Löschen über
+`admin_delete_tour`; direkte Tabellenrechte ersetzen diese Regeln nicht.
+`AdminTourFormPage` schreibt aktuell mehrere Tabellen in getrennten Requests
+und erzeugt Slugs clientseitig (Präzisierung zu §8.3, siehe §37.1). Das ist
+keine atomare Backend-Speicheroperation und kein automatisch sicherer
+Konfliktschutz für einen zweiten Client.
+
+Für zusammengehörige Änderungen vor Freigabe des betreffenden Mac-Schreibpfads
+eine minimale gemeinsame Transaktions-/RPC-Lösung vorsehen, die alle Eingaben
+vor dem Schreiben prüft und bei Fehler vollständig zurückrollt. Keine breite
+PWA-Neuimplementierung. Gleichzeitige PWA-/Mac-Änderungen durch serverseitige
+Versionsprüfung und verständliche Konfliktvorschau absichern; `updated_at`
+nur nutzen, wenn es bei sämtlichen Schreibwegen zuverlässig serverseitig
+fortgeschrieben wird. Erneutes Laden vor Speichern allein verhindert kein
+Überschreiben konkurrierender Änderungen. Unklar ausgegangene Schreibrequests
+nicht blind wiederholen: Ergebnis nachladen bzw. Idempotenz absichern.
+
 ### 40.4 Datenmodell-Mapping
 
 Jede Supabase-Tabelle/RPC-Antwort, die die Mac-App braucht, bekommt einen
@@ -6385,6 +6540,12 @@ Typen unter `src/types/*.ts` (z. B. `Tour`, `TourRegistration`,
 `Vehicle`). Feldnamen und Nullability werden aus den Migrationen unter
 `supabase/migrations/` abgeleitet, nicht neu erfunden — beide Clients
 beschreiben denselben Datenbestand.
+
+Lesemodelle und erlaubte Schreibfelder trennen. `DATE` als Kalenderdatum ohne
+UTC-Verschiebung, `TIMESTAMPTZ` als Zeitpunkt mit definierter Anzeigezeitzone
+und Geldwerte als Decimal behandeln (§19). Nullable Felder, unbekannte neue
+Enum-Werte und strukturierte RPC-Fehler explizit behandeln. Große Listen
+serverseitig filtern/paginieren, nicht unbegrenzt vollständig laden.
 
 ### 40.5 Planungs-Dashboard (§38.5) — ein zusätzlicher Lesezugriff nötig
 
@@ -6406,24 +6567,41 @@ Einzelabfragen pro Tour braucht. Bei Umsetzung als eigene, neue Migration
 in `supabase/migrations/` anzulegen; `is_admin()`-Prüfung wie bei jeder
 bestehenden Admin-RPC (§8.12).
 
+Die Kennzahlen nach §38.5 getrennt voraggregieren, bevor sie verbunden werden,
+damit mehrere Nächte und Bestellungen keine Join-bedingten Doppelzählungen
+erzeugen. Einen konsistenten Snapshot samt Berechnungszeitpunkt liefern;
+fehlende/ungenutzte Bereiche von echten Nullwerten unterscheiden. Keine
+Rohprofile oder Kennzeichen in der Summary. `auth.uid()`/`is_admin()` prüfen,
+`EXECUTE` nicht an `PUBLIC`/`anon` vergeben; `SECURITY INVOKER` bevorzugen,
+`SECURITY DEFINER` nur bei begründetem Bedarf mit §8.12-Härtung. Abnahme mit
+Nicht-Admin, fehlender Tour, mehreren Nächten/Stopps und stornierten Teilnehmern.
+
 ### 40.6 Auth-/Rollenprüfung im Detail
 
 ```text
 1. Login (E-Mail/Passwort) über supabase-swift
 2. Session im Keychain sichern
-3. RPC-Aufruf, der is_admin() serverseitig prüft
-   → z. B. Wiederverwendung von is_admin() selbst über eine minimale
-     Wrapper-RPC "am_i_admin()" (SECURITY DEFINER, gibt nur ein boolean
-     zurück, keine weiteren Daten) - analog zu is_username_available()
-     als Muster für eine schmale, zweckgebundene RPC
+3. Bestehende RPC is_admin() im Kontext der angemeldeten Session aufrufen
+   (bereits von src/features/auth/useIsAdmin.ts genutzt; kein Wrapper nötig)
 4. false  → Meldung „Kein Administrator-Zugriff", signOut(), zurück zum Login
 5. true   → App entsperrt, weitere Admin-Daten laden
 ```
 
-Bei jedem App-Start erneut geprüft (nicht nur einmalig beim Login) — ein
-zwischenzeitlicher Rollenentzug (§38.2) wirkt sich damit spätestens beim
-nächsten Start aus. Optional zusätzlich bei Reaktivierung aus dem
-Hintergrund (`NSApplication.didBecomeActiveNotification`) erneut prüfen.
+Bei App-Start, Sessionwechsel und Reaktivierung erneut prüfen. Bis zum
+Ergebnis keine Admin-Daten laden/anzeigen; Netzwerkfehler sind keine Freigabe.
+Die eigentliche Sicherheitsgrenze bleibt die aktuelle Datenbankprüfung je
+geschütztem Request: nach wirksamem Rollenentzug dürfen neue Admin-Operationen
+nicht bis zum Neustart erlaubt bleiben. Bereits geladene Daten lassen sich
+serverseitig nicht zurückholen. Bei erkanntem Entzug/ungültiger Session App
+sperren, laufende Requests und Abonnements beenden, sensible Ansichten und
+Caches leeren; nachträglich eintreffende Ergebnisse einer alten Session verwerfen.
+Bei Offline-Logout lokale Session auch ohne erfolgreiche Serverantwort löschen.
+
+Für erhöhten Schutz Admin-MFA vor produktiver Distribution entscheiden; eine
+verbindliche MFA-Pflicht müsste auf gemeinsamen Backend-Pfaden (AAL-Prüfung)
+gelten, nicht nur im Mac-Dialog. Kontosperre und Rollenentzug getrennt testen:
+`is_admin()` prüft die Rolle, nicht automatisch den Sperrstatus; noch gültige
+JWTs dürfen nicht mit sofortigem Session-Widerruf gleichgesetzt werden.
 
 ### 40.7 KI-Schicht — konkrete Swift-Architektur
 
@@ -6434,25 +6612,26 @@ protocol AIProvider {
 ```
 
 - `OllamaProvider`: HTTP-Client gegen den in den Einstellungen (§39.9)
-  hinterlegten Endpoint (Default `http://localhost:11434`), kein API-Key
-  nötig (§39.8-Korrektur).
+  hinterlegten Endpoint (Default `http://localhost:11434`); ohne API-Key nur
+  beim lokalen Standarddienst, entfernte Endpunkte gemäß §39.6 absichern.
 - `OpenAIProvider` (und potenziell weitere OpenAI-kompatible Anbieter):
   liest den API-Key ausschließlich aus dem Keychain (`KeychainStore`), nie
   aus Code oder Konfigurationsdatei (§39.8).
 - `AIProviderChain` implementiert die in §39.7 beschriebene Fallback-
-  Reihenfolge; ein Wechsel von einem lokalen auf einen Cloud-Provider löst
-  vor der ersten Anfrage einen expliziten Bestätigungsdialog aus, nicht nur
-  eine einmalige Einstellung — schützt davor, dass eine spätere
-  Konfigurationsänderung unbemerkt zu Cloud-Versand führt.
+  Reihenfolge mit Grenzen aus §39.7; jeder neue Cloud-Empfänger benötigt pro
+  Analyse vor Versand eine Bestätigung. Dieselbe Datenvorschau gilt bei
+  direkt ausgewähltem Cloud-Provider, nicht nur bei einem Fallback.
 - `ExtractionSchema` bildet die JSON-Schemata aus §39.2 (`hotel_offer`,
   `restaurant`, künftige Typen) ab; die Antwort des Modells wird gegen
   dieses Schema validiert, bevor sie der `ExtractionReviewView` (§39.3)
   angezeigt wird — eine Antwort, die nicht dem Schema entspricht, wird
   verworfen und dem Admin als Fehler gemeldet, nie ungeprüft übernommen.
-- Das „Übernehmen" in der Review-Ansicht ruft ausschließlich bestehende
-  bzw. für Admins bereits vorgesehene RPCs auf (z. B. Hotelvorschlag
-  anlegen) — die KI-Schicht selbst besitzt keinen eigenen Schreibpfad zur
-  Datenbank (§39.3).
+- Das „Übernehmen" verwendet ausschließlich den fachlichen Repository-
+  Schreibpfad (§40.3), einschließlich zulässigem RLS-CRUD für Hotelvorschläge.
+  Ziel, Alt-/Neuwert und ausgewählte Felder anzeigen; Validierung nach jeder
+  manuellen Korrektur wiederholen. Mehrtabellen-Übernahmen erst mit atomarem
+  Backend-Pfad freigeben; Doppelübernahme und veraltete Vorschauen absichern.
+  Die KI-Schicht besitzt keinen eigenen Schreibpfad zur Datenbank (§39.3).
 
 ### 40.8 Implementierungsphasen
 
@@ -6483,43 +6662,71 @@ Phase M6 — Planungs-Dashboard (§38.5)
 
 Phase M7 — KI-Grundgerüst (Ollama-only)
   AIProvider-Protokoll, OllamaProvider, ExtractionReviewView,
-  Hotel-/Restaurant-Schema, „Übernehmen" → bestehende RPCs
+  Hotel-/Restaurant-Schema, „Übernehmen" → abgesicherter Repository-Pfad
 
 Phase M8 — KI-Provider-Erweiterung
   OpenAIProvider, AIProviderChain mit Fallback-Bestätigung (§39.7),
   KI-Einstellungen (§39.9)
 
-Phase M9 — Distribution
-  Code-Signing mit Developer-ID, Notarization, Verteilung außerhalb
-  des Mac App Store direkt an die Administratoren (kein Store-Review
-  nötig, kein zusätzliches Apple-Developer-Programm zwingend, sofern
-  ausschließlich als selbst notariziertes Direkt-Distributable
-  ausgeliefert wird — siehe §40.9 zu offenen Punkten)
+Phase M9 — Manuelle Distribution
+  Lokaler Release-Build, bei Bedarf Ad-hoc-Signierung ohne Entwicklerkonto,
+  Übergabe als .app im ZIP/DMG ausschließlich an benötigte Administratoren;
+  kein App Store, keine Developer-ID-Signierung und keine Notarisierung.
+  Erstinstallation und manuelles Update auf Ziel-Macs prüfen (§40.9).
 ```
 
 Jede Phase soll für sich lauffähig und in sich abgeschlossen sein, analog
 zur bisherigen additiven Vorgehensweise bei der PWA (§23).
 
+Abnahme passend zur jeweiligen Phase: M1/M2 mit normalem Nutzer, Admin,
+Rollenentzug in laufender Session, Token-Refresh und Offline-Start prüfen;
+M3–M6 mit parallelen Clients, Kapazitätsgrenzen, Konflikten und Teilausfällen.
+M7/M8 mit synthetischen Mails fehlende Jahresangaben, Prompt-Injection,
+ungültiges JSON, Schemaabweichungen, Abbruch, nicht erreichbares Ollama,
+Cloud-Ablehnung, Budgetgrenzen und Doppelübernahme testen. Lokaler Modus
+darf dabei keine Cloud-Anfragen auslösen. Bestehende PWA-Regressionen bewahren;
+Mac-Build/Tests auf unterstütztem macOS ausführen, bevor eine Phase als fertig gilt.
+
 ### 40.9 Offene Entscheidungen
 
-Bewusst noch nicht entschieden, vor Beginn von Phase M1 zu klären:
+Der Verteilungsweg ist durch den Projektinhaber festgelegt; die übrigen
+technischen Entscheidungen vor Beginn von Phase M1 klären:
 
-- **Verteilungsweg:** direkter Download (signiert + notarisiert) reicht für
-  einen kleinen, bekannten Administratorenkreis aus und vermeidet
-  Store-Gebühren/-Review; ein Mac-App-Store-Eintrag ist nicht zwingend
-  erforderlich und würde zusätzliche Kosten/Prozesse bedeuten (§4
-  Kostenregel gilt sinngemäß auch hier).
-- **Apple Developer Program** (99 $/Jahr) wird für Code-Signing/Notarization
-  ohnehin benötigt, unabhängig vom Store — das ist keine SFT-Drive-
-  spezifische Zusatzkosten-Entscheidung, sondern Voraussetzung für jede
-  vertrauenswürdig verteilte native Mac-App.
+- **Verteilungsweg (entschieden):** ausschließlich manuelle Weitergabe an
+  die benötigten Personen, keine Veröffentlichung im Mac App Store.
+  Release-Build als `.app` in ZIP/DMG über einen vertrauenswürdigen privaten
+  Übergabeweg verteilen; Updates ebenfalls manuell.
+- **Kein Entwicklerkonto erforderlich:** für diesen Verteilungsweg sind
+  weder ein Apple-Developer-Konto noch eine kostenpflichtige Mitgliedschaft
+  vorgesehen. Lokal bauen und bei Bedarf ad hoc signieren; keine
+  Developer-ID-Signierung, Notarisierung oder Stapling voraussetzen.
+  Ad-hoc-Signierung bestätigt keine von Apple geprüfte Entwickleridentität.
+  Developer-ID/Notarisierung wäre nur nach einer späteren ausdrücklichen
+  Änderung dieser Entscheidung relevant und würde eine geeignete
+  Mitgliedschaft erfordern ([Apple Developer ID](https://developer.apple.com/help/glossary/developer-id-certificate/)).
+- **Erstinstallation:** macOS kann eine manuell übertragene, nicht notarisierte
+  App über Gatekeeper blockieren. Die gezielte Freigabe dieser bekannten App
+  unter „Datenschutz & Sicherheit“ dokumentieren, soweit die macOS-Version
+  und Geräteverwaltung dies erlauben; keine globale Abschaltung von Gatekeeper
+  oder SIP verlangen. Siehe [Apple: Apps sicher öffnen](https://support.apple.com/en-ie/102445)
+  (geprüft am 10.09.2026).
+- **Release-Prüfung:** stabile Bundle-ID, minimale Entitlements und passende
+  Zielarchitektur festlegen. Das tatsächlich übertragene Paket auf einem
+  zweiten Mac ohne Entwicklungsumgebung testen, einschließlich Gatekeeper,
+  Keychain-Zugriff, Login und manuellem Update. Keychain-Zugriff über
+  Ad-hoc-Build-Wechsel nicht als automatisch unverändert voraussetzen;
+  erforderlichenfalls erneuten Login bzw. erneute Credential-Eingabe vorsehen.
+  Versionsnummer, Prüfsumme und unterstützte macOS-Versionen mitliefern.
 - **Mindest-macOS-Version** (z. B. aktuelle plus eine Vorversion) noch
   festzulegen.
 - **Ollama-Erreichbarkeit**: rein lokal auf demselben Mac, oder auch ein
   im lokalen Netzwerk erreichbarer separater Rechner/Server — beides laut
   §39.6 vorgesehen, UI muss also einen frei editierbaren Endpoint statt nur
   „localhost" anbieten.
-- **`admin_get_tour_planning_summary()`** (§40.5) ist die einzige geplante
-  neue Migration für dieses Konzept — bei Umsetzung wie gewohnt einzeln
-  versioniert, lokal gegen eine echte `authenticated`-Rolle getestet, und
-  erst nach Migration im Supabase SQL Editor produktiv nutzbar.
+- **Backend-Ergänzungen:** `admin_get_tour_planning_summary()` (§40.5) ist
+  geplant; weitere minimale Migrationen für die konkret benötigten atomaren
+  Schreib-/Konfliktprüfungen (§40.3) erst nach Bestandsabgleich festlegen.
+  Keine pauschale Zusage „nur eine Migration“. Änderungen einzeln versionieren,
+  als echte `authenticated`-Rolle mit und ohne Adminrecht testen und den
+  tatsächlich eingespielten Stand prüfen (§26). Die vorliegende Spezifikation
+  allein verändert weder Datenbank noch produktive App.
