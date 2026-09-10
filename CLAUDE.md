@@ -6283,3 +6283,243 @@ E-Mail einfügen
 ```
 
 reduziert werden.
+
+---
+
+## 40. Implementierungskonzept native macOS-App (Umsetzung zu §38/§39)
+
+Dieser Abschnitt ist die konkrete technische Umsetzungsplanung zu §38/§39.
+Wie dort gilt: **geplant, noch nicht umgesetzt.** Er wird durch
+`Umsetzungsstand`-Ergänzungen fortgeschrieben, sobald einzelne Phasen
+tatsächlich gebaut sind — analog zu §26/§34/§35/§37.
+
+### 40.1 Neues Repository statt Mono-Repo
+
+Die Mac-App ist ein eigenständiges Xcode-Projekt in einem **eigenen
+Repository** (z. B. `sft-drive-mac`), nicht Teil von `SFT-Drive`. Gründe:
+
+- Ein Vite/React-Repo und ein Xcode-Projekt teilen sich kein Tooling
+  (kein gemeinsames `package.json`, kein gemeinsamer CI-Lauf sinnvoll).
+- Cloudflare Pages baut aus `SFT-Drive` automatisch bei jedem Push auf
+  `main` — ein zusätzliches `.xcodeproj` im selben Repo würde diesen Build
+  nicht stören, aber auch keinerlei Nutzen stiften.
+- `CLAUDE.md` bleibt trotzdem die **eine** Produktspezifikation für beide
+  Anwendungen (§23.15) — das neue Repository bekommt keine eigene,
+  konkurrierende Spezifikationsdatei, sondern verweist in seiner README auf
+  diesen Abschnitt.
+
+Gemeinsam genutzt werden ausschließlich die Supabase-Projekt-ID, die
+Datenbank/RLS/RPCs und die Auth-Nutzerkonten — nicht der Code selbst.
+
+### 40.2 Projektstruktur
+
+```text
+SFTDriveAdmin/
+├── SFTDriveAdmin.xcodeproj
+├── SFTDriveAdmin/
+│   ├── App/
+│   │   └── SFTDriveAdminApp.swift        (@main, App-Lifecycle)
+│   ├── Auth/
+│   │   ├── AuthManager.swift             (Login, Session, admin-Check)
+│   │   └── KeychainStore.swift           (Session + KI-Credentials)
+│   ├── Data/
+│   │   ├── SupabaseClient.swift          (zentraler Client, ein Singleton)
+│   │   ├── Models/                       (Codable-Structs je Tabelle/RPC)
+│   │   └── Repositories/                 (ein Repository je fachlichem Bereich:
+│   │                                       ToursRepository, RegistrationsRepository,
+│   │                                       UsersRepository, StopsRepository,
+│   │                                       AccommodationRepository, …)
+│   ├── Features/
+│   │   ├── Dashboard/
+│   │   ├── Tours/                        (Liste, Editor, Duplizieren)
+│   │   ├── Registrations/                (Confirmed/Pending/Waitlist/…)
+│   │   ├── PlanningBoard/                (§38.5 Gesamtübersicht je Tour)
+│   │   ├── Users/
+│   │   └── Settings/                     (inkl. KI-Einstellungen, §39.4)
+│   ├── AI/
+│   │   ├── AIProvider.swift              (Protocol, §39.5)
+│   │   ├── OllamaProvider.swift
+│   │   ├── OpenAIProvider.swift
+│   │   ├── AIProviderChain.swift         (Fallback-Reihenfolge, §39.7)
+│   │   └── ExtractionReviewView.swift    (Vorschau/Diff, §39.3)
+│   └── Shared/                           (Design-Tokens, wiederverwendete Views)
+└── SFTDriveAdminTests/
+```
+
+Architekturmuster: **MVVM**, ein `ObservableObject`-ViewModel pro Feature-
+Screen, das über sein Repository lädt/schreibt. Repositories kapseln jeden
+Supabase-Zugriff — eine View ruft nie direkt den Supabase-Client auf,
+analog dazu, wie die PWA jeden Zugriff über `src/features/*` bzw. RPCs
+kapselt statt direkter Tabellenzugriffe verstreut über Components.
+
+### 40.3 Supabase-Anbindung
+
+- Verwendet wird das offizielle Swift-Package **`supabase-swift`**
+  (Auth/PostgREST/Realtime-Client, analog zu `@supabase/supabase-js` in der
+  PWA).
+- `SupabaseClient` wird mit **URL + Anon/Publishable Key** initialisiert —
+  exakt dieselben zwei Werte wie in `.env`/`VITE_SUPABASE_URL` /
+  `VITE_SUPABASE_ANON_KEY` der PWA. Kein Service-Role-Key, auch nicht für
+  Admin-Funktionen (§38.1) — dieselbe Grenze wie im Web-Client.
+- Authentifizierung läuft über `supabase.auth.signIn(email:password:)`; die
+  zurückgegebene Session wird nicht in `UserDefaults`, sondern ausschließlich
+  im **macOS Keychain** gespeichert (`KeychainStore`, §38.2).
+- Adminprüfung nach Login: Aufruf einer vorhandenen oder neu zu ergänzenden
+  RPC, die `is_admin()` serverseitig auswertet (siehe §40.6) — niemals nur
+  `user_metadata` oder ein lokal zwischengespeichertes Flag prüfen.
+- Datenzugriff ausschließlich über bestehende RLS-Policies und die bereits
+  in `supabase/migrations/` definierten Admin-RPCs (`admin_list_users`,
+  `admin_get_user_vehicles`, `admin_send_tour_notification`,
+  `admin_delete_tour`, `admin_add_registration`, `approve_tour_registration`,
+  `reject_tour_registration`, usw.) — **keine neuen, separaten „Mac-App-RPCs“
+  mit weiteren Rechten**, sondern Wiederverwendung derselben serverseitigen
+  Logik wie die PWA (§8.12: „keine generischen Admin-Bypass-Funktionen
+  bauen").
+
+### 40.4 Datenmodell-Mapping
+
+Jede Supabase-Tabelle/RPC-Antwort, die die Mac-App braucht, bekommt einen
+`Codable`-Swift-Struct, konzeptionell 1:1 zu den bestehenden TypeScript-
+Typen unter `src/types/*.ts` (z. B. `Tour`, `TourRegistration`,
+`ConfirmedVehicle`, `HotelSuggestion`, `AccommodationConfirmation`,
+`Vehicle`). Feldnamen und Nullability werden aus den Migrationen unter
+`supabase/migrations/` abgeleitet, nicht neu erfunden — beide Clients
+beschreiben denselben Datenbestand.
+
+### 40.5 Planungs-Dashboard (§38.5) — ein zusätzlicher Lesezugriff nötig
+
+Um die in §38.5 beschriebene Zusammenfassung einer Tour auf einem
+Bildschirm (Fahrzeuge/Personen/Hotel/Essen/Check-in/Warteliste/Vormerkungen
+in einer Ansicht) ohne zahlreiche Einzelabfragen zu ermöglichen, wird eine
+neue, rein lesende RPC ergänzt:
+
+```text
+admin_get_tour_planning_summary(p_tour_id uuid)
+```
+
+Sie fasst ausschließlich bereits heute für Admins zugängliche aggregierte
+Zahlen zusammen (analog zu `get_public_tour_stats`, aber mit den
+zusätzlichen, admin-only Kennzahlen aus §12/§27.9/§34.3/§36.8/§35.3) —
+liefert also keine neuen Berechtigungen, sondern bündelt bestehende
+Admin-Sichten in einem Aufruf, damit die Mac-App nicht sechs bis acht
+Einzelabfragen pro Tour braucht. Bei Umsetzung als eigene, neue Migration
+in `supabase/migrations/` anzulegen; `is_admin()`-Prüfung wie bei jeder
+bestehenden Admin-RPC (§8.12).
+
+### 40.6 Auth-/Rollenprüfung im Detail
+
+```text
+1. Login (E-Mail/Passwort) über supabase-swift
+2. Session im Keychain sichern
+3. RPC-Aufruf, der is_admin() serverseitig prüft
+   → z. B. Wiederverwendung von is_admin() selbst über eine minimale
+     Wrapper-RPC "am_i_admin()" (SECURITY DEFINER, gibt nur ein boolean
+     zurück, keine weiteren Daten) - analog zu is_username_available()
+     als Muster für eine schmale, zweckgebundene RPC
+4. false  → Meldung „Kein Administrator-Zugriff", signOut(), zurück zum Login
+5. true   → App entsperrt, weitere Admin-Daten laden
+```
+
+Bei jedem App-Start erneut geprüft (nicht nur einmalig beim Login) — ein
+zwischenzeitlicher Rollenentzug (§38.2) wirkt sich damit spätestens beim
+nächsten Start aus. Optional zusätzlich bei Reaktivierung aus dem
+Hintergrund (`NSApplication.didBecomeActiveNotification`) erneut prüfen.
+
+### 40.7 KI-Schicht — konkrete Swift-Architektur
+
+```swift
+protocol AIProvider {
+    func extract(text: String, schema: ExtractionSchema) async throws -> StructuredResult
+}
+```
+
+- `OllamaProvider`: HTTP-Client gegen den in den Einstellungen (§39.9)
+  hinterlegten Endpoint (Default `http://localhost:11434`), kein API-Key
+  nötig (§39.8-Korrektur).
+- `OpenAIProvider` (und potenziell weitere OpenAI-kompatible Anbieter):
+  liest den API-Key ausschließlich aus dem Keychain (`KeychainStore`), nie
+  aus Code oder Konfigurationsdatei (§39.8).
+- `AIProviderChain` implementiert die in §39.7 beschriebene Fallback-
+  Reihenfolge; ein Wechsel von einem lokalen auf einen Cloud-Provider löst
+  vor der ersten Anfrage einen expliziten Bestätigungsdialog aus, nicht nur
+  eine einmalige Einstellung — schützt davor, dass eine spätere
+  Konfigurationsänderung unbemerkt zu Cloud-Versand führt.
+- `ExtractionSchema` bildet die JSON-Schemata aus §39.2 (`hotel_offer`,
+  `restaurant`, künftige Typen) ab; die Antwort des Modells wird gegen
+  dieses Schema validiert, bevor sie der `ExtractionReviewView` (§39.3)
+  angezeigt wird — eine Antwort, die nicht dem Schema entspricht, wird
+  verworfen und dem Admin als Fehler gemeldet, nie ungeprüft übernommen.
+- Das „Übernehmen" in der Review-Ansicht ruft ausschließlich bestehende
+  bzw. für Admins bereits vorgesehene RPCs auf (z. B. Hotelvorschlag
+  anlegen) — die KI-Schicht selbst besitzt keinen eigenen Schreibpfad zur
+  Datenbank (§39.3).
+
+### 40.8 Implementierungsphasen
+
+```text
+Phase M1 — Grundgerüst
+  Xcode-Projekt, SwiftUI-App-Shell, Branding/Design-Tokens (§38.3),
+  supabase-swift eingebunden, Login + Keychain + Admin-Check (§40.6)
+
+Phase M2 — Read-only Admin-Kern
+  Dashboard, Tourenliste (read-only), Teilnehmerlisten (read-only),
+  Nutzerverwaltung (read-only) — bestätigt die Datenanbindung, bevor
+  Schreibpfade gebaut werden
+
+Phase M3 — Tourenverwaltung (Schreibzugriff)
+  Tour erstellen/bearbeiten/duplizieren/veröffentlichen/absagen/
+  archivieren/löschen (§38.4), Formulare als natives SwiftUI-Form
+  statt Web-Formular-Nachbau
+
+Phase M4 — Teilnehmerverwaltung
+  Bestätigen/Ablehnen/Entfernen/administrativ Hinzufügen, Warteliste,
+  Fahrzeuglimit-Änderung, Kontextmenüs + Mehrfachauswahl (§38.3)
+
+Phase M5 — Stopps, Restaurant, Hotel, Check-in, Tagesrouten
+  Restliche administrative Bereiche aus §38.4
+
+Phase M6 — Planungs-Dashboard (§38.5)
+  admin_get_tour_planning_summary() (§40.5), Filter/Auswertung
+
+Phase M7 — KI-Grundgerüst (Ollama-only)
+  AIProvider-Protokoll, OllamaProvider, ExtractionReviewView,
+  Hotel-/Restaurant-Schema, „Übernehmen" → bestehende RPCs
+
+Phase M8 — KI-Provider-Erweiterung
+  OpenAIProvider, AIProviderChain mit Fallback-Bestätigung (§39.7),
+  KI-Einstellungen (§39.9)
+
+Phase M9 — Distribution
+  Code-Signing mit Developer-ID, Notarization, Verteilung außerhalb
+  des Mac App Store direkt an die Administratoren (kein Store-Review
+  nötig, kein zusätzliches Apple-Developer-Programm zwingend, sofern
+  ausschließlich als selbst notariziertes Direkt-Distributable
+  ausgeliefert wird — siehe §40.9 zu offenen Punkten)
+```
+
+Jede Phase soll für sich lauffähig und in sich abgeschlossen sein, analog
+zur bisherigen additiven Vorgehensweise bei der PWA (§23).
+
+### 40.9 Offene Entscheidungen
+
+Bewusst noch nicht entschieden, vor Beginn von Phase M1 zu klären:
+
+- **Verteilungsweg:** direkter Download (signiert + notarisiert) reicht für
+  einen kleinen, bekannten Administratorenkreis aus und vermeidet
+  Store-Gebühren/-Review; ein Mac-App-Store-Eintrag ist nicht zwingend
+  erforderlich und würde zusätzliche Kosten/Prozesse bedeuten (§4
+  Kostenregel gilt sinngemäß auch hier).
+- **Apple Developer Program** (99 $/Jahr) wird für Code-Signing/Notarization
+  ohnehin benötigt, unabhängig vom Store — das ist keine SFT-Drive-
+  spezifische Zusatzkosten-Entscheidung, sondern Voraussetzung für jede
+  vertrauenswürdig verteilte native Mac-App.
+- **Mindest-macOS-Version** (z. B. aktuelle plus eine Vorversion) noch
+  festzulegen.
+- **Ollama-Erreichbarkeit**: rein lokal auf demselben Mac, oder auch ein
+  im lokalen Netzwerk erreichbarer separater Rechner/Server — beides laut
+  §39.6 vorgesehen, UI muss also einen frei editierbaren Endpoint statt nur
+  „localhost" anbieten.
+- **`admin_get_tour_planning_summary()`** (§40.5) ist die einzige geplante
+  neue Migration für dieses Konzept — bei Umsetzung wie gewohnt einzeln
+  versioniert, lokal gegen eine echte `authenticated`-Rolle getestet, und
+  erst nach Migration im Supabase SQL Editor produktiv nutzbar.
