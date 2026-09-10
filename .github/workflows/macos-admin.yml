@@ -1,0 +1,29 @@
+name: macOS Admin
+on:
+  push:
+    branches: [main]
+    paths: ['macos/**', '.github/workflows/macos-admin.yml']
+  pull_request:
+    paths: ['macos/**', '.github/workflows/macos-admin.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - name: Unit tests and native build
+        working-directory: macos
+        run: bash scripts/check.sh
+      - name: Build manual distribution
+        working-directory: macos
+        run: bash scripts/release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SFTDriveAdmin-macOS15
+          path: macos/build/distribution/*
+          retention-days: 7

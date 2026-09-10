@@ -6407,32 +6407,22 @@ Wie dort gilt: **geplant, noch nicht umgesetzt.** Er wird durch
 `Umsetzungsstand`-Ergänzungen fortgeschrieben, sobald einzelne Phasen
 tatsächlich gebaut sind — analog zu §26/§34/§35/§37.
 
-### 40.1 Neues Repository statt Mono-Repo
+### 40.1 Mac-App im bestehenden Repository (Entscheidung 10.09.2026)
 
-Die Mac-App ist ein eigenständiges Xcode-Projekt in einem **eigenen
-Repository** (z. B. `sft-drive-mac`), nicht Teil von `SFT-Drive`. Gründe:
+Auf ausdrücklichen Wunsch des Projektinhabers liegt die native App unter
+`macos/` auf `main` im bestehenden Repository `Lightblue87/SFT-Drive`.
+Dies ersetzt die frühere organisatorische Entscheidung für ein separates
+Repository. Vite/PWA und Xcode behalten getrennte Build-Prozesse;
+`CLAUDE.md` bleibt die einzige zentrale Produktspezifikation.
 
-- Vite/React und Xcode erhalten getrennte Build- und Release-Prozesse.
-  Ein Mono-Repo wäre technisch möglich; die Trennung ist hier eine
-  organisatorische Entscheidung, keine technische Notwendigkeit.
-- Cloudflare Pages baut aus `SFT-Drive` automatisch bei jedem Push auf
-  `main` — ein zusätzliches `.xcodeproj` im selben Repo würde diesen Build
-  nicht stören; getrennte Repositories halten die Release-Zuständigkeiten klar.
-- `CLAUDE.md` bleibt trotzdem die **eine** Produktspezifikation für beide
-  Anwendungen (§23.15) — das neue Repository bekommt keine eigene,
-  konkurrierende Spezifikationsdatei, sondern verweist in seiner README auf
-  diesen Abschnitt.
+Backend-Migrationen und Edge Functions bleiben unter `supabase/`.
+Die Mindestversion ist ausdrücklich **macOS 15**. Verteilung ausschließlich
+manuell, ohne Developer-ID und ohne Notarisierung (§40.9).
+Die erste KI-Version verwendet ausdrücklich **nur Ollama**, kein OpenAI
+oder anderer Cloudanbieter. Phase M8 wird erst nach neuer Entscheidung verfolgt.
 
-Gemeinsam genutzt werden ausschließlich die Supabase-Projekt-ID, die
-Datenbank/RLS/RPCs und die Auth-Nutzerkonten — nicht der Code selbst.
-
-Backend-Migrationen und Edge Functions bleiben in `SFT-Drive`; das Mac-Repo
-verweist auf den unterstützten Commit-/Migrationsstand dieser Spezifikation.
-API-Verträge über repräsentative JSON-Testdaten und dokumentierte RPC-Signaturen
-abgleichen. Backend zuerst additiv bereitstellen, danach Clients aktualisieren;
-ältere verteilte Mac-Versionen müssen weiterhin funktionieren. Entwicklung und
-Tests verwenden lokale Supabase-Daten bzw. freigegebene Testumgebungen mit
-synthetischen Daten, nicht ungeprüft das gemeinsame Produktivprojekt.
+Entwicklung und Tests verwenden synthetische Daten. Die Veröffentlichung
+von Code wendet keine Migration automatisch in Supabase an.
 
 ### 40.2 Projektstruktur
 
@@ -6717,8 +6707,7 @@ technischen Entscheidungen vor Beginn von Phase M1 klären:
   Ad-hoc-Build-Wechsel nicht als automatisch unverändert voraussetzen;
   erforderlichenfalls erneuten Login bzw. erneute Credential-Eingabe vorsehen.
   Versionsnummer, Prüfsumme und unterstützte macOS-Versionen mitliefern.
-- **Mindest-macOS-Version** (z. B. aktuelle plus eine Vorversion) noch
-  festzulegen.
+- **Mindest-macOS-Version (entschieden): macOS 15** oder neuer.
 - **Ollama-Erreichbarkeit**: rein lokal auf demselben Mac, oder auch ein
   im lokalen Netzwerk erreichbarer separater Rechner/Server — beides laut
   §39.6 vorgesehen, UI muss also einen frei editierbaren Endpoint statt nur
@@ -6730,3 +6719,28 @@ technischen Entscheidungen vor Beginn von Phase M1 klären:
   als echte `authenticated`-Rolle mit und ohne Adminrecht testen und den
   tatsächlich eingespielten Stand prüfen (§26). Die vorliegende Spezifikation
   allein verändert weder Datenbank noch produktive App.
+
+
+### 40.10 Implementierung im Ordner `macos/` (10.09.2026)
+
+Der native Quellcode und das Xcode-Projekt werden nun implementiert.
+Die älteren Formulierungen „geplant, noch nicht umgesetzt“ in §38–40
+beschreiben die ursprüngliche Planungsphase. Dieser Abschnitt unterscheidet
+Implementierung, automatisierte Prüfung und produktive Bereitstellung.
+
+- M1–M6: SwiftUI-Shell, Keychain-Auth, serverseitige Adminprüfung,
+  Touren-/Teilnehmerverwaltung, organisatorische Masken, Nutzerverwaltung,
+  Mitteilungen, CSV-Export und Planungsübersicht sind im Quellcode angelegt.
+- M7: optionale Ollama-Analyse mit Quellenprüfung und editierbarer Vorschau.
+  Keine Cloudanbieter. Eingefügte Rohtexte werden nicht dauerhaft gespeichert.
+- M8: auf ausdrücklichen Wunsch zurückgestellt (zunächst ausschließlich Ollama).
+- M9: lokaler Universal-Release-Build mit Ad-hoc-Signatur und ZIP/Prüfsumme;
+  keine Developer-ID, Notarisierung oder Veröffentlichung in einem App Store.
+- Neue gemeinsame Backend-RPCs: `admin_get_tour_planning_summary`,
+  `admin_save_tour`, `admin_save_tour_resource`, `admin_delete_tour_resource`.
+  Die Schreibpfade verwenden weiterhin bestehende RLS und prüfen vollständige
+  gelesene Zeilenstände, statt unzuverlässige Client-Zeitstempel vorauszusetzen.
+- **Abnahme noch nicht als abgeschlossen markieren:** Mac-Build/Tests,
+  tatsächliche Backend-Bereitstellung, manuelle UI-/Login-/Offline-Prüfung
+  und Installation auf einem zweiten Mac separat dokumentieren. Ein
+  Repository-Commit ist kein Nachweis für produktiv eingespielte Migrationen.
