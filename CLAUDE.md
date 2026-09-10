@@ -6668,11 +6668,11 @@ Phase M8 — KI-Provider-Erweiterung
   OpenAIProvider, AIProviderChain mit Fallback-Bestätigung (§39.7),
   KI-Einstellungen (§39.9)
 
-Phase M9 — Distribution
-  Code-Signing mit Developer-ID, Notarization, Verteilung außerhalb
-  des Mac App Store direkt an die Administratoren (kein Store-Review
-  nötig; Developer-ID/Notarization setzt eine geeignete Apple-Developer-
-  Mitgliedschaft voraus, Kostenfreigabe und Release-Prüfung gemäß §40.9)
+Phase M9 — Manuelle Distribution
+  Lokaler Release-Build, bei Bedarf Ad-hoc-Signierung ohne Entwicklerkonto,
+  Übergabe als .app im ZIP/DMG ausschließlich an benötigte Administratoren;
+  kein App Store, keine Developer-ID-Signierung und keine Notarisierung.
+  Erstinstallation und manuelles Update auf Ziel-Macs prüfen (§40.9).
 ```
 
 Jede Phase soll für sich lauffähig und in sich abgeschlossen sein, analog
@@ -6689,22 +6689,34 @@ Mac-Build/Tests auf unterstütztem macOS ausführen, bevor eine Phase als fertig
 
 ### 40.9 Offene Entscheidungen
 
-Bewusst noch nicht entschieden, vor Beginn von Phase M1 zu klären:
+Der Verteilungsweg ist durch den Projektinhaber festgelegt; die übrigen
+technischen Entscheidungen vor Beginn von Phase M1 klären:
 
-- **Verteilungsweg:** direkter Download (signiert + notarisiert) reicht für
-  einen kleinen, bekannten Administratorenkreis aus und vermeidet
-  Store-Review, aber nicht die Mitgliedschaft für Developer-ID/Notarization.
-  Ein Store-Eintrag ist nicht erforderlich. Für Entwicklung sind lokale
-  Xcode-Builds eine Alternative, kein gleichwertiger notarisierter Vertriebsweg.
-- **Apple Developer Program:** regulär 99 USD pro Mitgliedschaftsjahr bzw.
-  lokaler Preis; vorhandene Mitgliedschaft und mögliche Ausnahmen prüfen.
-  Neue Ausgaben benötigen ausdrücklich die Kostenfreigabe nach §4.
-  Quelle: [Apple Developer Program](https://developer.apple.com/programs/)
-  (geprüft am 10.09.2026); Gebühren vor Bestellung erneut prüfen.
-- **Release-Sicherheit:** Bundle-ID, Signing-Verantwortlicher, Hardened Runtime,
-  minimale Entitlements und Notarization/Stapling festlegen; auf einem zweiten
-  Mac testen. Authentischen Update-/Downloadweg und Umgang mit nicht mehr
-  unterstützten App-Versionen definieren. macOS-CI-Kontingente mitprüfen.
+- **Verteilungsweg (entschieden):** ausschließlich manuelle Weitergabe an
+  die benötigten Personen, keine Veröffentlichung im Mac App Store.
+  Release-Build als `.app` in ZIP/DMG über einen vertrauenswürdigen privaten
+  Übergabeweg verteilen; Updates ebenfalls manuell.
+- **Kein Entwicklerkonto erforderlich:** für diesen Verteilungsweg sind
+  weder ein Apple-Developer-Konto noch eine kostenpflichtige Mitgliedschaft
+  vorgesehen. Lokal bauen und bei Bedarf ad hoc signieren; keine
+  Developer-ID-Signierung, Notarisierung oder Stapling voraussetzen.
+  Ad-hoc-Signierung bestätigt keine von Apple geprüfte Entwickleridentität.
+  Developer-ID/Notarisierung wäre nur nach einer späteren ausdrücklichen
+  Änderung dieser Entscheidung relevant und würde eine geeignete
+  Mitgliedschaft erfordern ([Apple Developer ID](https://developer.apple.com/help/glossary/developer-id-certificate/)).
+- **Erstinstallation:** macOS kann eine manuell übertragene, nicht notarisierte
+  App über Gatekeeper blockieren. Die gezielte Freigabe dieser bekannten App
+  unter „Datenschutz & Sicherheit“ dokumentieren, soweit die macOS-Version
+  und Geräteverwaltung dies erlauben; keine globale Abschaltung von Gatekeeper
+  oder SIP verlangen. Siehe [Apple: Apps sicher öffnen](https://support.apple.com/en-ie/102445)
+  (geprüft am 10.09.2026).
+- **Release-Prüfung:** stabile Bundle-ID, minimale Entitlements und passende
+  Zielarchitektur festlegen. Das tatsächlich übertragene Paket auf einem
+  zweiten Mac ohne Entwicklungsumgebung testen, einschließlich Gatekeeper,
+  Keychain-Zugriff, Login und manuellem Update. Keychain-Zugriff über
+  Ad-hoc-Build-Wechsel nicht als automatisch unverändert voraussetzen;
+  erforderlichenfalls erneuten Login bzw. erneute Credential-Eingabe vorsehen.
+  Versionsnummer, Prüfsumme und unterstützte macOS-Versionen mitliefern.
 - **Mindest-macOS-Version** (z. B. aktuelle plus eine Vorversion) noch
   festzulegen.
 - **Ollama-Erreichbarkeit**: rein lokal auf demselben Mac, oder auch ein
