@@ -17,6 +17,7 @@ import Supabase
                 for await (event, _) in services.client.auth.authStateChanges {
                     if Task.isCancelled { return }
                     if event == .signedOut { self?.authorized = false }
+                    if event == .tokenRefreshed, let self, !self.busy { await self.restore() }
                 }
             }
             await restore()
@@ -24,13 +25,14 @@ import Supabase
     }
     func restore() async {
         guard let services, !verifying else { return }
-        verifying = true; busy = true; authorized = false
+        verifying = true; busy = true
         defer { busy = false; verifying = false }
         do {
             _ = try await services.client.auth.session
             try await verify(services)
             authorized = true
         } catch {
+            authorized = false
             // A missing saved session is expected at first launch. Other failures stay locked.
             if !(error is AuthError) { self.error = error.localizedDescription }
         }
@@ -55,6 +57,6 @@ import Supabase
     func logout() async {
         authorized = false
         do { try await services?.client.auth.signOut(scope: .local) }
-        catch { self.error = "Abgemeldet, aber gespeicherte Sitzung konnte nicht entfernt werden: \(error.localizedDescription)" }
+        catch { self.error = "Lokal abgemeldet. Die Server-Abmeldung konnte nicht bestätigt werden." }
     }
 }

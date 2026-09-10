@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor final class ToursViewModel: ScreenModel {
     @Published var tours: [Tour] = []

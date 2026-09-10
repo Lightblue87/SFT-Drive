@@ -134,6 +134,9 @@ import Supabase
 }
 
 @MainActor final class ContentRepository: Repository {
+    func createRestaurant(id: String, tourID: String, stop: Payload, settings: Payload, menu: [Payload]) async throws {
+        try await action("admin_create_restaurant", ["p_id": .string(id), "p_tour_id": .string(tourID), "p_stop": .object(stop), "p_settings": .object(settings), "p_menu": .array(menu.map(JSONValue.object))])
+    }
     func load(_ kind: ResourceKind, parentID: String) async throws -> [DataRow] {
         try await requireAdmin()
         if kind == .restaurantSettings {
@@ -154,8 +157,8 @@ import Supabase
         return try await client.from("meal_orders").select("*, tour_registrations(status, vehicle_manufacturer, vehicle_model), meal_order_items(menu_item_id, quantity, note, menu_items(name))")
             .eq("restaurant_stop_id", value: stopID).eq("status", value: "submitted").execute().value
     }
-    func order(stopID: String, registrationID: String, items: [Payload]) async throws {
-        try await action("admin_update_meal_order", ["p_restaurant_stop_id": .string(stopID), "p_registration_id": .string(registrationID), "p_items": .array(items.map(JSONValue.object))])
+    func order(stopID: String, registrationID: String, expected: Payload, items: [Payload]) async throws {
+        try await action("admin_replace_meal_order", ["p_restaurant_stop_id": .string(stopID), "p_registration_id": .string(registrationID), "p_expected": .object(expected), "p_items": .array(items.map(JSONValue.object))])
     }
     func notify(tourID: String?, title: String, body: String) async throws -> String {
         var params: Payload = ["p_title": .string(title), "p_body": .string(body)]

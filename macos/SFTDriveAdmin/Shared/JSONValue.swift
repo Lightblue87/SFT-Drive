@@ -33,7 +33,7 @@ enum JSONValue: Codable, Equatable, Sendable {
         }
     }
     var boolean: Bool { if case .bool(let v) = self { return v }; return false }
-    var integer: Int { if case .number(let v) = self { return Int(v) }; return 0 }
+    var integer: Int { if case .number(let v) = self, v.isFinite, v >= Double(Int.min), v < Double(Int.max) { return Int(v) }; return Int(text) ?? 0 }
 }
 typealias Payload = [String: JSONValue]
 extension Dictionary where Key == String, Value == JSONValue {

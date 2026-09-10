@@ -91,6 +91,7 @@ struct ResourceEditorView: View {
         .onAppear {
             model.values = Dictionary(uniqueKeysWithValues: kind.fields.map { ($0.id, $0.initial) })
             model.values.merge(request.existing?.values ?? request.initial) { _, new in new }
+            if kind == .stages && model.values.text("route_url").isEmpty { model.values["route_url"] = request.initial["route_url"] ?? model.values["kurviger_url"] ?? .null }
             model.id = request.existing?.id ?? (kind == .restaurantSettings ? parentID : model.id)
             model.initial = model.values
         }
@@ -235,7 +236,7 @@ struct MealOrderEditor: View {
             HStack { Button("Abbrechen", action: close); Spacer(); Button("Bestellung ersetzen") {
                 Task { await model.perform {
                     let payload: [Payload] = quantities.filter { $0.value > 0 }.map { ["menu_item_id": .string($0.key), "quantity": .number(Double($0.value)), "note": notes[$0.key].flatMap { $0.nilIfEmpty }.map(JSONValue.string) ?? .null] }
-                    try await repository.order(stopID: stopID, registrationID: order.values.text("registration_id"), items: payload); close()
+                    try await repository.order(stopID: stopID, registrationID: order.values.text("registration_id"), expected: order.values, items: payload); close()
                 } }
             }.disabled(model.busy) }
         }.padding().frame(width: 540, height: 570).interactiveDismissDisabled()

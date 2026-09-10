@@ -38,11 +38,17 @@ protocol AIProvider {
 }
 enum ExtractionSchema {
     static func keys(_ kind: ExtractionKind) -> [String] {
-        kind == .hotel_offer ? ["name", "arrival", "departure", "booking_deadline", "note", "address", "url"] : ["name", "reservation_time", "order_deadline", "note", "address"]
+        kind == .hotel_offer ? ["name", "arrival", "departure", "booking_deadline", "note", "address", "url"] : ["name", "reservation_time", "order_deadline", "note", "address", "menu_items"]
     }
     static func schema(_ kind: ExtractionKind) -> Payload {
         var properties: Payload = [:]
         for key in keys(kind) { properties[key] = .object(["type": .array([.string("string"), .string("null")])]) }
+        if kind == .restaurant {
+            properties["menu_items"] = .object(["type": .string("array"), "maxItems": .number(100), "items": .object([
+                "type": .string("object"), "properties": .object(["name": .object(["type": .string("string")]),
+                "price": .object(["type": .array([.string("number"), .string("null")])]), "evidence": .object(["type": .string("string")])]),
+                "required": .array([.string("name"), .string("price"), .string("evidence")]), "additionalProperties": .bool(false)])])
+        }
         properties["evidence"] = .object(["type": .string("object"), "properties": .object(Dictionary(uniqueKeysWithValues: keys(kind).map { ($0, .object(["type": .string("string")])) })), "additionalProperties": .bool(false)])
         return ["type": .string("object"), "properties": .object(properties), "required": .array((keys(kind) + ["evidence"]).map(JSONValue.string)), "additionalProperties": .bool(false)]
     }
@@ -52,6 +58,18 @@ enum ExtractionSchema {
         var sources: [String: String] = [:]
         for key in keys(kind) {
             guard let value = payload[key] else { throw AppError("KI-Feld fehlt: \(key)") }
+            if key == "menu_items" {
+                guard case .array(let items) = value, items.count <= 100 else { throw AppError("Ungültige KI-Speisekarte.") }
+                for item in items {
+                    guard case .object(let fields) = item, Set(fields.keys) == Set(["name", "price", "evidence"]),
+                          !fields.text("name").isEmpty, fields.text("name").count <= 200,
+                          !fields.text("evidence").isEmpty, source.contains(fields.text("evidence")) else { throw AppError("Gericht ohne gültigen Quelltextbeleg.") }
+                    if fields["price"] != .null {
+                        guard case .number(let price) = fields["price"], price.isFinite, price >= 0, price <= 10000 else { throw AppError("Ungültiger Gerichtpreis.") }
+                    }
+                }
+                continue
+            }
             if value == .null { continue }
             guard case .string(let text) = value, text.count <= 5000, let quote = evidence[key], case .string(let excerpt) = quote,
                   !excerpt.isEmpty, source.contains(excerpt) else { throw AppError("Quelltextbeleg fehlt oder ist ungültig: \(key)") }

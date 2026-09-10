@@ -21,6 +21,8 @@ Vor Verwendung der neuen Schreibmasken die additiven Migrationen aus `supabase/m
 - `20260910010000_admin_planning_summary.sql`
 - `20260910020000_atomic_admin_tour_save.sql`
 - `20260910030000_atomic_admin_resources.sql`
+- `20260910040000_conflict_safe_meal_orders.sql`
+- `20260910050000_atomic_restaurant_import.sql`
 
 Diese Dateien werden nicht von der Mac-App ausgeführt. Code im Repository bedeutet nicht, dass das produktive Supabase-Projekt bereits migriert wurde. Ohne diese RPCs bleiben bestehende Lesefunktionen nutzbar, neue Masken melden beim Speichern einen Fehler. Entwicklung und Tests erfolgen mit synthetischen Daten; keine Produktionsdaten als Testfixtures verwenden.
 

@@ -60,6 +60,7 @@ struct ExtractionReviewView: View {
     @State private var consent = false
     @State private var editor: ResourceEditorRequest?
     @State private var night = ""
+    @State private var restaurantDraft = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -77,7 +78,15 @@ struct ExtractionReviewView: View {
                     Text("Erkannt mit \(result.model) · \(result.inputTokens ?? 0) Eingabe- / \(result.outputTokens ?? 0) Ausgabetokens").font(.caption)
                     ForEach(ExtractionSchema.keys(model.kind), id: \.self) { key in
                         VStack(alignment: .leading) {
-                            LabeledContent(key, value: result.values.text(key).nilIfEmpty ?? "Ungeklärt")
+                            if key == "menu_items", case .array(let items) = result.values[key] {
+                                Text("Speisekarte: \(items.count) Gerichte")
+                                ForEach(Array(items.enumerated()), id: \.offset) { entry in
+                                    if case .object(let item) = entry.element {
+                                        Text("\(item.text("name")) · \(item.text("price")) €")
+                                        Text("Quelle: \(item.text("evidence"))").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            } else { LabeledContent(label(key), value: result.values.text(key).nilIfEmpty ?? "Ungeklärt") }
                             if let evidence = result.evidence[key] { Text("Quelle: \(evidence)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                         }.padding(8).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
                     }
@@ -102,6 +111,9 @@ struct ExtractionReviewView: View {
             }.padding().frame(width: 600)
         }
         .sheet(item: $editor) { request in ResourceEditorView(repository: services.content, kind: model.kind == .hotel_offer ? .hotels : .stops, parentID: tour.id, tour: tour, request: request) { editor = nil; model.clear() } }
+        .sheet(isPresented: $restaurantDraft) {
+            if let result = model.result { RestaurantImportReviewView(repository: services.content, tour: tour, result: result) { restaurantDraft = false; model.clear() } }
+        }
     }
     private func openDraft(_ result: StructuredResult) {
         if model.kind == .hotel_offer {
@@ -109,8 +121,66 @@ struct ExtractionReviewView: View {
             values["night_date"] = .string(night); values["sort_order"] = .number(0)
             editor = .init(initial: values)
         } else {
-            editor = .init(initial: ["title": result.values["name"] ?? .null, "type": .string("restaurant"), "description": result.values["note"] ?? .null,
-                "address": result.values["address"] ?? .null, "starts_at": result.values["reservation_time"] ?? .null, "sort_order": .number(0)])
+            restaurantDraft = true
         }
+    }
+    private func label(_ key: String) -> String {
+        ["name": "Name", "arrival": "Anreise", "departure": "Abreise", "booking_deadline": "Buchungsfrist", "note": "Hinweise", "address": "Adresse", "url": "Link", "reservation_time": "Reservierungszeit", "order_deadline": "Bestellfrist"][key] ?? key
+    }
+}
+
+struct RestaurantImportReviewView: View {
+    let repository: ContentRepository
+    let tour: Tour
+    let result: StructuredResult
+    let close: () -> Void
+    @StateObject private var state = ScreenModel()
+    @State private var stop: Payload = [:]
+    @State private var settings: Payload = [:]
+    @State private var menu: [DataRow] = []
+    @State private var stopID = UUID().uuidString.lowercased()
+    @State private var discard = false
+    var body: some View {
+        VStack {
+            Text("Restaurant-Entwurf · \(tour.title)").font(.headline)
+            Text("Neuer Stopp, Bestellfenster und ausgewählte Gerichte werden gemeinsam gespeichert.").font(.caption)
+            ErrorBanner(message: state.error)
+            Form {
+                Section("Neuer Restaurant-Stopp") { FormFields(fields: ResourceKind.stops.fields, values: $stop) }
+                Section("Vorbestellung") { FormFields(fields: ResourceKind.restaurantSettings.fields, values: $settings) }
+                Section("Gerichte prüfen") {
+                    ForEach($menu) { $item in
+                        FormFields(fields: ResourceKind.menu.fields, values: $item.values)
+                        Button("Gericht aus Entwurf entfernen", role: .destructive) { menu.removeAll { $0.id == item.id } }
+                        Divider()
+                    }
+                }
+            }.formStyle(.grouped).disabled(state.busy)
+            HStack { Button("Abbrechen") { discard = true }; Spacer(); Button("Geprüften Entwurf speichern") {
+                Task { await state.perform {
+                    let stopPayload = try FormValidation.payload(stop, fields: ResourceKind.stops.fields)
+                    let settingsPayload = try FormValidation.payload(settings, fields: ResourceKind.restaurantSettings.fields)
+                    try FormValidation.window(settingsPayload, open: "ordering_open_at", close: "ordering_deadline_at")
+                    let items = try menu.map { item -> Payload in var payload = try FormValidation.payload(item.values, fields: ResourceKind.menu.fields); payload["id"] = .string(item.id); return payload }
+                    try await repository.createRestaurant(id: stopID, tourID: tour.id, stop: stopPayload, settings: settingsPayload, menu: items)
+                    close()
+                } }
+            }.buttonStyle(.borderedProminent).disabled(state.busy) }
+        }.padding().frame(width: 690, height: 750).interactiveDismissDisabled()
+        .onAppear {
+            stop = Dictionary(uniqueKeysWithValues: ResourceKind.stops.fields.map { ($0.id, $0.initial) })
+            stop.merge(["title": result.values["name"] ?? .null, "description": result.values["note"] ?? .null, "address": result.values["address"] ?? .null, "starts_at": result.values["reservation_time"] ?? .null]) { _, new in new }
+            settings = Dictionary(uniqueKeysWithValues: ResourceKind.restaurantSettings.fields.map { ($0.id, $0.initial) })
+            settings["ordering_deadline_at"] = result.values["order_deadline"] ?? .null
+            if case .array(let items) = result.values["menu_items"] {
+                menu = items.compactMap { value in
+                    guard case .object(let extracted) = value else { return nil }
+                    var fields = Dictionary(uniqueKeysWithValues: ResourceKind.menu.fields.map { ($0.id, $0.initial) })
+                    fields["id"] = .string(UUID().uuidString.lowercased()); fields["name"] = extracted["name"]; fields["price"] = extracted["price"]
+                    return DataRow(fields)
+                }
+            }
+        }
+        .confirmationDialog("Restaurant-Entwurf verwerfen?", isPresented: $discard, titleVisibility: .visible) { Button("Verwerfen", role: .destructive, action: close) }
     }
 }

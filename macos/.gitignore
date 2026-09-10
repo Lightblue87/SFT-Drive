@@ -9,3 +9,4 @@ Config.local.*
 *.p12
 *.key
 *.mobileprovision
+node_modules/

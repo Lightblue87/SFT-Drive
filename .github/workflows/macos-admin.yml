@@ -2,13 +2,26 @@ name: macOS Admin
 on:
   push:
     branches: [main]
-    paths: ['macos/**', '.github/workflows/macos-admin.yml']
+    paths: ['macos/**', 'supabase/migrations/**', '.github/workflows/macos-admin.yml']
   pull_request:
     paths: ['macos/**', '.github/workflows/macos-admin.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: PostgreSQL contract and RLS tests
+        working-directory: macos/tests/backend
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm test
   build:
     runs-on: macos-15
     timeout-minutes: 30
@@ -16,6 +29,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Select Xcode 16.4
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - uses: actions/cache@v4
+        with:
+          path: |
+            macos/.build
+            macos/build/DerivedData/SourcePackages
+            macos/build/Release/SourcePackages
+          key: macos15-supabase-2.55.2-xcode16.4-${{ runner.arch }}
       - name: Unit tests and native build
         working-directory: macos
         run: bash scripts/check.sh
