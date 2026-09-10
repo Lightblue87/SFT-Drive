@@ -5825,3 +5825,461 @@ Umsetzung (Migration `20260909060000_admin_delete_tour.sql`):
   läuft (verhindert Doppelauslösung) und entfernt nach Erfolg zusätzlich
   einen eventuell noch vorhandenen lokalen `localStorage`-Formularentwurf
   dieser Tour.
+
+---
+
+## 38. Native macOS-Admin-App & optionale KI-Unterstützung
+
+Diese Phase ist **geplant, noch nicht umgesetzt**. Der Abschnitt hält die
+bisher getroffenen Architekturentscheidungen fest, bevor mit der
+Implementierung begonnen wird — er darf nicht als bereits produktiver Stand
+missverstanden werden (§34.5/§35.4-Grundsatz: "Noch nicht implementierte
+Punkte niemals als produktiv vorhanden darstellen").
+
+Ziel: Zusätzlich zur mobilen PWA entsteht eine eigenständige native
+macOS-Anwendung ausschließlich für Administratoren. Sie ist kein
+Web-Wrapper und keine Desktop-Version der PWA, sondern eine echte
+Desktop-App, die für umfangreiche Planung, Administration und Auswertung
+optimiert ist.
+
+### 38.1 Native macOS-Anwendung
+
+Die Anwendung soll sich funktional auf die Administration konzentrieren.
+Die PWA bleibt primär für Teilnehmer und mobile Administration bestehen.
+
+Zielplattform: **Swift + SwiftUI**. Damit erhalten wir eine echte
+macOS-App mit nativen Fenstern, Tabellen, Sidebars, Tastaturbedienung,
+Drag & Drop, macOS Keychain usw.
+
+Die Desktop-App arbeitet mit dem gleichen Supabase-Projekt und damit
+demselben Datenbestand wie SFT Drive. Eine in der PWA vorgenommene
+Änderung ist anschließend unmittelbar auch in der Mac-App sichtbar und
+umgekehrt.
+
+Wichtig: „Direkter Datenbankzugriff" bedeutet dabei **nicht**, dass
+Datenbankpasswort oder Supabase-Service-Role-Key in die App eingebaut
+werden. Die Anwendung verwendet Supabase Auth, RLS und die bestehenden
+beziehungsweise dafür vorgesehenen RPCs. Dadurch kann die Mac-App
+umfassende Administrationsrechte erhalten, ohne einen universellen
+geheimen Datenbankschlüssel auszuliefern.
+
+### 38.2 Ausschließlich für Administratoren
+
+Die Mac-App besitzt einen eigenen Login.
+
+Verwendet werden dieselben Supabase-Benutzerkonten wie in der PWA.
+
+Nach dem Login muss serverseitig geprüft werden:
+
+```text
+user_roles.role = admin
+```
+
+Nur wenn der angemeldete Benutzer aktuell Administrator ist, darf die
+Anwendung geöffnet und dürfen administrative Daten geladen werden.
+
+Damit gilt:
+
+```text
+PWA-Admin
+    ↓
+gleicher Account
+    ↓
+Mac-App verwendbar
+
+normaler PWA-User
+    ↓
+Mac-App Login abgelehnt
+```
+
+Die Adminberechtigung darf niemals ausschließlich lokal geprüft werden.
+
+Wird einem Benutzer die Adminrolle entzogen, verliert er damit auch die
+Berechtigung für die Mac-App.
+
+Sessions und Zugangsdaten werden ausschließlich sicher im macOS Keychain
+gespeichert.
+
+### 38.3 Desktop-optimiertes Design
+
+Das Design soll eindeutig zu SFT Drive gehören und sich an der
+vorhandenen PWA orientieren:
+
+```text
+Schwarz / Anthrazit
+Rot als Primär-/Aktionsfarbe
+helle Typografie
+Archivo / JetBrains Mono bzw. passende native Entsprechung
+gleiche Statusfarben
+gleiche Begriffe
+gleiche Icons / visuelle Sprache
+```
+
+Die Oberfläche wird aber nicht einfach auf Desktopgröße hochskaliert.
+
+Für macOS sollen stattdessen Desktop-Möglichkeiten genutzt werden:
+
+```text
+Sidebar-Navigation
+mehrspaltige Ansichten
+große Datentabellen
+Sortierung
+Filter
+Suche
+Detailbereich neben der Tabelle
+Kontextmenüs
+Mehrfachauswahl
+Tastaturkürzel
+Drag & Drop
+größere Planungsübersichten
+```
+
+Damit können beispielsweise Teilnehmerliste und ausgewählter Teilnehmer
+gleichzeitig dargestellt werden.
+
+### 38.4 Administrativer Gesamtumfang
+
+Langfristig soll die Mac-App alle administrativen Funktionen der PWA
+enthalten und für Desktop-Bedienung verbessern.
+
+Dazu gehören insbesondere:
+
+- Touren erstellen, bearbeiten, duplizieren, veröffentlichen, absagen, archivieren und – soweit erlaubt – löschen
+- Teilnehmer verwalten, bestätigen, ablehnen, entfernen und administrativ hinzufügen
+- Warteliste und Kapazitäten
+- Fahrzeuge und Fahrzeugdaten
+- Personen-/Mitfahrerzahlen
+- Leistungs- und Altersbedingungen
+- Anmeldezeiträume
+- Check-in
+- Tagesetappen
+- Kurviger-/Routenlinks
+- Stopps und Restaurants
+- Speisekarten und Vorbestellungen
+- Hotelvorschläge und Übernachtungsbestätigungen
+- Interessenten/Vormerkungen
+- WhatsApp-/Zello-/weitere Tourlinks
+- Mitteilungen und Push
+- Coverbilder und Medien
+- YouTube-Inhalte
+- Benutzerverwaltung
+- CSV-/Datenexport
+
+Die detaillierte Straßenroute soll nach der bisherigen Architektur
+weiterhin nicht unnötig in SFT Drive dupliziert werden. Kurviger bleibt
+dafür die spezialisierte Routingquelle; SFT Drive verwaltet die
+dazugehörigen Planungs- und Organisationsinformationen.
+
+### 38.5 Planungs- und Analysebereich
+
+Die Mac-App soll einen größeren Planungsschwerpunkt bekommen als die PWA.
+
+Beispielsweise kann eine Tour auf einem Bildschirm zusammengeführt werden:
+
+```text
+20 Fahrzeuge bestätigt
+27 Personen
+18 / 20 Hotel bestätigt
+16 / 20 Essen bestellt
+17 / 20 eingecheckt
+3 Warteliste
+4 Vormerkungen
+2 offene Admin-Aufgaben
+```
+
+Dazu kommen Filter und Auswertungen nach Fahrzeug, Personen, Status,
+Übernachtung, Restaurant, Check-in usw.
+
+Das soll dem Organisator ermöglichen, Unstimmigkeiten früh zu erkennen,
+ohne mehrere mobile Ansichten durchsuchen zu müssen.
+
+---
+
+## 39. Optionale KI-Assistenz für die Tourplanung
+
+Ebenfalls **geplant, noch nicht umgesetzt** (siehe Hinweis zu Beginn von
+§38).
+
+### 39.1 Grundidee
+
+Die Mac-App erhält optional einen KI-Assistenten oberhalb beziehungsweise
+innerhalb des Planungsbereiches.
+
+Die KI soll vor allem unstrukturierte Kommunikation in strukturierte
+SFT-Drive-Daten übersetzen.
+
+Typischer Anwendungsfall:
+
+```text
+E-Mail vom Hotel
+        ↓
+KI
+        ↓
+strukturierte Daten
+        ↓
+Vorschau in SFT Drive
+        ↓
+Admin bestätigt
+        ↓
+Datenbank
+```
+
+Copy & Paste von E-Mails soll als erste und einfachste Variante
+unterstützt werden.
+
+Später kann ein direkter E-Mail-Import ergänzt werden.
+
+### 39.2 Beispiele
+
+Eine Hotel-Mail wie:
+
+```text
+Wir können Ihnen vom 18. bis 20. Juni 15 Doppelzimmer anbieten.
+Reservierung bis 30. April. Frühstück ist enthalten …
+```
+
+könnte beispielsweise strukturiert zurückgegeben werden als:
+
+```json
+{
+  "type": "hotel_offer",
+  "hotel": "...",
+  "arrival": "2027-06-18",
+  "departure": "2027-06-20",
+  "rooms": 15,
+  "booking_deadline": "2027-04-30",
+  "notes": "Frühstück inklusive"
+}
+```
+
+Eine Restaurant-Mail könnte beispielsweise extrahieren:
+
+```json
+{
+  "type": "restaurant",
+  "name": "...",
+  "reservation_time": "...",
+  "order_deadline": "...",
+  "menu_items": []
+}
+```
+
+Die Anwendung übersetzt dieses definierte Schema anschließend in die
+entsprechenden SFT-Drive-Felder.
+
+### 39.3 KI darf nicht ungeprüft schreiben
+
+Ein wichtiger Architekturpunkt:
+
+Die KI selbst bekommt keinen freien Datenbankzugriff.
+
+Stattdessen:
+
+```text
+E-Mail/Text
+↓
+KI analysiert
+↓
+JSON / strukturiertes Ergebnis
+↓
+App validiert Schema
+↓
+Admin sieht Vorschau
+↓
+„Übernehmen"
+↓
+normale SFT-Drive-RPC/API
+↓
+Datenbank
+```
+
+Dadurch kann ein Modell weder versehentlich Touren verändern noch Daten
+erfinden und ungeprüft speichern.
+
+Ideal wäre eine Änderungsansicht wie:
+
+```text
+ERKANNT
+Hotel: Hotel Alpenblick
+Check-in: 18.06.2027
+Check-out: 20.06.2027
+Deadline: 30.04.2027
+Zimmer: 15
+[ Verwerfen ]       [ Übernehmen ]
+```
+
+### 39.4 KI komplett optional
+
+Die Mac-App muss ohne KI vollständig funktionsfähig bleiben.
+
+In den Einstellungen:
+
+```text
+KI-Unterstützung
+[ AN / AUS ]
+
+Provider
+Ollama
+OpenAI
+...
+
+Modell
+<aus verfügbaren Modellen>
+
+Fallback
+[ AN / AUS ]
+```
+
+Kein administrativer Kernworkflow darf von der Verfügbarkeit eines
+KI-Anbieters abhängig sein.
+
+### 39.5 Provider-Abstraktion
+
+Die Anwendung soll nicht auf einen einzelnen Anbieter fest programmiert
+werden.
+
+Intern bekommt die KI-Schicht eine gemeinsame Schnittstelle, sinngemäß:
+
+```text
+AIProvider
+  analyse(text, schema)
+    → StructuredResult
+```
+
+Dahinter können unterschiedliche Provider betrieben werden.
+
+Beispielsweise:
+
+```text
+Ollama
+OpenAI
+weitere OpenAI-kompatible APIs
+lokale Modelle
+spätere Anbieter
+```
+
+Damit kann ein Modell ausgetauscht werden, ohne die Planungslogik
+umzubauen.
+
+### 39.6 Ollama als bevorzugte kostenlose/lokale Option
+
+Ollama soll ausdrücklich als unterstützte Variante vorgesehen werden.
+
+Möglich sind sowohl lokal erreichbare Ollama-Modelle als auch
+entsprechend konfigurierte kompatible Endpunkte.
+
+Das eignet sich für den Anwendungsfall besonders, weil primär Text
+analysiert wird und kein großes multimodales Modell erforderlich ist.
+
+Die Mac-App soll einen konfigurierbaren Endpoint und ein Modell verwenden
+können.
+
+Beispiel:
+
+```text
+Provider: Ollama
+Endpoint: http://localhost:11434
+Modell: <ausgewähltes Modell>
+```
+
+Damit kann ein Modell lokal auf dem Mac oder auf einem eigenen
+Rechner/Server laufen.
+
+### 39.7 Flexible Modellauswahl und Fallback
+
+Mehrere Modelle können konfiguriert werden.
+
+Beispiel:
+
+```text
+1. Modell A
+2. Modell B
+3. Modell C
+```
+
+Ist Modell A nicht verfügbar oder ist ein Kontingent ausgeschöpft, kann –
+sofern aktiviert – Modell B versucht werden. Danach Modell C.
+
+Wichtig: Ein automatischer Wechsel von einem lokalen Modell auf einen
+Cloud-Anbieter darf nicht still stattfinden, weil dadurch E-Mail-Inhalte
+an einen externen Dienst übertragen würden.
+
+Ein solcher Cloud-Fallback muss vom Admin ausdrücklich erlaubt sein.
+
+### 39.8 Datenschutz und Secrets
+
+Gerade E-Mail-Kommunikation kann Namen, E-Mail-Adressen,
+Buchungsinformationen und andere personenbezogene Inhalte enthalten.
+
+Daher:
+
+```text
+lokale KI:  Daten verlassen das eigene System nicht
+Cloud-KI:   vor Verarbeitung klare Kennzeichnung
+```
+
+Es sollen nur die für die Planung notwendigen Daten an das Modell
+geschickt werden.
+
+**Verbindliche Korrektur/Präzisierung gegenüber einer früheren
+Gesprächsformulierung:** API-Keys werden **niemals fest in die App
+eingebaut** (kein hartkodierter Schlüssel im Quellcode/Binary) — eine
+verteilte `.app` lässt sich extrahieren, ein eingebetteter Schlüssel wäre
+damit kompromittiert. Für Ollama ohne Auth ist lokal ohnehin kein
+Schlüssel nötig. Benötigte Provider-Credentials (z. B. ein OpenAI-Key)
+gehören ausschließlich in den macOS Keychain, vom Admin selbst dort
+eingetragen — nie im Quellcode, nie in einer mit der App ausgelieferten
+Konfigurationsdatei.
+
+KI-API-Schlüssel gehören außerdem niemals:
+
+```text
+ins Git-Repository
+in CLAUDE.md
+in Supabase site_settings
+in Klartext-Konfigurationsdateien
+```
+
+### 39.9 KI-Konfiguration pro Mac
+
+Nicht geheime Einstellungen können lokal gespeichert werden:
+
+```text
+Provider
+Endpoint
+Modell
+Fallback-Reihenfolge
+Timeout
+KI aktiviert/deaktiviert
+```
+
+Credentials/API-Schlüssel dagegen ausschließlich im Keychain (§39.8).
+
+### 39.10 Langfristiges Ziel
+
+Die KI soll kein Chatbot als Selbstzweck sein.
+
+Ihre Aufgabe lautet: unstrukturierte Planungsinformationen erkennen und
+in valide SFT-Drive-Daten übersetzen.
+
+Damit könnte ein großer Teil der organisatorischen Arbeit von:
+
+```text
+E-Mail lesen
+→ Daten herausschreiben
+→ Hotelmaske suchen
+→ Werte eintippen
+→ Restaurantmaske öffnen
+→ Werte eintippen
+```
+
+zu:
+
+```text
+E-Mail einfügen
+→ Analyse
+→ Ergebnis kontrollieren
+→ Übernehmen
+```
+
+reduziert werden.
