@@ -1,12 +1,17 @@
 import Foundation
-import Supabase
+@preconcurrency import Supabase
+
+extension Notification.Name { static let sftAdminAccessRevoked = Notification.Name("sftAdminAccessRevoked") }
 
 @MainActor class Repository {
     let client: SupabaseClient
     init(_ client: SupabaseClient) { self.client = client }
     func requireAdmin() async throws {
         let allowed: Bool = try await client.rpc("is_admin").execute().value
-        guard allowed else { throw AppError("Administrator-Berechtigung entzogen. Bitte abmelden.") }
+        guard allowed else {
+            NotificationCenter.default.post(name: .sftAdminAccessRevoked, object: nil)
+            throw AppError("Administrator-Berechtigung entzogen. Die Sitzung wird gesperrt.")
+        }
     }
     func action(_ name: String, _ params: Payload, allowing: Set<String> = ["OK"]) async throws {
         try await requireAdmin()

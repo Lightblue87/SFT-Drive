@@ -1,5 +1,6 @@
 import Foundation
-import Supabase
+@preconcurrency import Supabase
+import Combine
 
 @MainActor final class AuthManager: ObservableObject {
     @Published private(set) var authorized = false
@@ -8,6 +9,12 @@ import Supabase
     @Published private(set) var services: AppServices?
     private var listener: Task<Void, Never>?
     private var verifying = false
+    private var revokedObserver: AnyCancellable?
+    init() {
+        revokedObserver = NotificationCenter.default.publisher(for: .sftAdminAccessRevoked).sink { [weak self] _ in
+            Task { @MainActor in await self?.logout() }
+        }
+    }
     func configure(_ configuration: ConnectionConfiguration) async {
         authorized = false; listener?.cancel(); error = nil
         do {

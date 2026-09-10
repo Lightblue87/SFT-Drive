@@ -53,7 +53,7 @@ struct AppError: LocalizedError {
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
 }
-struct RPCResult: Decodable {
+struct RPCResult: Decodable, Sendable {
     let code: String
     let registration_id: String?
     func check(allowing codes: Set<String> = ["OK"]) throws {

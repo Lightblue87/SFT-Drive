@@ -137,6 +137,18 @@ struct OllamaProvider: AIProvider {
 struct AIProviderChain: AIProvider {
     let configuration: AIConfiguration
     func extract(text: String, kind: ExtractionKind) async throws -> StructuredResult {
+        try await withThrowingTaskGroup(of: StructuredResult.self) { group in
+            group.addTask { try await run(text: text, kind: kind) }
+            group.addTask {
+                try await Task.sleep(for: .seconds(configuration.timeout))
+                throw AppError("Gemeinsames Zeitlimit der Analyse erreicht.")
+            }
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else { throw CancellationError() }
+            return result
+        }
+    }
+    private func run(text: String, kind: ExtractionKind) async throws -> StructuredResult {
         let extra = configuration.fallbackEnabled ? configuration.fallbackModels.split(separator: "\n").map(String.init).filter { !$0.isEmpty } : []
         var seen = Set<String>(); let models = ([configuration.model] + extra).filter { seen.insert($0).inserted }.prefix(3)
         let deadline = Date().addingTimeInterval(configuration.timeout)

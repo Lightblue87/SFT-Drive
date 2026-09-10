@@ -57,6 +57,7 @@ struct ResourceListView: View {
 }
 @MainActor final class ResourceEditorModel: ScreenModel {
     @Published var values: Payload = [:]
+    @Published var latest: DataRow?
     var initial: Payload = [:]
     var id = UUID().uuidString.lowercased()
 }
@@ -73,6 +74,16 @@ struct ResourceEditorView: View {
         VStack {
             Text("\(kind.title) · \(tour.title)").font(.headline)
             ErrorBanner(message: model.error)
+            if let latest = model.latest {
+                DisclosureGroup("Aktueller Serverstand zum Vergleichen") {
+                    ForEach(kind.fields) { field in
+                        if latest.values[field.id] != model.values[field.id] {
+                            LabeledContent(field.title, value: "Server: \(latest.values.text(field.id)) · Entwurf: \(model.values.text(field.id))")
+                        }
+                    }
+                    Text("Entwurf bei Bedarf notieren, abbrechen und den Eintrag neu öffnen.").font(.caption)
+                }
+            }
             Form { FormFields(fields: kind.fields, values: $model.values) }.formStyle(.grouped)
             HStack {
                 Button("Abbrechen") { if model.initial != model.values { discard = true } else { close() } }
@@ -82,12 +93,16 @@ struct ResourceEditorView: View {
                         let payload = try FormValidation.payload(model.values, fields: kind.fields)
                         if kind == .hotels && !TourDates.days(start: tour.start_date, end: tour.end_date, nights: true).contains(payload.text("night_date")) { throw AppError("Gültige Tournacht wählen.") }
                         if kind == .restaurantSettings { try FormValidation.window(payload, open: "ordering_open_at", close: "ordering_deadline_at") }
-                        try await repository.save(kind, id: model.id, parentID: parentID, expected: request.existing?.values, values: payload)
+                        do { try await repository.save(kind, id: model.id, parentID: parentID, expected: request.existing?.values, values: payload) }
+                        catch {
+                            model.latest = try? await repository.load(kind, parentID: parentID).first(where: { $0.id == model.id })
+                            throw error
+                        }
                         close()
                     } }
                 }.buttonStyle(.borderedProminent).keyboardShortcut("s").disabled(model.busy)
             }
-        }.padding().frame(width: 610, height: 650).interactiveDismissDisabled()
+        }.padding().frame(width: 610, height: 650).interactiveDismissDisabled().protectDraft(model.values != model.initial)
         .onAppear {
             model.values = Dictionary(uniqueKeysWithValues: kind.fields.map { ($0.id, $0.initial) })
             model.values.merge(request.existing?.values ?? request.initial) { _, new in new }
@@ -239,7 +254,7 @@ struct MealOrderEditor: View {
                     try await repository.order(stopID: stopID, registrationID: order.values.text("registration_id"), expected: order.values, items: payload); close()
                 } }
             }.disabled(model.busy) }
-        }.padding().frame(width: 540, height: 570).interactiveDismissDisabled()
+        }.padding().frame(width: 540, height: 570).interactiveDismissDisabled().protectDraft(true)
         .onAppear { if case .array(let items) = order.values["meal_order_items"] { for case .object(let item) in items { quantities[item.text("menu_item_id")] = item.integer("quantity"); notes[item.text("menu_item_id")] = item.text("note") } } }
     }
 }

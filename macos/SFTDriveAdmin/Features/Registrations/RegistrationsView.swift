@@ -142,7 +142,7 @@ struct AddRegistrationView: View {
                     try await repository.addRegistration(tourID: tour.id, userID: model.userID, fields: payload); close()
                 } }
             }.buttonStyle(.borderedProminent).disabled(model.userID.isEmpty || model.busy) }
-        }.padding().frame(width: 560, height: 590).interactiveDismissDisabled()
+        }.padding().frame(width: 560, height: 590).interactiveDismissDisabled().protectDraft(!model.userID.isEmpty)
         .task { await model.perform { model.users = try await repository.users() } }
         .task(id: model.userID) {
             guard !model.userID.isEmpty else { return }

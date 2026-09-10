@@ -13,6 +13,7 @@ import SwiftUI
 struct UsersView: View {
     @StateObject private var model: UsersModel
     @State private var operation: String?
+    @State private var sortOrder = [KeyPathComparator(\AdminUser.username)]
     init(repository: PeopleRepository) { _model = StateObject(wrappedValue: UsersModel(repository)) }
     private var selected: AdminUser? { model.users.first { $0.id == model.selection } }
     var body: some View {
@@ -20,7 +21,7 @@ struct UsersView: View {
             ErrorBanner(message: model.error)
             TextField("Nutzer nach Name, Username oder E-Mail suchen", text: $model.query).textFieldStyle(.roundedBorder).padding()
             HSplitView {
-                Table(model.filtered, selection: $model.selection) {
+                Table(model.filtered.sorted(using: sortOrder), selection: $model.selection, sortOrder: $sortOrder) {
                     TableColumn("Username", value: \.username)
                     TableColumn("Vorname", value: \.first_name)
                     TableColumn("Nachname", value: \.last_name)

@@ -105,6 +105,7 @@ struct ExtractionReviewView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Diese Analyse senden?").font(.headline)
                 Text("Empfänger: \(AIConfiguration.load().endpoint)\nModell: \(AIConfiguration.load().model)")
+                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene lokale Modelle: \(AIConfiguration.load().fallbackModels)").font(.caption) }
                 ScrollView { Text(model.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 260)
                 Text("Systemauftrag: ausschließlich belegte Hotel-/Restaurantfelder extrahieren; unklare Angaben leer lassen. Keine Datenbankdaten oder Zugangsschlüssel werden an das Modell geschickt.").font(.caption)
                 HStack { Button("Abbrechen") { consent = false }; Spacer(); Button("Jetzt analysieren") { consent = false; model.analyze() }.buttonStyle(.borderedProminent) }
@@ -146,7 +147,7 @@ struct RestaurantImportReviewView: View {
             Text("Neuer Stopp, Bestellfenster und ausgewählte Gerichte werden gemeinsam gespeichert.").font(.caption)
             ErrorBanner(message: state.error)
             Form {
-                Section("Neuer Restaurant-Stopp") { FormFields(fields: ResourceKind.stops.fields, values: $stop) }
+                Section("Neuer Restaurant-Stopp") { FormFields(fields: ResourceKind.stops.fields.filter { $0.id != "type" }, values: $stop) }
                 Section("Vorbestellung") { FormFields(fields: ResourceKind.restaurantSettings.fields, values: $settings) }
                 Section("Gerichte prüfen") {
                     ForEach($menu) { $item in
@@ -166,7 +167,7 @@ struct RestaurantImportReviewView: View {
                     close()
                 } }
             }.buttonStyle(.borderedProminent).disabled(state.busy) }
-        }.padding().frame(width: 690, height: 750).interactiveDismissDisabled()
+        }.padding().frame(width: 690, height: 750).interactiveDismissDisabled().protectDraft(true)
         .onAppear {
             stop = Dictionary(uniqueKeysWithValues: ResourceKind.stops.fields.map { ($0.id, $0.initial) })
             stop.merge(["title": result.values["name"] ?? .null, "description": result.values["note"] ?? .null, "address": result.values["address"] ?? .null, "starts_at": result.values["reservation_time"] ?? .null]) { _, new in new }

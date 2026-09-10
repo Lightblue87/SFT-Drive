@@ -51,6 +51,11 @@ try {
  check((await snapshot()).tour.title,'Testfahrt');
  const hotelID='00000000-0000-0000-0000-000000000020';
  check((await rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Testhotel',night_date:'2027-06-18',sort_order:0}])).code,'OK');
+ const hotelBefore=(await db.query('select to_jsonb(h) v from tour_hotel_suggestions h where id=$1',[hotelID])).rows[0].v;
+ await db.query("update tour_hotel_suggestions set note='PWA changed' where id=$1",[hotelID]);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,hotelBefore,{name:'Mac changed'}]),/CONFLICT/);
+ await bad(()=>rpc('admin_save_tour_resource',['users',hotelID,tourID,null,{}]),/INVALID_RESOURCE/);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,hotelBefore,{user_id:admin}]),/INVALID_PAYLOAD/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000021',tourID,null,{name:'Bad',night_date:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
  await identity(member);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-19',true])).code,'OK');
  await identity(second);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');
@@ -73,10 +78,13 @@ try {
  await bad(()=>rpc('admin_replace_meal_order',[stopID,regs[0].id,orderBefore,[{menu_item_id:menuID,quantity:4,note:null}]]),/CONFLICT/);
  await rpc('admin_replace_meal_order',[stopID,regs[0].id,await readOrder(),[{menu_item_id:menuID,quantity:2,note:null}]]);
  let s=await rpc('admin_get_tour_planning_summary',[tourID]);
+ check((await rpc('admin_set_checked_in',[regs[0].id,true])).code,'OK');
+ check((await rpc('admin_get_tour_planning_summary',[tourID])).checked_in,1);
  check(s.confirmed_vehicles,2);check(s.people,4);check(s.nights.map(n=>n.confirmed),[2,1]);check(s.all_nights_confirmed,1);check(s.restaurants[0].orders,2);check(s.restaurants[0].dishes,4);
  await rpc('admin_remove_registration',[regs.find(r=>r.user_id===second).id,null]);
  s=await rpc('admin_get_tour_planning_summary',[tourID]);check(s.confirmed_vehicles,1);check(s.people,2);check(s.restaurants[0].orders,1);check(s.restaurants[0].dishes,2);check(s.nights.map(n=>n.confirmed),[1,1]);
  await identity(member);await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Attack'}]),/FORBIDDEN/);
+ await bad(()=>rpc('admin_replace_meal_order',[stopID,regs[0].id,orderBefore,[]]),/FORBIDDEN/);
  check((await db.query('select * from profiles where id=$1',[second])).rows.length,0);
  await db.exec('reset role');await db.query("delete from user_roles where user_id=$1 and role='admin'",[admin]);await identity(admin);
  await bad(()=>rpc('admin_get_tour_planning_summary',[tourID]),/FORBIDDEN/);

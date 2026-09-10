@@ -64,7 +64,9 @@ struct FormFields: View {
                     if !field.required {
                         Toggle(field.title, isOn: Binding(get: { !values.text(field.id).isEmpty }, set: { values[field.id] = $0 ? encodedDate(field, Date()) : .null }))
                     }
-                    if field.required || !values.text(field.id).isEmpty {
+                    if field.required && values.text(field.id).isEmpty {
+                        Button("\(field.title) festlegen") { values[field.id] = encodedDate(field, Date()) }
+                    } else if field.required || !values.text(field.id).isEmpty {
                         DatePicker(field.required ? field.title : "Zeitpunkt", selection: date(field), displayedComponents: components(field))
                             .environment(\.timeZone, TourDates.zone)
                     }

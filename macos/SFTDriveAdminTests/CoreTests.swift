@@ -49,4 +49,23 @@ final class CoreTests: XCTestCase {
     func testInvalidOrderingWindowRejected() {
         XCTAssertThrowsError(try FormValidation.window(["open": .string("2026-09-11T10:00:00Z"), "close": .string("2026-09-10T10:00:00Z")], open: "open", close: "close"))
     }
+    func testRestaurantMenuRequiresEvidenceAndValidPrice() throws {
+        var payload: Payload = Dictionary(uniqueKeysWithValues: ExtractionSchema.keys(.restaurant).map { ($0, .null) })
+        payload["evidence"] = .object([:])
+        payload["menu_items"] = .array([.object(["name": .string("Pasta"), "price": .number(12.5), "evidence": .string("Pasta 12,50")])])
+        XCTAssertNoThrow(try ExtractionSchema.validate(payload, kind: .restaurant, source: "Pasta 12,50"))
+        payload["menu_items"] = .array([.object(["name": .string("Pasta"), "price": .number(-1), "evidence": .string("Pasta 12,50")])])
+        XCTAssertThrowsError(try ExtractionSchema.validate(payload, kind: .restaurant, source: "Pasta 12,50"))
+    }
+    func testNoDateIsInferredFromMissingFields() throws {
+        var payload: Payload = Dictionary(uniqueKeysWithValues: ExtractionSchema.keys(.hotel_offer).map { ($0, .null) })
+        payload["evidence"] = .object([:])
+        let (values, _) = try ExtractionSchema.validate(payload, kind: .hotel_offer, source: "Im Juni wäre etwas frei.")
+        XCTAssertEqual(values["arrival"], .null)
+        XCTAssertEqual(values["departure"], .null)
+    }
+    func testRPCBusinessErrorsAreNotSuccessfulHTTPResponses() throws {
+        let result = try JSONDecoder().decode(RPCResult.self, from: Data("{\"code\":\"TOUR_FULL\",\"registration_id\":null}".utf8))
+        XCTAssertThrowsError(try result.check())
+    }
 }

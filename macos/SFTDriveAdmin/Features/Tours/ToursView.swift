@@ -26,6 +26,7 @@ struct ToursView: View {
     let services: AppServices
     @StateObject private var model: ToursViewModel
     @State private var editor: TourEditorRequest?
+    @State private var sortOrder = [KeyPathComparator(\Tour.start_date, order: .reverse)]
     init(services: AppServices) { self.services = services; _model = StateObject(wrappedValue: ToursViewModel(services.tours)) }
     private var selected: Tour? { model.tours.first { $0.id == model.selection } }
     var body: some View {
@@ -35,7 +36,7 @@ struct ToursView: View {
                 VStack {
                     HStack { TextField("Touren suchen", text: $model.query).textFieldStyle(.roundedBorder)
                         Toggle("Archiv", isOn: $model.archived).toggleStyle(.checkbox) }.padding()
-                    Table(model.tours, selection: $model.selection) {
+                    Table(model.tours.sorted(using: sortOrder), selection: $model.selection, sortOrder: $sortOrder) {
                         TableColumn("Ausfahrt", value: \.title).width(min: 150, ideal: 230)
                         TableColumn("Beginn", value: \.start_date).width(100)
                         TableColumn("Region", value: \.region)
@@ -199,7 +200,7 @@ struct TourEditorView: View {
                     }
                 }
             }.formStyle(.grouped).disabled(model.busy || !model.loaded)
-        }.frame(width: 760, height: 760).interactiveDismissDisabled(model.dirty || model.busy)
+        }.frame(width: 760, height: 760).interactiveDismissDisabled(model.dirty || model.busy).protectDraft(model.dirty)
         .task { await model.load() }
         .confirmationDialog("Ungespeicherte Änderungen verwerfen?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Verwerfen", role: .destructive, action: close); Button("Weiter bearbeiten", role: .cancel) { }

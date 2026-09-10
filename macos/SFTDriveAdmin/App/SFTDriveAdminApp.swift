@@ -2,17 +2,18 @@ import SwiftUI
 import AppKit
 
 @main struct SFTDriveAdminApp: App {
+    @NSApplicationDelegateAdaptor(SFTAppDelegate.self) private var appDelegate
     @StateObject private var auth = AuthManager()
     var body: some Scene {
         WindowGroup("SFT Drive Admin") {
             RootView().environmentObject(auth).tint(.sftRed).preferredColorScheme(.dark)
-                .frame(minWidth: 1100, minHeight: 720)
+                .frame(minWidth: 1100, minHeight: 720).background(WindowCloseGuard())
         }
         .defaultSize(width: 1380, height: 880)
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(after: .appSettings) {
-                Button("Abmelden") { Task { await auth.logout() } }.keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("Abmelden") { if DraftRegistry.shared.confirmDiscard() { Task { await auth.logout() } } }.keyboardShortcut("l", modifiers: [.command, .shift])
             }
         }
         Settings { TabView { ConnectionView().tabItem { Label("Verbindung", systemImage: "network") }; AISettingsView().tabItem { Label("KI", systemImage: "sparkles") } }.environmentObject(auth).frame(width: 620, height: 620) }
@@ -72,9 +73,9 @@ struct AdminShell: View {
     @EnvironmentObject private var auth: AuthManager
     var body: some View {
         NavigationSplitView {
-            List(AppSection.allCases, selection: $selection) { section in Label(section.rawValue, systemImage: section.icon).tag(section) }
+            List(AppSection.allCases, selection: Binding(get: { selection }, set: { value in if value == selection || DraftRegistry.shared.confirmDiscard() { selection = value } })) { section in Label(section.rawValue, systemImage: section.icon).tag(section) }
                 .safeAreaInset(edge: .top) { HStack { Image(systemName: "gauge.with.dots.needle.67percent").foregroundStyle(Color.sftRed); Text("SFT DRIVE").font(.headline) }.padding(20) }
-                .safeAreaInset(edge: .bottom) { VStack(alignment: .leading) { SettingsLink { Label("Einstellungen", systemImage: "gearshape") }; Button("Abmelden") { Task { await auth.logout() } } }.buttonStyle(.plain).padding(20) }
+                .safeAreaInset(edge: .bottom) { VStack(alignment: .leading) { SettingsLink { Label("Einstellungen", systemImage: "gearshape") }; Button("Abmelden") { if DraftRegistry.shared.confirmDiscard() { Task { await auth.logout() } } } }.buttonStyle(.plain).padding(20) }
                 .navigationSplitViewColumnWidth(min: 210, ideal: 225, max: 270)
         } detail: {
             switch selection ?? .dashboard {

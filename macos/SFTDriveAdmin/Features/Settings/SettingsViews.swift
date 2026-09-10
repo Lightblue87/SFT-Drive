@@ -45,7 +45,7 @@ struct NotificationsView: View {
                 ErrorBanner(message: model.error)
                 if let notice = model.notice { Text(notice) }
             }
-        }.formStyle(.grouped).navigationTitle("Mitteilungen")
+        }.formStyle(.grouped).navigationTitle("Mitteilungen").protectDraft(!model.title.isEmpty || !model.body.isEmpty)
         .task { await model.perform {
             var offset = 0
             while true { let page = try await services.tours.list(query: "", offset: offset, archived: false); model.tours += page; if page.count < 100 { break }; offset += 100; try Task.checkCancellation() }
@@ -62,14 +62,15 @@ struct LegalSettingsView: View {
     let repository: ContentRepository
     @StateObject private var model = ScreenModel()
     @State private var values: Payload = [:]
+    @State private var initial: Payload = [:]
     private let fields: [FormField] = [.init("organization_name", "Organisation"), .init("responsible_name", "Verantwortliche Person"), .init("street", "Straße"), .init("postal_code", "Postleitzahl"), .init("city", "Ort"), .init("contact_email", "Kontakt-E-Mail"), .init("phone", "Telefon")]
     var body: some View {
         Form {
             Section("Impressum & Datenschutz") { FormFields(fields: fields, values: $values) }
             ErrorBanner(message: model.error)
             if let notice = model.notice { Text(notice) }
-            Button("Speichern") { Task { await model.perform { try await repository.saveSiteSettings(FormValidation.payload(values, fields: fields)); model.notice = "Gespeichert." } } }.disabled(model.busy)
-        }.formStyle(.grouped).navigationTitle("Impressum & Datenschutz")
-        .task { await model.perform { values = try await repository.siteSettings() } }
+            Button("Speichern") { Task { await model.perform { try await repository.saveSiteSettings(FormValidation.payload(values, fields: fields)); initial = values; model.notice = "Gespeichert." } } }.disabled(model.busy)
+        }.formStyle(.grouped).navigationTitle("Impressum & Datenschutz").protectDraft(values != initial)
+        .task { await model.perform { values = try await repository.siteSettings(); initial = values } }
     }
 }
