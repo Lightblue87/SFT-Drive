@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import type { Vehicle } from '@/types/vehicle'
@@ -30,6 +30,7 @@ function initials(name: string): string {
  */
 export function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [user, setUser] = useState<UserRow | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,9 +75,17 @@ export function AdminUserDetailPage() {
 
   return (
     <div className="pt-3">
-      <Link to="/admin/users" className="tap-scale mb-3.5 inline-block text-sm text-sft-gray">
-        ‹ Zurück
-      </Link>
+      <div className="flex items-center gap-3 pb-3.5">
+        <button
+          onClick={() => navigate('/admin/users')}
+          className="tap-scale flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[11px] border border-white/10 bg-[#131316]"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M15 4 7 12l8 8" stroke="#f5f5f5" strokeWidth="2" />
+          </svg>
+        </button>
+        <div className="text-[22px] font-semibold leading-none">@{user.username}</div>
+      </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/9 bg-sft-card px-[15px] py-3.5">
         <div className="flex items-center gap-2.5">
