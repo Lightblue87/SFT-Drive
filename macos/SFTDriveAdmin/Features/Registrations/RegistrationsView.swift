@@ -20,9 +20,17 @@ import SwiftUI
         }
     }
     func name(_ row: TourRegistration) -> String { users.first { $0.id == row.user_id }?.username ?? row.user_id }
+    // Klarname ist Admin-Inhalt (§5/§12 "Admin kann ... Klarname sehen"), anders als die
+    // datensparsame Teilnehmer-Fahrzeugliste (§8.9) oder der CSV-Export (§35.1, dort weiterhin
+    // ohne Klarname per Default) -- deshalb nur für die Anzeige hier, nicht für name()/den Export.
+    func displayName(_ row: TourRegistration) -> String {
+        guard let user = users.first(where: { $0.id == row.user_id }) else { return row.user_id }
+        let full = "\(user.first_name) \(user.last_name)".trimmingCharacters(in: .whitespaces)
+        return full.isEmpty ? user.username : "\(full) · \(user.username)"
+    }
     var filtered: [TourRegistration] {
         rows.filter { (filter == "all" || (filter == "arrived" ? $0.checked_in_at != nil && $0.status == "confirmed" : $0.status == filter)) &&
-            (query.isEmpty || "\(name($0)) \($0.vehicle_manufacturer) \($0.vehicle_model)".localizedCaseInsensitiveContains(query)) }
+            (query.isEmpty || "\(displayName($0)) \($0.vehicle_manufacturer) \($0.vehicle_model)".localizedCaseInsensitiveContains(query)) }
         .sorted { ($0.registered_at, $0.id) < ($1.registered_at, $1.id) }
     }
     func apply(_ action: String) async {
@@ -68,7 +76,7 @@ struct RegistrationsView: View {
                 Button("Laden", systemImage: "arrow.clockwise") { Task { await model.load() } }.labelStyle(.iconOnly)
             }
             Table(model.filtered, selection: $model.selection) {
-                TableColumn("Fahrer") { Text(model.name($0)) }
+                TableColumn("Fahrer") { Text(model.displayName($0)) }
                 TableColumn("Fahrzeug") { Text("\($0.vehicle_manufacturer) \($0.vehicle_model)") }
                 TableColumn("PS") { Text("\($0.vehicle_power_ps)") }.width(45)
                 TableColumn("Personen") { Text("\($0.passenger_count + 1)") }.width(60)
@@ -78,7 +86,7 @@ struct RegistrationsView: View {
                 Button("Auswahl entfernen", role: .destructive) { action = "admin_remove_registration" }.disabled(model.selection.isEmpty)
             }
             if let selected, model.selection.count == 1 {
-                GroupBox("\(model.name(selected)) · \(selected.vehicle_manufacturer) \(selected.vehicle_model)") {
+                GroupBox("\(model.displayName(selected)) · \(selected.vehicle_manufacturer) \(selected.vehicle_model)") {
                     HStack {
                         Text("Kennzeichen: \(selected.license_plate ?? "–")").textSelection(.enabled)
                         Spacer()

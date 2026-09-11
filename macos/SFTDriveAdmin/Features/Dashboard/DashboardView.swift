@@ -44,7 +44,12 @@ enum DashboardMetric: String, Identifiable, CaseIterable {
         self.toursRepository = toursRepository; self.people = people; self.planning = planning
     }
     func total(_ metric: DashboardMetric) -> Int { tours.reduce(0) { $0 + metric.count(summaries[$1.id]) } }
-    func name(_ row: TourRegistration) -> String { users.first { $0.id == row.user_id }?.username ?? row.user_id }
+    // Klarname ist Admin-Inhalt (§5/§12 "Admin kann ... Klarname sehen").
+    func name(_ row: TourRegistration) -> String {
+        guard let user = users.first(where: { $0.id == row.user_id }) else { return row.user_id }
+        let full = "\(user.first_name) \(user.last_name)".trimmingCharacters(in: .whitespaces)
+        return full.isEmpty ? user.username : "\(full) · \(user.username)"
+    }
     func load() async {
         await perform {
             let all = try await toursRepository.list(query: "", offset: 0, archived: false)
