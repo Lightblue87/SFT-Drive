@@ -99,13 +99,15 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
     }
     // Lädt Registrierungen aller kommenden Touren nach, die noch nicht im Cache
     // sind -- nur beim expliziten Öffnen von "Teilnehmer"/"Bestätigte Fahrzeuge"
-    // (Drilldown), nicht beim initialen Dashboard-Laden (§4 N+1-Regel: Drilldowns
-    // dürfen Details nachladen, eine globale Übersicht nicht jede Zeile einzeln).
+    // (Drilldown), nicht beim initialen Dashboard-Laden. Ein Request statt
+    // eines Loops je Tour (§4 N+1-Regel).
     func loadAllRegistrations() async {
+        let missing = tours.map(\.id).filter { registrations[$0] == nil }
+        guard !missing.isEmpty else { return }
         await perform {
-            for tour in tours where registrations[tour.id] == nil {
-                registrations[tour.id] = try await people.registrations(tour.id)
-            }
+            let rows = try await people.registrationsBulk(missing)
+            var byTour = Dictionary(grouping: rows, by: \.tour_id)
+            for id in missing { registrations[id] = byTour.removeValue(forKey: id) ?? [] }
         }
     }
     func setExpanded(_ tourID: String, _ expanded: Bool) {

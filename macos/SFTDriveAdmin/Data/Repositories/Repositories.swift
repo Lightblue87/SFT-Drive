@@ -112,6 +112,15 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
         let records = try await rows("tour_registrations", key: "tour_id", value: tourID)
         return try JSONDecoder().decode([TourRegistration].self, from: JSONEncoder().encode(records))
     }
+    // Bündelt Registrierungen mehrerer Touren in einem Request statt einem
+    // Aufruf je Tour (§4 N+1-Regel) -- für Dashboard-Drilldowns, die alle
+    // kommenden Touren auf einmal brauchen (Teilnehmer/Fahrzeuge).
+    func registrationsBulk(_ tourIDs: [String]) async throws -> [TourRegistration] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        let params: Payload = ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]
+        return try await client.rpc("admin_get_registrations_bulk", params: params).execute().value
+    }
     func change(_ registrationID: String, action name: String) async throws {
         let allowed = ["approve_tour_registration", "reject_tour_registration", "admin_remove_registration"]
         guard allowed.contains(name) else { throw AppError("Unzulässige Teilnehmeraktion.") }

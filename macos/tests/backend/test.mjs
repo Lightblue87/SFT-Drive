@@ -116,6 +116,12 @@ try {
  check(bulk.length,2);
  const bulkOk=bulk.find(r=>r.tour_id===tourID);check(bulkOk.error,null);check(bulkOk.summary.confirmed_vehicles,1);
  const bulkMissing=bulk.find(r=>r.tour_id==='00000000-0000-0000-0000-000000000099');check(bulkMissing.summary,null);check(/TOUR_NOT_FOUND/.test(bulkMissing.error),true);
+ // Bundled multi-tour registrations RPC (Dashboard "Teilnehmer"/"Bestätigte
+ // Fahrzeuge" drilldowns): one request instead of a loop per tour (§4 N+1-Regel).
+ const regsBulk=(await db.query('select * from public.admin_get_registrations_bulk($1::uuid[])',[[tourID]])).rows;
+ check(regsBulk.length,regs.length);check(regsBulk.every(r=>r.tour_id===tourID),true);
+ await identity(member);await bad(()=>db.query('select * from public.admin_get_registrations_bulk($1::uuid[])',[[tourID]]),/FORBIDDEN/);
+ await identity(admin);
  await identity(member);await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Attack'}]),/FORBIDDEN/);
  await bad(()=>db.query('select * from public.admin_get_tour_planning_summaries($1::uuid[])',[[tourID]]),/FORBIDDEN/);
  await bad(()=>rpc('admin_replace_meal_order',[stopID,regs[0].id,orderBefore,[]]),/FORBIDDEN/);
