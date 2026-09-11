@@ -400,7 +400,12 @@ struct TourEditorView: View {
                 if step == 6 { Section("Kommunikation") { FormFields(fields: TourFormSchema.memberFields, values: $model.member); FormFields(fields: TourFormSchema.participantFields, values: $model.participant) }
                     Section("Medien") { FormFields(fields: fields(["cover_image_url","youtube_url","youtube_embed"]), values: $model.fields) } }
                 if step == 7 { Section("Prüfen und veröffentlichen") { LabeledContent("Titel", value: model.fields.text("title")); LabeledContent("Zeitraum", value: "\(model.fields.text("start_date")) – \(model.fields.text("end_date"))"); LabeledContent("Status", value: Labels.status(model.status)); Text("Vor Veröffentlichung Datum, Uhrzeiten, Fristen, Preise und Kapazitäten nochmals bewusst prüfen.").foregroundStyle(.secondary) } }
-                if model.expected != nil {
+                // Nur auf dem letzten Schritt zeigen: die destruktiven Aktionen
+                // hingen bisher an keinem `step`-Zweig und erschienen dadurch
+                // unter jedem Schritt (u. a. unter "Übernachtungen" und
+                // "Restaurants", ohne fachlichen Bezug dorthin) -- inkonsistente
+                // Darstellung im Nutzerfeedback.
+                if step == steps.count - 1 && model.expected != nil {
                     Section("Verwaltung") {
                         if ["published", "registration_closed"].contains(originalStatus) {
                             TextField("Begründung der Absage", text: $reason)
