@@ -88,27 +88,3 @@ struct AdminShell: View {
         }
     }
 }
-struct DashboardView: View {
-    let services: AppServices
-    @StateObject private var model = ScreenModel()
-    @State private var tours: [Tour] = []
-    @State private var selection: String?
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text("Ausfahrten im Blick").font(.largeTitle.bold())
-            Text("Planung, Teilnehmer und Organisation an einem Ort.").foregroundStyle(.secondary)
-            ErrorBanner(message: model.error)
-            Picker("Ausfahrt", selection: $selection) {
-                Text("Tour auswählen").tag(String?.none)
-                ForEach(tours) { Text("\($0.start_date) · \($0.title)").tag(Optional($0.id)) }
-            }.padding(.vertical)
-            if let tour = tours.first(where: { $0.id == selection }) { PlanningView(repository: services.planning, tour: tour).id(tour.id) }
-            else { ContentUnavailableView("Ausfahrt auswählen", systemImage: "map") }
-        }.padding(28).navigationTitle("Dashboard")
-        .task { await model.perform {
-            tours = try await services.tours.list(query: "", offset: 0, archived: false)
-            let today = TourDates.dayString(Date())
-            selection = tours.filter { $0.end_date >= today && $0.status != "cancelled" }.sorted { $0.start_date < $1.start_date }.first?.id ?? tours.first?.id
-        } }
-    }
-}
