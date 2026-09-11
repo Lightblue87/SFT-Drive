@@ -144,7 +144,8 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
     func summaries(_ tourIDs: [String]) async throws -> [TourPlanningSummaryRow] {
         guard !tourIDs.isEmpty else { return [] }
         try await requireAdmin()
-        return try await client.rpc("admin_get_tour_planning_summaries", params: ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]).execute().value
+        let params: Payload = ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]
+        return try await client.rpc("admin_get_tour_planning_summaries", params: params).execute().value
     }
     func accommodation(_ tourID: String) async throws -> [AccommodationConfirmation] {
         let records = try await rows("tour_accommodation_confirmations", key: "tour_id", value: tourID)
