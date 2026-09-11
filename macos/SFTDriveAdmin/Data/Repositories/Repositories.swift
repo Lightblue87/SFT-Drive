@@ -49,11 +49,20 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
     func upcoming() async throws -> [Tour] {
         try await requireAdmin()
         let today = TourDates.dayString(Date())
-        return try await client.from("tours").select()
-            .gte("end_date", value: today).neq("status", value: "cancelled")
-            .neq("status", value: "draft").neq("status", value: "archived")
-            .order("start_date", ascending: true).order("id")
-            .range(from: 0, to: 199).execute().value
+        // Paginate to exhaustion (mirrors Repository.rows()) rather than a fixed cutoff --
+        // a hard cap here would silently drop tours beyond it (PR #18 review).
+        var result: [Tour] = []; var offset = 0
+        while true {
+            try Task.checkCancellation()
+            let page: [Tour] = try await client.from("tours").select()
+                .gte("end_date", value: today).neq("status", value: "cancelled")
+                .neq("status", value: "draft").neq("status", value: "archived")
+                .order("start_date", ascending: true).order("id")
+                .range(from: offset, to: offset + 199).execute().value
+            result += page
+            if page.count < 200 { return result }
+            offset += 200
+        }
     }
     func details(_ id: String) async throws -> Payload {
         try await requireAdmin()
@@ -172,6 +181,17 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
             return try await client.from(kind.table).select().eq(kind.parentKey, value: parentID).execute().value
         }
         return try await rows(kind.table, key: kind.parentKey, value: parentID)
+    }
+    // For the Restaurant overview (PR #18 review): admin_get_tour_planning_summary's
+    // restaurants list only includes stops with ordering_enabled=true, so a newly
+    // created restaurant stop (no settings row yet, or ordering still off) would never
+    // appear there -- exactly the case an admin needs this overview for, to configure
+    // it. Queries tour_stops directly instead, independent of ordering state.
+    func restaurantStops(_ tourIDs: [String]) async throws -> [DataRow] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        return try await client.from("tour_stops").select().eq("type", value: "restaurant")
+            .in("tour_id", values: tourIDs).execute().value
     }
     func save(_ kind: ResourceKind, id: String, parentID: String, expected: Payload?, values: Payload) async throws {
         try await action("admin_save_tour_resource", ["p_kind": .string(kind.rawValue), "p_id": .string(id),

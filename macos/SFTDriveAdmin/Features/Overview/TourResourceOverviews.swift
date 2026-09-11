@@ -3,15 +3,26 @@ import SwiftUI
 @MainActor final class TourResourceOverviewModel: ScreenModel {
     @Published var tours: [Tour] = []
     @Published var summaries: [String: PlanningSummary] = [:]
+    @Published var restaurantStops: [String: [DataRow]] = [:]
     @Published var selection: String?
     let toursRepository: ToursRepository
     let planning: PlanningRepository
-    init(toursRepository: ToursRepository, planning: PlanningRepository) { self.toursRepository = toursRepository; self.planning = planning }
+    let content: ContentRepository
+    init(toursRepository: ToursRepository, planning: PlanningRepository, content: ContentRepository) {
+        self.toursRepository = toursRepository; self.planning = planning; self.content = content
+    }
     func load() async {
         await perform {
             tours = try await toursRepository.upcoming()
-            let rows = try await planning.summaries(tours.map(\.id))
+            let tourIDs = tours.map(\.id)
+            async let summariesTask = planning.summaries(tourIDs)
+            // Restaurant membership must not depend on admin_get_tour_planning_summary's
+            // ordering_enabled filter (Codex review on #18) -- a newly created restaurant
+            // stop needs to show up here precisely so it can be configured.
+            async let stopsTask = content.restaurantStops(tourIDs)
+            let (rows, stops) = try await (summariesTask, stopsTask)
             summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
+            restaurantStops = Dictionary(grouping: stops, by: { $0.values.text("tour_id") })
             // A failed summary must not silently read as "no hotels/restaurants here"
             // (PR #18 review) -- surface which tours it affects.
             let failed = rows.filter { $0.summary == nil }
@@ -28,7 +39,7 @@ struct HotelsOverviewView: View {
     @StateObject private var model: TourResourceOverviewModel
     init(services: AppServices) {
         self.services = services
-        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning))
+        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
     }
     private var multiDay: [Tour] { model.tours.filter { $0.end_date > $0.start_date } }
     private var selected: Tour? { multiDay.first { $0.id == model.selection } }
@@ -74,9 +85,9 @@ struct RestaurantsOverviewView: View {
     @State private var openStop: DataRow?
     init(services: AppServices) {
         self.services = services
-        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning))
+        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
     }
-    private var withRestaurants: [Tour] { model.tours.filter { !(model.summaries[$0.id]?.restaurants.isEmpty ?? true) } }
+    private var withRestaurants: [Tour] { model.tours.filter { !(model.restaurantStops[$0.id]?.isEmpty ?? true) } }
     private var selected: Tour? { withRestaurants.first { $0.id == model.selection } }
     var body: some View {
         VStack(spacing: 0) {
@@ -102,11 +113,16 @@ struct RestaurantsOverviewView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(selected.title).font(.title2.bold())
                         Text("Restaurant-Stopps dieser Tour").foregroundStyle(.secondary)
-                        List(model.summaries[selected.id]?.restaurants ?? []) { stop in
+                        List(model.restaurantStops[selected.id] ?? []) { stop in
+                            let counts = model.summaries[selected.id]?.restaurants.first { $0.id == stop.id }
                             HStack {
-                                VStack(alignment: .leading) { Text(stop.title).bold(); Text("\(stop.orders) Bestellungen · \(stop.dishes) Gerichte").font(.caption).foregroundStyle(.secondary) }
+                                VStack(alignment: .leading) {
+                                    Text(stop.values.text("title")).bold()
+                                    if let counts { Text("\(counts.orders) Bestellungen · \(counts.dishes) Gerichte").font(.caption).foregroundStyle(.secondary) }
+                                    else { Text("Bestellung noch nicht aktiviert").font(.caption).foregroundStyle(.secondary) }
+                                }
                                 Spacer()
-                                Button("Öffnen") { openStop = DataRow(["id": .string(stop.id), "title": .string(stop.title)]) }
+                                Button("Öffnen") { openStop = stop }
                             }
                         }
                         Text("Neue Restaurant-Stopps: Tourenverwaltung → Tour → Stopps → Hinzufügen (Typ „Restaurant“), danach hier oder dort „Speisekarte & Bestellungen“ öffnen.")

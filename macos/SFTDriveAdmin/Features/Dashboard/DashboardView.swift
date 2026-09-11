@@ -79,7 +79,11 @@ enum DashboardMetric: String, Identifiable, CaseIterable {
         await perform {
             try await people.change(row.id, action: action)
             registrations[row.tour_id] = try await people.registrations(row.tour_id)
-            summaries[row.tour_id] = try? await planning.summary(row.tour_id)
+            // Keep the prior summary and surface the failure instead of wiping this
+            // tour's counts to nil on a refresh hiccup (Codex review on #18) -- the
+            // registration change itself already succeeded above.
+            do { summaries[row.tour_id] = try await planning.summary(row.tour_id) }
+            catch { self.error = "Aktion ausgeführt, aber aktuelle Zahlen für diese Tour konnten nicht neu geladen werden: \(error.localizedDescription)" }
         }
     }
 }
