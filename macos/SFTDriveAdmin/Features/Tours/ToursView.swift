@@ -196,6 +196,7 @@ struct RestaurantsTab: View {
                     }
                 }
             }
+            RefreshFooter(time: model.refreshedAt, busy: model.busy)
         }.task { await load() }
         .sheet(item: $openStop) { stop in RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await load() } } }
         .sheet(isPresented: $adding) {
@@ -394,9 +395,17 @@ struct TourEditorView: View {
                 }
                 if step == 1 { Section("Zeitraum und Treffpunkt") { FormFields(fields: fields(["start_date","end_date","meeting_at","planned_end_at","meeting_point_public"]), values: $model.fields) } }
                 if step == 2 { Section("Teilnahmebedingungen und Anmeldung") { FormFields(fields: fields(["max_vehicles","confirmation_mode","license_plate_required","min_power_ps","max_power_ps","min_driver_age","registration_open_at","registration_close_at","passenger_edit_deadline_at","check_in_enabled","check_in_open_minutes_before","check_in_close_minutes_after"]), values: $model.fields) } }
-                if step == 3 { Section("Tagesplanung") { if let tour = model.workingTour { TagesplanungTab(services: services, tour: tour, multiDay: tour.end_date > tour.start_date).frame(minHeight: 420) } else { Text("Zuerst zwischenspeichern, dann werden Tourtage, Routen und Stopps hier im selben Flow freigeschaltet.") } } }
-                if step == 4 { Section("Übernachtungen") { if let tour = model.workingTour, tour.end_date > tour.start_date { AccommodationView(services: services, tour: tour).frame(minHeight: 420) } else { Text("Mehrtagestour mit gültigem Zeitraum zwischenspeichern, um Hotelvorschläge direkt hier zu planen.") } } }
-                if step == 5 { Section("Restaurants und Essen") { if let tour = model.workingTour { RestaurantsTab(services: services, tour: tour).frame(minHeight: 420) } else { Text("Tour zwischenspeichern, um Restaurants und Speisekarten direkt hier anzulegen.") } } }
+                // frame(minHeight:) zentriert seinen Inhalt standardmäßig vertikal,
+                // ohne explizites alignment: .top -- bei kurzem Inhalt (z. B. eine
+                // leere Restaurant-Liste) entstand dadurch oben Leerraum, während ein
+                // Tab mit von Haus aus höherem Inhalt (z. B. Übernachtungen mit
+                // Hotelliste + Matrix + Erinnerung) bereits über 420pt hinausragte und
+                // der Effekt dort unsichtbar blieb -- optisch uneinheitliches Bild
+                // zwischen den Schritten (Nutzerfeedback). Alle drei Tabs jetzt
+                // konsistent oben ausgerichtet, unabhängig vom tatsächlichen Inhalt.
+                if step == 3 { Section("Tagesplanung") { if let tour = model.workingTour { TagesplanungTab(services: services, tour: tour, multiDay: tour.end_date > tour.start_date).frame(minHeight: 420, alignment: .top) } else { Text("Zuerst zwischenspeichern, dann werden Tourtage, Routen und Stopps hier im selben Flow freigeschaltet.") } } }
+                if step == 4 { Section("Übernachtungen") { if let tour = model.workingTour, tour.end_date > tour.start_date { AccommodationView(services: services, tour: tour).frame(minHeight: 420, alignment: .top) } else { Text("Mehrtagestour mit gültigem Zeitraum zwischenspeichern, um Hotelvorschläge direkt hier zu planen.") } } }
+                if step == 5 { Section("Restaurants und Essen") { if let tour = model.workingTour { RestaurantsTab(services: services, tour: tour).frame(minHeight: 420, alignment: .top) } else { Text("Tour zwischenspeichern, um Restaurants und Speisekarten direkt hier anzulegen.") } } }
                 if step == 6 { Section("Kommunikation") { FormFields(fields: TourFormSchema.memberFields, values: $model.member); FormFields(fields: TourFormSchema.participantFields, values: $model.participant) }
                     Section("Medien") { FormFields(fields: fields(["cover_image_url","youtube_url","youtube_embed"]), values: $model.fields) } }
                 if step == 7 { Section("Prüfen und veröffentlichen") { LabeledContent("Titel", value: model.fields.text("title")); LabeledContent("Zeitraum", value: "\(model.fields.text("start_date")) – \(model.fields.text("end_date"))"); LabeledContent("Status", value: Labels.status(model.status)); Text("Vor Veröffentlichung Datum, Uhrzeiten, Fristen, Preise und Kapazitäten nochmals bewusst prüfen.").foregroundStyle(.secondary) } }
