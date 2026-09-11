@@ -84,6 +84,7 @@ struct RestaurantsOverviewView: View {
     @StateObject private var model: TourResourceOverviewModel
     @State private var openStop: DataRow?
     @State private var creating = false
+    @State private var deleting: DataRow?
     init(services: AppServices) {
         self.services = services
         _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
@@ -128,6 +129,7 @@ struct RestaurantsOverviewView: View {
                                 }
                                 Spacer()
                                 Button("Öffnen") { openStop = stop }
+                                Button("Löschen", role: .destructive) { deleting = stop }
                             }
                         }
                         Text("Neue Restaurant-Stopps: Tourenverwaltung → Tour → Stopps → Hinzufügen (Typ „Restaurant“), danach hier oder dort „Speisekarte & Bestellungen“ öffnen.")
@@ -138,6 +140,12 @@ struct RestaurantsOverviewView: View {
         }.navigationTitle("Restaurant").task { await model.load() }
         .sheet(item: $openStop) { stop in
             if let tour = selected { RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await model.load() } } }
+        }
+        .confirmationDialog("Restaurant-Stopp endgültig löschen? Bereits eingereichte Bestellungen verhindern das Löschen -- diese müssten zuerst storniert werden.", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button("Löschen", role: .destructive) {
+                guard let stop = deleting, let tour = selected else { return }; deleting = nil
+                Task { await model.perform { try await services.content.remove(.stops, id: stop.id, parentID: tour.id, expected: stop.values) }; await model.load() }
+            }
         }
         .sheet(isPresented: $creating) {
             NewRestaurantStopSheet(services: services, tours: model.tours) { newTourID in

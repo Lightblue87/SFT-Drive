@@ -37,7 +37,7 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
         switch self {
         case .tours: return "Kommende Touren"
         case .next: return "Nächste Tour"
-        case .people: return "Teilnehmerplätze gesamt"
+        case .people: return "Teilnehmer"
         case .vehicles: return "Bestätigte Fahrzeuge"
         }
     }
@@ -88,7 +88,26 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
         }
     }
     func toggle(_ metric: DashboardMetric) { expandedMetric = expandedMetric == metric ? nil : metric; expandedInfo = nil }
-    func toggleInfo(_ info: DashboardInfo) { expandedInfo = expandedInfo == info ? nil : info; expandedMetric = nil }
+    func toggleInfo(_ info: DashboardInfo) {
+        expandedInfo = expandedInfo == info ? nil : info
+        expandedMetric = nil
+        switch expandedInfo {
+        case .next: if let id = tours.first?.id { Task { await loadRegistrations(id) } }
+        case .people, .vehicles: Task { await loadAllRegistrations() }
+        case .tours, nil: break
+        }
+    }
+    // Lädt Registrierungen aller kommenden Touren nach, die noch nicht im Cache
+    // sind -- nur beim expliziten Öffnen von "Teilnehmer"/"Bestätigte Fahrzeuge"
+    // (Drilldown), nicht beim initialen Dashboard-Laden (§4 N+1-Regel: Drilldowns
+    // dürfen Details nachladen, eine globale Übersicht nicht jede Zeile einzeln).
+    func loadAllRegistrations() async {
+        await perform {
+            for tour in tours where registrations[tour.id] == nil {
+                registrations[tour.id] = try await people.registrations(tour.id)
+            }
+        }
+    }
     func setExpanded(_ tourID: String, _ expanded: Bool) {
         if expanded { expandedTours.insert(tourID); Task { await loadRegistrations(tourID) } }
         else { expandedTours.remove(tourID) }
@@ -195,35 +214,120 @@ struct DashboardView: View {
             }
         }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
     }
-    private func infoDrillDown(_ info: DashboardInfo) -> some View {
-        // "Nächste Tour" zeigt gezielt nur diese eine Tour, die übrigen drei
-        // listen alle kommenden Touren mit dem jeweils passenden Wert je Tour.
-        let list = info == .next ? Array(model.tours.prefix(1)) : model.tours
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(info.title).font(.title3.bold())
-            if list.isEmpty {
+    @ViewBuilder private func infoDrillDown(_ info: DashboardInfo) -> some View {
+        switch info {
+        case .tours: toursList()
+        case .next: nextTourDetail()
+        case .people: participantsList()
+        case .vehicles: vehiclesList()
+        }
+    }
+    private func sectionBox<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.title3.bold())
+            content()
+        }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+    }
+    @ViewBuilder private func toursList() -> some View {
+        sectionBox(DashboardInfo.tours.title) {
+            if model.tours.isEmpty {
                 Text("Keine Touren vorhanden.").foregroundStyle(.secondary).padding(.vertical, 8)
             } else {
-                ForEach(list) { tour in
+                ForEach(model.tours) { tour in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(tour.title).bold()
                             Text("\(tour.start_date) · \(tour.region)").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if let value = infoValue(info, tour) { Text(value).foregroundStyle(.secondary) }
                     }.padding(.vertical, 6)
                     Divider()
                 }
             }
-        }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+        }
     }
-    private func infoValue(_ info: DashboardInfo, _ tour: Tour) -> String? {
-        let summary = model.summaries[tour.id]
-        switch info {
-        case .tours, .next: return nil
-        case .people: return summary.map { "\($0.people) Personen" }
-        case .vehicles: return summary.map { "\($0.confirmed_vehicles) Fahrzeuge" }
+    @ViewBuilder private func nextTourDetail() -> some View {
+        sectionBox(DashboardInfo.next.title) {
+            if let tour = model.tours.first {
+                let summary = model.summaries[tour.id]
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(tour.title).font(.headline)
+                    Text("\(tour.region) · \(tour.start_date)\(tour.end_date != tour.start_date ? " – \(tour.end_date)" : "")").foregroundStyle(.secondary)
+                    if let meeting = tour.meeting_at, let date = TourDates.instant(meeting) {
+                        Text("Treffpunkt: \(date.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let length = tour.route_length_km { Text("\(Int(length)) km").font(.caption).foregroundStyle(.secondary) }
+                    if let summary { Text("\(summary.confirmed_vehicles) / \(tour.max_vehicles) Fahrzeuge bestätigt · \(summary.people) Personen").font(.caption) }
+                }
+                Divider().padding(.vertical, 4)
+                Text("Teilnehmer").font(.subheadline.bold())
+                if let rows = model.registrations[tour.id] {
+                    let confirmed = rows.filter { $0.status == "confirmed" }.sorted { $0.registered_at < $1.registered_at }
+                    if confirmed.isEmpty {
+                        Text("Noch keine bestätigten Teilnehmer.").foregroundStyle(.secondary).padding(.vertical, 6)
+                    } else {
+                        ForEach(confirmed) { row in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(model.name(row)).bold()
+                                    Text("\(row.vehicle_manufacturer) \(row.vehicle_model) · \(row.passenger_count + 1) Personen").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }.padding(.vertical, 4)
+                        }
+                    }
+                } else {
+                    ProgressView().padding(.vertical, 10).frame(maxWidth: .infinity)
+                }
+            } else {
+                Text("Keine anstehende Tour.").foregroundStyle(.secondary).padding(.vertical, 8)
+            }
+        }
+    }
+    private var confirmedByTour: [(Tour, TourRegistration)] {
+        model.tours.flatMap { tour in (model.registrations[tour.id] ?? []).filter { $0.status == "confirmed" }.map { (tour, $0) } }
+    }
+    private var stillLoadingAcrossTours: Bool { model.tours.contains { model.registrations[$0.id] == nil } }
+    @ViewBuilder private func participantsList() -> some View {
+        sectionBox(DashboardInfo.people.title) {
+            if stillLoadingAcrossTours {
+                ProgressView().padding(.vertical, 10).frame(maxWidth: .infinity)
+            } else if confirmedByTour.isEmpty {
+                Text("Keine bestätigten Teilnehmer.").foregroundStyle(.secondary).padding(.vertical, 8)
+            } else {
+                ForEach(Array(confirmedByTour.enumerated()), id: \.offset) { _, pair in
+                    let (tour, row) = pair
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.name(row)).bold()
+                            Text("\(tour.title) · \(row.vehicle_manufacturer) \(row.vehicle_model)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }.padding(.vertical, 4)
+                    Divider()
+                }
+            }
+        }
+    }
+    @ViewBuilder private func vehiclesList() -> some View {
+        sectionBox(DashboardInfo.vehicles.title) {
+            if stillLoadingAcrossTours {
+                ProgressView().padding(.vertical, 10).frame(maxWidth: .infinity)
+            } else if confirmedByTour.isEmpty {
+                Text("Keine bestätigten Fahrzeuge.").foregroundStyle(.secondary).padding(.vertical, 8)
+            } else {
+                ForEach(Array(confirmedByTour.enumerated()), id: \.offset) { _, pair in
+                    let (tour, row) = pair
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(row.vehicle_manufacturer) \(row.vehicle_model)\(row.license_plate.map { " · \($0)" } ?? "")").bold()
+                            Text("\(tour.title) · \(model.name(row)) · \(row.passenger_count + 1) Personen").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }.padding(.vertical, 4)
+                    Divider()
+                }
+            }
         }
     }
     @ViewBuilder private func tourRows(_ tour: Tour, metric: DashboardMetric) -> some View {
