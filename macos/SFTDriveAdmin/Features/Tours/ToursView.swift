@@ -70,26 +70,166 @@ struct ToursView: View {
         }
     }
 }
+// §38.6: die Tour ist das zentrale Arbeitsobjekt. Der Workspace bündelt alle
+// tourbezogenen Bereiche in einem zusammenhängenden Satz von Tabs statt
+// isolierter Hauptwelten. "Stopps" bleibt bewusst die einzige CRUD-Oberfläche
+// für Tour-Stopps jeder Art (auch Restaurant-Stopps) -- "Restaurants" daneben
+// ist ein zusätzlicher, gefilterter Schnelleinstieg zur Speisekarten-/
+// Bestellverwaltung, keine zweite Anlege-/Bearbeiten-Oberfläche dafür.
 struct TourWorkspace: View {
     let services: AppServices
     let tour: Tour
     let edit: () -> Void
-    @State private var section = "Planung"
-    private var sections: [String] { ["Planung", "Teilnehmer", "Stopps"] + (tour.end_date > tour.start_date ? ["Hotels", "Tagesrouten"] : []) + ["KI-Assistenz"] }
+    @State private var section = "Übersicht"
+    private var multiDay: Bool { tour.end_date > tour.start_date }
+    private let sections = ["Übersicht", "Tourdaten", "Tagesplanung", "Teilnehmer", "Restaurants", "Übernachtungen", "Kommunikation", "Medien", "KI-Assistenz"]
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack { VStack(alignment: .leading) { Text(tour.title).font(.title2.bold()); Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").foregroundStyle(.secondary) }
                 Spacer(); Button("Bearbeiten", action: edit) }
             Picker("Bereich", selection: $section) { ForEach(sections, id: \.self) { Text($0).tag($0) } }.pickerStyle(.menu)
             switch section {
+            case "Tourdaten": TourDataTab(tour: tour, edit: edit)
+            case "Tagesplanung": TagesplanungTab(services: services, tour: tour, multiDay: multiDay)
             case "Teilnehmer": RegistrationsView(services: services, tour: tour)
-            case "Stopps": ResourceListView(services: services, kind: .stops, parentID: tour.id, tour: tour)
-            case "Hotels": AccommodationView(services: services, tour: tour)
-            case "Tagesrouten": StagesView(services: services, tour: tour)
+            case "Restaurants": RestaurantsTab(services: services, tour: tour)
+            case "Übernachtungen":
+                if multiDay { AccommodationView(services: services, tour: tour) }
+                else { ContentUnavailableView("Nicht anwendbar", systemImage: "bed.double", description: Text("Übernachtungen gelten nur für Touren mit mehreren Tagen.")) }
+            case "Kommunikation": CommunicationTab(services: services, tour: tour, edit: edit)
+            case "Medien": MediaTab(tour: tour, edit: edit)
             case "KI-Assistenz": ExtractionReviewView(services: services, tour: tour)
             default: PlanningView(repository: services.planning, tour: tour)
             }
         }.padding()
+    }
+}
+struct TourDataTab: View {
+    let tour: Tour
+    let edit: () -> Void
+    var body: some View {
+        Form {
+            Section("Grunddaten") {
+                LabeledContent("Titel", value: tour.title)
+                LabeledContent("Region", value: tour.region)
+                LabeledContent("Zeitraum", value: "\(tour.start_date) – \(tour.end_date)")
+                LabeledContent("Status", value: Labels.status(tour.status))
+                LabeledContent("Fahrzeuglimit", value: "\(tour.max_vehicles)")
+                LabeledContent("Bestätigungsmodus", value: Labels.status(tour.confirmation_mode))
+                if let km = tour.route_length_km { LabeledContent("Streckenlänge", value: "\(km) km") }
+            }
+            Section("Anforderungen") {
+                LabeledContent("Kennzeichen", value: tour.license_plate_required ? "Pflicht" : "Optional")
+                if let min = tour.min_power_ps { LabeledContent("Mindestleistung", value: "\(min) PS") }
+                if let max = tour.max_power_ps { LabeledContent("Maximalleistung", value: "\(max) PS") }
+                if let age = tour.min_driver_age { LabeledContent("Mindestalter", value: "\(age)") }
+            }
+            Section { Button("Tourdaten bearbeiten", action: edit) }
+        }.formStyle(.grouped)
+    }
+}
+struct TagesplanungTab: View {
+    let services: AppServices
+    let tour: Tour
+    let multiDay: Bool
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if multiDay { StagesView(services: services, tour: tour); Divider() }
+                ResourceListView(services: services, kind: .stops, parentID: tour.id, tour: tour)
+            }
+        }
+    }
+}
+@MainActor final class RestaurantsTabModel: ScreenModel {
+    @Published var stops: [DataRow] = []
+    func load(_ repository: ContentRepository, tourID: String) async {
+        await perform { stops = try await repository.restaurantStops([tourID]) }
+    }
+}
+struct RestaurantsTab: View {
+    let services: AppServices
+    let tour: Tour
+    @StateObject private var model = RestaurantsTabModel()
+    @State private var openStop: DataRow?
+    @State private var adding = false
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack { Text("Restaurant-Stopps").font(.headline); Spacer()
+                Button("Neu anlegen", systemImage: "plus") { adding = true }
+                Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly)
+            }
+            ErrorBanner(message: model.error)
+            if model.stops.isEmpty && !model.busy {
+                ContentUnavailableView("Keine Restaurant-Stopps", systemImage: "fork.knife", description: Text("Über „Neu anlegen“ oder den Bereich „Tagesplanung“ → Stopps hinzufügen."))
+            } else {
+                List(model.stops) { stop in
+                    HStack {
+                        Text(stop.values.text("title")).bold()
+                        Spacer()
+                        Button("Speisekarte & Bestellungen") { openStop = stop }
+                    }
+                }
+            }
+        }.task { await load() }
+        .sheet(item: $openStop) { stop in RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await load() } } }
+        .sheet(isPresented: $adding) {
+            ResourceEditorView(repository: services.content, kind: .stops, parentID: tour.id, tour: tour, request: .init()) { adding = false; Task { await load() } }
+        }
+    }
+    private func load() async { await model.load(services.content, tourID: tour.id) }
+}
+@MainActor final class CommunicationModel: ScreenModel {
+    @Published var kurviger = ""
+    @Published var zello = ""
+    @Published var whatsapp = ""
+    func load(_ repository: ToursRepository, tourID: String) async {
+        await perform {
+            let snapshot = try await repository.details(tourID)
+            guard case .object(let participant) = snapshot["participant"] else { return }
+            kurviger = participant.text("kurviger_url"); zello = participant.text("zello_url"); whatsapp = participant.text("whatsapp_group_url")
+        }
+    }
+}
+struct CommunicationTab: View {
+    let services: AppServices
+    let tour: Tour
+    let edit: () -> Void
+    @StateObject private var model = CommunicationModel()
+    var body: some View {
+        Form {
+            Section("Links für bestätigte Teilnehmer") {
+                linkRow("Kurviger", model.kurviger)
+                linkRow("Zello", model.zello)
+                linkRow("WhatsApp-Gruppe", model.whatsapp)
+            }
+            Section { Button("Links bearbeiten", action: edit) }
+        }.formStyle(.grouped).task { await model.load(services.tours, tourID: tour.id) }
+    }
+    @ViewBuilder private func linkRow(_ title: String, _ value: String) -> some View {
+        if let url = URL(string: value), !value.isEmpty { LabeledContent(title) { Link("Öffnen", destination: url) } }
+        else { LabeledContent(title, value: "Nicht hinterlegt") }
+    }
+}
+struct MediaTab: View {
+    let tour: Tour
+    let edit: () -> Void
+    var body: some View {
+        Form {
+            Section("Titelbild") {
+                if let url = tour.cover_image_url, let imageURL = URL(string: url) {
+                    AsyncImage(url: imageURL) { $0.resizable().aspectRatio(contentMode: .fit) } placeholder: { ProgressView() }
+                        .frame(maxHeight: 220)
+                } else { Text("Kein Titelbild hinterlegt.").foregroundStyle(.secondary) }
+            }
+            Section("YouTube") {
+                if let url = tour.youtube_url, let videoURL = URL(string: url), !url.isEmpty {
+                    LabeledContent("Video") { Link("Öffnen", destination: videoURL) }
+                    LabeledContent("Eingebettet anzeigen", value: tour.youtube_embed ? "Ja" : "Nein")
+                } else { Text("Kein Video hinterlegt.").foregroundStyle(.secondary) }
+            }
+            Section { Button("Medien bearbeiten", action: edit) }
+        }.formStyle(.grouped)
     }
 }
 
