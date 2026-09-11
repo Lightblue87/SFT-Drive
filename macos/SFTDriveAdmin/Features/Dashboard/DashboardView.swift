@@ -52,23 +52,23 @@ enum DashboardMetric: String, Identifiable, CaseIterable {
     }
     func load() async {
         await perform {
-            let all = try await toursRepository.list(query: "", offset: 0, archived: false)
-            let today = TourDates.dayString(Date())
-            tours = all.filter { $0.end_date >= today && $0.status != "cancelled" && $0.status != "draft" }
-                .sorted { $0.start_date < $1.start_date }
+            tours = try await toursRepository.upcoming()
             users = try await people.users()
-            var next: [String: PlanningSummary] = [:]
-            for tour in tours {
-                try Task.checkCancellation()
-                next[tour.id] = try? await planning.summary(tour.id)
+            let rows = try await planning.summaries(tours.map(\.id))
+            summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
+            // A failed summary must not silently read as an empty/zero planning
+            // state (PR #18 review) -- surface which tours it affects.
+            let failed = rows.filter { $0.summary == nil }
+            if !failed.isEmpty {
+                let titles = failed.compactMap { row in tours.first { $0.id == row.tour_id }?.title ?? row.tour_id }.joined(separator: ", ")
+                error = "Planungsdaten konnten nicht geladen werden für: \(titles)."
             }
-            summaries = next
         }
     }
     func toggle(_ metric: DashboardMetric) { expandedMetric = expandedMetric == metric ? nil : metric }
-    func toggle(tour tourID: String) {
-        if expandedTours.contains(tourID) { expandedTours.remove(tourID) }
-        else { expandedTours.insert(tourID); Task { await loadRegistrations(tourID) } }
+    func setExpanded(_ tourID: String, _ expanded: Bool) {
+        if expanded { expandedTours.insert(tourID); Task { await loadRegistrations(tourID) } }
+        else { expandedTours.remove(tourID) }
     }
     func loadRegistrations(_ tourID: String) async {
         guard registrations[tourID] == nil else { return }
@@ -109,7 +109,7 @@ struct DashboardView: View {
                     LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], spacing: 12) {
                         infoTile("Kommende Touren", "\(model.tours.count)", "calendar")
                         if let next = model.tours.first { infoTile("Nächste Tour", "\(next.start_date) · \(next.title)", "arrow.right.circle") }
-                        infoTile("Personen gesamt", "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.people ?? 0) })", "person.2")
+                        infoTile("Teilnehmerplätze gesamt", "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.people ?? 0) })", "person.2")
                         infoTile("Bestätigte Fahrzeuge", "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.confirmed_vehicles ?? 0) })", "steeringwheel")
                         ForEach(DashboardMetric.allCases) { metric in
                             metricTile(metric)
@@ -147,7 +147,7 @@ struct DashboardView: View {
                 ForEach(relevant) { tour in
                     DisclosureGroup(isExpanded: Binding(
                         get: { model.expandedTours.contains(tour.id) },
-                        set: { _ in model.toggle(tour: tour.id) }
+                        set: { model.setExpanded(tour.id, $0) }
                     )) {
                         tourRows(tour, metric: metric)
                     } label: {
@@ -177,8 +177,12 @@ struct DashboardView: View {
                         }
                         Spacer()
                         StatusBadge(value: row.status)
-                        Button("Bestätigen") { Task { await model.apply(row, action: "approve_tour_registration") } }
-                            .disabled(model.busy || row.status == "confirmed")
+                        // approve_tour_registration() akzeptiert serverseitig ausschließlich status='pending'
+                        // (REGISTRATION_NOT_PENDING sonst) -- ein Warteliste-Eintrag rückt in Automatik-/
+                        // Manuellmodus über die eigene Nachrücklogik nach (§9.5), nicht per Direkt-Bestätigung.
+                        if metric == .pending {
+                            Button("Bestätigen") { Task { await model.apply(row, action: "approve_tour_registration") } }.disabled(model.busy)
+                        }
                         Button("Ablehnen", role: .destructive) { Task { await model.apply(row, action: "reject_tour_registration") } }
                             .disabled(model.busy || row.status == "rejected")
                     }.padding(.vertical, 6)

@@ -41,6 +41,20 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
         return try await request.order("start_date", ascending: false).order("id")
             .range(from: offset, to: offset + 99).execute().value
     }
+    // For Dashboard/Restaurant/Hotels overviews: filtered and sorted server-side so
+    // relevant upcoming tours can't fall outside a client-side-filtered page (PR #18
+    // review) -- list(archived:false) alone sorts newest-start-date-first and only
+    // filters "upcoming" locally afterwards, which can drop near-term tours once
+    // there are more than one page of them.
+    func upcoming() async throws -> [Tour] {
+        try await requireAdmin()
+        let today = TourDates.dayString(Date())
+        return try await client.from("tours").select()
+            .gte("end_date", value: today).neq("status", value: "cancelled")
+            .neq("status", value: "draft").neq("status", value: "archived")
+            .order("start_date", ascending: true).order("id")
+            .range(from: 0, to: 199).execute().value
+    }
     func details(_ id: String) async throws -> Payload {
         try await requireAdmin()
         let tour: Payload = try await client.from("tours").select().eq("id", value: id).single().execute().value
@@ -122,6 +136,15 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
     func summary(_ tourID: String) async throws -> PlanningSummary {
         try await requireAdmin()
         return try await client.rpc("admin_get_tour_planning_summary", params: ["p_tour_id": tourID]).execute().value
+    }
+    // One request for many tours instead of one admin_get_tour_planning_summary()
+    // call per tour (PR #18 review: N+1 traffic, relevant under §4's free-tier goal).
+    // A tour whose summary failed to compute comes back with summary=nil and a
+    // populated error, rather than silently looking like an empty planning state.
+    func summaries(_ tourIDs: [String]) async throws -> [TourPlanningSummaryRow] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        return try await client.rpc("admin_get_tour_planning_summaries", params: ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]).execute().value
     }
     func accommodation(_ tourID: String) async throws -> [AccommodationConfirmation] {
         let records = try await rows("tour_accommodation_confirmations", key: "tour_id", value: tourID)

@@ -9,16 +9,16 @@ import SwiftUI
     init(toursRepository: ToursRepository, planning: PlanningRepository) { self.toursRepository = toursRepository; self.planning = planning }
     func load() async {
         await perform {
-            let all = try await toursRepository.list(query: "", offset: 0, archived: false)
-            let today = TourDates.dayString(Date())
-            tours = all.filter { $0.end_date >= today && $0.status != "cancelled" && $0.status != "draft" }
-                .sorted { $0.start_date < $1.start_date }
-            var next: [String: PlanningSummary] = [:]
-            for tour in tours {
-                try Task.checkCancellation()
-                next[tour.id] = try? await planning.summary(tour.id)
+            tours = try await toursRepository.upcoming()
+            let rows = try await planning.summaries(tours.map(\.id))
+            summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
+            // A failed summary must not silently read as "no hotels/restaurants here"
+            // (PR #18 review) -- surface which tours it affects.
+            let failed = rows.filter { $0.summary == nil }
+            if !failed.isEmpty {
+                let titles = failed.compactMap { row in tours.first { $0.id == row.tour_id }?.title ?? row.tour_id }.joined(separator: ", ")
+                error = "Planungsdaten konnten nicht geladen werden für: \(titles)."
             }
-            summaries = next
         }
     }
 }
