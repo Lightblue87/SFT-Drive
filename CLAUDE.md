@@ -202,6 +202,16 @@ Stattdessen:
 
 Free-Tier-Limits können sich ändern. Harte Limits deshalb nicht als dauerhafte technische Annahme behandeln.
 
+Für Dashboard-, Planungs- und Matrixansichten gilt zusätzlich verbindlich:
+
+- keine N+1-Abfragen pro Tour, Teilnehmer, Nacht, Restaurant oder Menüpunkt erzeugen,
+- zusammengehörige Kennzahlen und Statusdaten bevorzugt mit gebündelten,
+  zweckgebundenen Read-RPCs oder vergleichbaren Übersichtsabfragen laden,
+- Drilldowns dürfen Details nachladen, sollen aber nicht bereits für eine
+  globale Übersicht jede Detailzeile einzeln abrufen,
+- neue RPCs bleiben schmal, serverseitig autorisiert und dürfen keine
+  generischen Admin-Bypässe schaffen.
+
 ---
 
 ## 5. Benutzerrollen
@@ -3794,8 +3804,11 @@ updated_at TIMESTAMPTZ
 
 Regeln:
 
+- Reservierungsdaten gehören zum Restaurant-Stopp und umfassen mindestens
+  Restaurantname, Adresse/Ort, Reservierungsdatum und -zeit, geplante
+  Personenzahl, optionalen Kontakt, Reservierungsstatus/-hinweis und Notiz,
 - Essensbestellung pro Restaurant-Stopp aktivierbar
-- Bestellfrist durch Admin
+- Bestellfenster mit Start und Frist durch Admin
 - nach Fristende keine Änderung mehr durch normale User
 - Admin darf weiterhin organisatorische Korrekturen vornehmen
 
@@ -3828,7 +3841,12 @@ Regeln:
 - Preis optional
 - Beschreibung optional
 - Allergene optional
+- vegetarisch und vegan als getrennte, sichtbare Merkmale pflegen
 - Menüpositionen sortierbar
+- Gerichte in der Admin-App mit möglichst wenig Eingabeschritten anlegen und
+  duplizieren können; beim Duplizieren entsteht eine eigenständige
+  Menüposition, deren Name, Preis und Merkmale vor dem Speichern angepasst
+  werden können
 - bereits bestellte Menüpositionen nicht unkontrolliert löschen
 
 ### 27.5 Bestellung pro Touranmeldung
@@ -3937,6 +3955,14 @@ Danach:
 ```text
 Bestellung geschlossen
 ```
+
+Die PWA zeigt die Speisekarte als schnell bedienbare Auswahlliste. Pro
+Gericht sind Name, optional Beschreibung, Allergene, vegetarisch/vegan und
+der Einzelpreis sichtbar. Der Teilnehmer ändert die Menge direkt in der
+Liste; pro Position werden Menge und Zwischensumme, für die gesamte
+Bestellung die Gesamtsumme angezeigt. Fehlt ein Preis, darf keine erfundene
+Summe erscheinen; die UI kennzeichnet stattdessen, dass die Gesamtsumme nur
+die bepreisten Positionen umfasst oder nicht vollständig berechenbar ist.
 
 ### 27.9 Admin-Auswertung
 
@@ -5221,10 +5247,17 @@ Hotel-/Unterkunftsvorschläge hinterlegen.
 Ein Vorschlag kann mindestens enthalten:
 
 - Hotel-/Unterkunftsname
-- externe URL
 - optionale Adresse
+- optionale Hotel-URL
+- optionaler direkter Buchungslink
+- optionaler Preis und eine eindeutige Preiseinheit, z. B. pro Zimmer/Nacht
+  oder pro Person/Aufenthalt
+- optionale Zimmerart
+- optionale Angaben zu Frühstück und Parkplatz
+- optionale Stornierungsbedingungen
+- optionales Kontingent und eine Buchungsdeadline
+- optionale Kontaktdaten
 - optionale organisatorische Notiz
-- optionale Buchungsdeadline / Hinweis auf ein Abrufkontingent
 - Sortierreihenfolge
 
 Beispiel:
@@ -5255,8 +5288,10 @@ noopener/noreferrer beachten.
 
 ### 36.3 Teilnehmer muss kein vorgeschlagenes Hotel wählen
 
-Ein bestätigter Teilnehmer muss SFT Drive NICHT mitteilen, welches Hotel
-oder welche Unterkunft er tatsächlich gebucht hat.
+Ein bestätigter Teilnehmer bestätigt pro Nacht, dass seine Unterkunft
+organisiert ist. Dabei kann er optional einen der für diese Nacht
+vorgeschlagenen Anbieter auswählen oder bewusst `andere Unterkunft` angeben.
+Die Auswahl dient ausschließlich der organisatorischen Übersicht.
 
 Er darf:
 - einen vorgeschlagenen Anbieter verwenden,
@@ -5265,23 +5300,24 @@ Er darf:
 - privat übernachten,
 - eine andere geeignete Unterkunft organisieren.
 
-SFT Drive speichert ausschließlich den organisatorischen Status:
+SFT Drive darf damit speichern:
 
 ```text
 "Übernachtung gebucht / organisiert"
+optional: ausgewählter Hotelvorschlag oder "andere Unterkunft"
 ```
 
-Dadurch werden keine unnötigen privaten Reise- oder Buchungsdaten erfasst.
+Preise gehören zum jeweiligen administrativen Hotelvorschlag und dürfen
+gespeichert und dem Teilnehmer angezeigt werden. Sie sind keine Aussage über
+den vom Teilnehmer tatsächlich gezahlten Betrag.
 
 Insbesondere NICHT speichern:
 
 - Buchungsnummer
 - Reservierungsnummer
-- Preis
 - Zahlungsinformationen
 - Kreditkartendaten
 - Zimmernummer
-- Zimmerkategorie
 - Buchungsplattform
 - sonstige unnötige Buchungsdetails
 
@@ -5299,9 +5335,11 @@ Beispiel:
 
 Hotelvorschläge:
 Hotel Alpenblick
+[Preis und Preiseinheit, sofern hinterlegt]
 [ Hotel öffnen ]
 
-[ ✓ Übernachtung gebucht ]
+[ Hotel Alpenblick ausgewählt ] [ andere Unterkunft ]
+[ ✓ Unterkunft organisiert ]
 ```
 
 Nach Bestätigung:
@@ -5332,6 +5370,9 @@ Nacht organisiert ist."
 ```
 
 Sie ist kein Beleg dafür, dass tatsächlich eine Buchung besteht.
+Die optionale Auswahl eines Vorschlags ist ebenfalls keine Reservierung und
+darf jederzeit zusammen mit der Bestätigung korrigiert oder zurückgenommen
+werden.
 
 ### 36.5 Mögliches Datenmodell
 
@@ -5346,10 +5387,19 @@ id UUID PRIMARY KEY
 tour_id UUID REFERENCES tours(id)
 night_date DATE NOT NULL
 name TEXT NOT NULL
-url TEXT NULL
 address TEXT NULL
+hotel_url TEXT NULL
+booking_url TEXT NULL
+price NUMERIC NULL
+price_unit TEXT NULL
+room_type TEXT NULL
+breakfast_details TEXT NULL
+parking_details TEXT NULL
+cancellation_terms TEXT NULL
+allotment_details TEXT NULL
 note TEXT NULL
 booking_deadline DATE NULL
+contact TEXT NULL
 sort_order INTEGER DEFAULT 0
 created_at TIMESTAMPTZ
 updated_at TIMESTAMPTZ
@@ -5366,9 +5416,19 @@ id UUID PRIMARY KEY
 tour_id UUID REFERENCES tours(id)
 user_id UUID REFERENCES auth.users(id)
 night_date DATE NOT NULL
+accommodation_choice TEXT NOT NULL
+hotel_suggestion_id UUID NULL REFERENCES tour_hotel_suggestions(id)
 confirmed_at TIMESTAMPTZ NOT NULL
 UNIQUE(tour_id, user_id, night_date)
 ```
+
+`accommodation_choice` unterscheidet mindestens `suggested_hotel` und
+`other_accommodation`. Bei `suggested_hotel` muss der Vorschlag zur selben
+Tour und Nacht gehören; bei `other_accommodation` bleibt
+`hotel_suggestion_id` leer. Das bisherige Feld `url` bestehender
+Hotelvorschläge darf bei einer späteren Migration nicht rückwirkend entfernt
+werden, sondern wird kompatibel als Hotel-URL übernommen bzw. als Fallback
+weitergelesen.
 
 Bei Umsetzung das tatsächliche bestehende Schema zuerst prüfen und die
 bestehenden Namens-/FK-/Timestamp-Konventionen des Projekts übernehmen.
@@ -5405,6 +5465,8 @@ Serverseitig mindestens prüfen:
 7. Bei Bestätigung wird confirmed_at ausschließlich serverseitig gesetzt.
 8. Doppelbestätigungen dürfen nicht zu doppelten Datensätzen führen.
 9. Der User darf ausschließlich seinen eigenen Status ändern.
+10. Ein optional gewählter Hotelvorschlag gehört zur selben Tour und Nacht.
+11. Es werden keine Buchungsnummern oder Zahlungsdaten entgegengenommen.
 
 pending, waitlisted, rejected oder cancelled dürfen keine
 Übernachtungsbestätigung setzen.
@@ -5454,6 +5516,13 @@ S4shadow · Audi S4
 RS3Tom · Audi RS3
 TurboMike · Porsche 911
 ```
+
+Zusätzlich ist eine Hotelmatrix erforderlich: Zeilen sind die aktuell
+bestätigten Teilnehmer, Spalten die aus dem Tourzeitraum abgeleiteten
+Übernachtungsnächte. Jede Zelle zeigt `noch nicht bestätigt`, den optional
+gewählten Hotelvorschlag oder `andere Unterkunft`. Filter auf offene Zellen
+und Mehrfachauswahl für gezielte Erinnerungen müssen direkt aus dieser Matrix
+möglich sein.
 
 WICHTIGE BEZEICHNUNG:
 
@@ -5575,6 +5644,8 @@ mitgelöscht werden.
 
 - keine Zahlungsdaten speichern
 - keine Reservierungs-/Buchungsnummern speichern
+- Preise nur als Eigenschaft eines Hotelvorschlags speichern, niemals als
+  tatsächlichen Zahlungs- oder Buchungsdatensatz des Teilnehmers
 - keine unnötigen Reisedaten speichern
 - kein service_role im Client
 - keine zusätzlichen laufenden Kosten
@@ -5608,12 +5679,22 @@ Mindestens testen:
 - Datumsspannenänderungen führen nicht zu falschen offenen Nächten
 - Kennzeichen, Buchungsdaten oder sonstige nicht benötigte private Daten
   werden nicht an andere Teilnehmer ausgegeben
+- optional ausgewählter Vorschlag gehört zur richtigen Tour und Nacht
+- `andere Unterkunft` funktioniert ohne Freitext zu privaten Buchungsdetails
+- Preis und Preiseinheit eines Vorschlags werden gemeinsam validiert und
+  verständlich dargestellt
 
 ### 36.14 Umsetzungsstand
 
 **Umsetzungsstand:** implementiert (Migration `20260908120000_accommodation.sql`,
 lokal gegen eine echte, nicht-privilegierte Postgres-Rolle auf RLS und die
 serverseitigen Vorbedingungen aus §36.6 getestet, nicht nur als Superuser).
+
+Die in dieser Fassung ergänzten Detailfelder für Hotelvorschläge, die
+optionale Auswahl eines Vorschlags/`andere Unterkunft` und die Hotelmatrix
+sind verbindlicher Zielzustand, aber gegenüber dem nachfolgend beschriebenen
+produktiven Stand noch nicht vollständig umgesetzt. Sie sind additiv per
+neuer Migration und ohne Umschreiben der bestehenden Migration einzuführen.
 
 - `tour_hotel_suggestions` (Hotelvorschläge, Participant-Inhalt, gleiches
   RLS-Muster wie `tour_stops`/`tour_stages`: bestätigte Teilnehmer und Admins
@@ -6000,8 +6081,38 @@ dazugehörigen Planungs- und Organisationsinformationen.
 ### 38.5 Planungs- und Analysebereich
 
 Die Mac-App soll einen größeren Planungsschwerpunkt bekommen als die PWA.
+Ihr Dashboard ist verbindlich die globale To-do- und Planungszentrale, nicht
+nur eine Sammlung von Statistiken. Es beantwortet zuerst, wo aktuell
+Handlungsbedarf besteht.
 
-Beispielsweise kann eine Tour auf einem Bildschirm zusammengeführt werden:
+Mindestens als Problemkategorien darstellen:
+
+- offene Teilnahmebestätigungen,
+- Warteliste und frei werdende Kapazitäten,
+- fehlende Unterkunftsbestätigungen,
+- fehlende Essensvorbestellungen,
+- bevorstehende oder abgelaufene Anmelde-, Bestell-, Hotelkontingent- und
+  sonstige Planungsfristen,
+- offene beziehungsweise fehlende Check-ins,
+- weitere unvollständige Planungsdaten einer Tour.
+
+Jede Kategorie folgt demselben Drilldown:
+
+```text
+Problemkategorie
+  → betroffene Tour(en)
+    → konkreter Teilnehmer oder konkretes Planungsobjekt
+      → passende Aktion
+```
+
+Eine passende Aktion ist beispielsweise Teilnahme bestätigen/ablehnen,
+Warteliste bearbeiten, Teilnehmer oder Hotelnacht öffnen, Speisekarte
+vervollständigen, Frist korrigieren, Check-in administrativ setzen oder eine
+gezielte Erinnerung senden. Der Drilldown behält Kategorie und Filter bei,
+damit der Admin nach einer Aktion mit dem nächsten offenen Fall fortfahren
+kann.
+
+Zusätzlich kann eine Tour auf einem Bildschirm zusammengefasst werden:
 
 ```text
 20 Fahrzeuge bestätigt
@@ -6027,6 +6138,158 @@ Dazu kommen Filter und Auswertungen nach Fahrzeug, Personen, Status,
 
 Das soll dem Organisator ermöglichen, Unstimmigkeiten früh zu erkennen,
 ohne mehrere mobile Ansichten durchsuchen zu müssen.
+
+### 38.6 Tour als zentrales Arbeitsobjekt
+
+Die **Tour ist das zentrale Arbeitsobjekt der gesamten Mac-App**. Hotel,
+Restaurant, Teilnehmer, Tagesrouten, Kommunikation und Medien sind keine
+isolierten Hauptwelten, sondern Bestandteile der jeweiligen Tour.
+
+Beim Öffnen einer Tour erscheint ein zusammenhängender Tour-Workspace mit
+mindestens diesen Tabs beziehungsweise Abschnitten:
+
+```text
+Übersicht
+Tourdaten
+Tagesplanung
+Teilnehmer
+Restaurants
+Übernachtungen
+Kommunikation
+Medien
+```
+
+Der Workspace behält Tourkontext, Auswahl und offene Änderungen beim Wechsel
+zwischen den Abschnitten. Seine Übersicht zeigt Status, Vollständigkeit,
+Fristen und nächste Aktionen dieser einen Tour. Ein globaler Drilldown aus
+Dashboard oder Planung öffnet direkt den passenden Abschnitt und, soweit
+möglich, bereits den betroffenen Teilnehmer oder das betroffene Objekt.
+
+### 38.7 Geführter Flow für Anlegen und Duplizieren
+
+Neue Tour und `Tour duplizieren` verwenden denselben durchgängigen,
+schrittweisen Flow. Der Admin kann vor- und zurückgehen, zwischenspeichern
+und später am letzten vollständigen Schritt fortsetzen.
+
+Mindestens folgende Schritte sind vorzusehen:
+
+```text
+1. Grundlagen
+2. Zeitraum und Treffpunkt
+3. Teilnahmebedingungen und Anmeldung
+4. Tagesplanung
+5. Übernachtungen
+6. Restaurants und Essen
+7. Kommunikation und Medien
+8. Prüfen und Veröffentlichen
+```
+
+Beim Duplizieren werden wiederverwendbare Stammdaten und Inhalte als
+editierbare Ausgangsbasis angeboten, zum Beispiel Beschreibungen,
+Teilnahmebedingungen, Fahrzeuganforderungen, Links, Medien sowie optional
+die Struktur von Tagesplanung, Hotelvorschlägen und Restaurants/Speisekarten.
+Der Admin entscheidet vor der Übernahme, welche Bereiche wiederverwendet
+werden.
+
+Bewusst neu festzulegen und vor Veröffentlichung zu bestätigen sind immer:
+
+- Start- und Enddatum,
+- konkrete Uhrzeiten,
+- Anmelde-, Bestell-, Stornierungs- und Kontingentfristen,
+- Restaurant- und Hotelpreise samt Preiseinheit,
+- zeitabhängige Kapazitäten und Verfügbarkeiten.
+
+Diese Werte dürfen nicht unbemerkt aus einer alten Tour fortgeschrieben
+werden. Registrierungen, Bestellungen, Unterkunftsbestätigungen, Check-ins,
+Vormerkungen und bereits versendete Mitteilungen werden niemals kopiert.
+Diese Zielentscheidung erweitert den bestehenden PWA-Duplizierpfad aus
+§37.1 für die Mac-App; sie ändert dessen aktuellen Umsetzungsstand nicht.
+
+### 38.8 Tagesplanung als Rückgrat
+
+Bei Mehrtagestouren ist die Tagesplanung das zeitliche Rückgrat des
+Tour-Workspace. Die aus `start_date` bis `end_date` abgeleiteten Tage
+strukturieren Routenlink, Treff-/Startzeiten, Restaurants, Stopps,
+Übernachtungsübergänge, Kommunikation und offene Aufgaben.
+
+Die Tagesansicht baut kein eigenes Roadbook und dupliziert keine externe
+Detailroute (§34.4). Sie ordnet jedoch alle in SFT Drive verwalteten
+Planungsobjekte eindeutig einem Tag beziehungsweise einer Nacht zu und
+macht zeitliche Konflikte oder fehlende Angaben sichtbar. Eintägige Touren
+verwenden denselben mentalen Flow ohne unnötige Mehrtageskomplexität.
+
+### 38.9 Restaurantplanung im Tour-Workspace
+
+Restaurants werden innerhalb der Tour und, bei Mehrtagestouren, innerhalb
+des betreffenden Tages geplant. Die Maske führt Reservierungsdaten,
+Bestellfenster und Speisekarte zusammen. Es gelten die fachlichen Felder und
+Regeln aus §27.3/§27.4; insbesondere sind Preise, optionale Beschreibungen,
+Allergene sowie vegetarisch/vegan direkt erfassbar.
+
+Die Eingabe einer Speisekarte muss auf wiederholte Dateneingabe optimiert
+sein: Tastaturbedienung, schnelles Hinzufügen und Duplizieren eines Gerichts,
+ohne dafür den Restaurantkontext zu verlassen. Eine Vorschau zeigt, wie die
+PWA-Auswahl mit Mengen, Einzelpreisen, Positionssummen und Gesamtsumme für
+Teilnehmer erscheint.
+
+### 38.10 Übernachtungsplanung und Hotelmatrix
+
+Übernachtungen werden pro automatisch abgeleiteter Nacht organisiert. Pro
+Nacht sind mehrere Vorschläge mit den verbindlichen Feldern aus §36.2
+möglich: Hotelname, Adresse, Hotel-URL, Buchungslink, Preis, Preiseinheit,
+Zimmerart, Frühstück, Parkplatz, Stornierung, Kontingent/Deadline, Kontakt und
+Notiz.
+
+Bestätigte Teilnehmer melden in der PWA pro Nacht `Unterkunft organisiert`
+und können optional einen vorgeschlagenen Anbieter oder `andere Unterkunft`
+auswählen. SFT Drive speichert dabei weiterhin weder Buchungsnummern noch
+Zahlungsdaten (§36.3/§36.12).
+
+Die Mac-App zeigt die Hotelmatrix aus §36.8 pro Nacht und Teilnehmer,
+einschließlich aller offenen Teilnehmer. Von jeder offenen Zelle aus kann
+der Admin den Teilnehmer öffnen oder einzeln beziehungsweise gesammelt eine
+gezielte Erinnerung senden.
+
+### 38.11 Globale Planung und Teilnehmermatrix
+
+Neben Dashboard und Touren gibt es `Planung` als globale Cross-Tour-Ansicht
+für Teilnahme, Hotels, Restaurants, Fristen und Check-in. Hotels und
+Restaurants sind ausdrücklich keine isolierten globalen Hauptbereiche. Die
+globale Planung ist eine Kontrollansicht; Bearbeitung öffnet den passenden
+Tour-Workspace.
+
+Jede Tour besitzt außerdem eine gemeinsame Teilnehmermatrix. Eine Zeile
+entspricht einer Touranmeldung; die Spalten zeigen mindestens:
+
+```text
+Teilnahmestatus
+Username/Fahrzeug
+Personenzahl
+Unterkunft je Nacht
+Essen je Restaurant und Tag
+Check-in
+```
+
+Die Matrix unterstützt Suche, Sortierung und Filter auf offene oder
+widersprüchliche Zustände. Detaildaten werden im Seitenbereich geöffnet,
+ohne den Tabellenkontext zu verlieren. Sichtbarkeit und Datenschutz folgen
+weiterhin den bestehenden Admin-, Participant- und Profildatengrenzen.
+
+### 38.12 Datenzugriff und optionale KI im Arbeitsfluss
+
+Dashboard, globale Planung, Hotelmatrix und Teilnehmermatrix müssen über
+gebündelte Übersichtsabfragen/RPCs geladen werden. N+1-Requests pro Tour,
+Teilnehmer, Nacht, Restaurant oder Status sind wegen Performance und
+Free-Tier-Budget unzulässig (§4). Details dürfen bedarfsgerecht beim
+Drilldown nachgeladen werden.
+
+Der KI-Import aus §39 bleibt vollständig optional, ist aber direkt an diese
+Planungsworkflows anzubinden: Ein erkanntes Hotelangebot öffnet die passende
+Nacht/Hotelmaske, ein erkanntes Restaurantangebot den passenden
+Tag/Restaurantbereich. Nach Schema-Validierung zeigt die App eine Vorschau;
+erst die bewusste Bestätigung des Admins schreibt über den normalen,
+autorisierten Datenpfad. Ein separater KI-Datenbestand oder ein vom
+Tour-Workspace losgelöster Importbereich ist nicht vorgesehen.
 
 ---
 
@@ -6444,9 +6707,11 @@ SFTDriveAdmin/
 │   │                                       AccommodationRepository, …)
 │   ├── Features/
 │   │   ├── Dashboard/
-│   │   ├── Tours/                        (Liste, Editor, Duplizieren)
-│   │   ├── Registrations/                (Confirmed/Pending/Waitlist/…)
-│   │   ├── PlanningBoard/                (§38.5 Gesamtübersicht je Tour)
+│   │   ├── Tours/                        (Liste, geführter Flow, Tour-Workspace)
+│   │   ├── Registrations/                (Teilnehmermatrix und Details)
+│   │   ├── PlanningBoard/                (globale Cross-Tour-Planung)
+│   │   ├── Restaurants/                  (Reservierung, Menü, Bestellungen)
+│   │   ├── Accommodation/                (Nächte, Vorschläge, Hotelmatrix)
 │   │   ├── Users/
 │   │   └── Settings/                     (inkl. KI-Einstellungen, §39.4)
 │   ├── AI/
@@ -6537,12 +6802,11 @@ und Geldwerte als Decimal behandeln (§19). Nullable Felder, unbekannte neue
 Enum-Werte und strukturierte RPC-Fehler explizit behandeln. Große Listen
 serverseitig filtern/paginieren, nicht unbegrenzt vollständig laden.
 
-### 40.5 Planungs-Dashboard (§38.5) — ein zusätzlicher Lesezugriff nötig
+### 40.5 Gebündelte Lesezugriffe für Dashboard und Planung
 
-Um die in §38.5 beschriebene Zusammenfassung einer Tour auf einem
-Bildschirm (Fahrzeuge/Personen/Hotel/Essen/Check-in/Warteliste/Vormerkungen
-in einer Ansicht) ohne zahlreiche Einzelabfragen zu ermöglichen, wird eine
-neue, rein lesende RPC ergänzt:
+Um die Ansichten aus §38.5/§38.10/§38.11 ohne N+1-Abfragen zu laden,
+werden wenige zweckgebundene, rein lesende Admin-RPCs vorgesehen. Mindestens
+die Zusammenfassung einer Tour kann über folgende RPC geladen werden:
 
 ```text
 admin_get_tour_planning_summary(p_tour_id uuid)
@@ -6565,6 +6829,14 @@ Rohprofile oder Kennzeichen in der Summary. `auth.uid()`/`is_admin()` prüfen,
 `EXECUTE` nicht an `PUBLIC`/`anon` vergeben; `SECURITY INVOKER` bevorzugen,
 `SECURITY DEFINER` nur bei begründetem Bedarf mit §8.12-Härtung. Abnahme mit
 Nicht-Admin, fehlender Tour, mehreren Nächten/Stopps und stornierten Teilnehmern.
+
+Ergänzend sind gebündelte Abfragen für die globale To-do-Liste und die
+Teilnehmer-/Hotelmatrix zulässig. Eine globale Abfrage liefert zunächst
+Kategorien, Zähler und betroffene Touren; konkrete Teilnehmer-/Objektdetails
+werden je Drilldown gebündelt nachgeladen. Die genaue Anzahl und Signatur
+werden vor Implementierung anhand des dann aktuellen Schemas festgelegt.
+Nicht zulässig sind eine universelle `admin_select_anything`-RPC oder ein
+Client-Loop mit Einzelabfragen pro Zeile.
 
 ### 40.6 Auth-/Rollenprüfung im Detail
 
@@ -6637,18 +6909,19 @@ Phase M2 — Read-only Admin-Kern
 
 Phase M3 — Tourenverwaltung (Schreibzugriff)
   Tour erstellen/bearbeiten/duplizieren/veröffentlichen/absagen/
-  archivieren/löschen (§38.4), Formulare als natives SwiftUI-Form
-  statt Web-Formular-Nachbau
+  archivieren/löschen (§38.4), geführter Flow und Tour-Workspace
+  (§38.6/§38.7) als native SwiftUI-Oberfläche
 
 Phase M4 — Teilnehmerverwaltung
   Bestätigen/Ablehnen/Entfernen/administrativ Hinzufügen, Warteliste,
   Fahrzeuglimit-Änderung, Kontextmenüs + Mehrfachauswahl (§38.3)
 
 Phase M5 — Stopps, Restaurant, Hotel, Check-in, Tagesrouten
-  Restliche administrative Bereiche aus §38.4
+  Tagesplanung als Rückgrat, Restaurant-/Hotelplanung und Matrix
+  (§38.8–§38.11), additive Schemaerweiterungen aus §36
 
-Phase M6 — Planungs-Dashboard (§38.5)
-  admin_get_tour_planning_summary() (§40.5), Filter/Auswertung
+Phase M6 — Dashboard und globale Planung (§38.5/§38.11)
+  gebündelte Read-RPCs (§40.5), Drilldowns, Filter/Auswertung
 
 Phase M7 — KI-Grundgerüst (Ollama-only)
   AIProvider-Protokoll, OllamaProvider, ExtractionReviewView,
@@ -6713,12 +6986,14 @@ technischen Entscheidungen vor Beginn von Phase M1 klären:
   §39.6 vorgesehen, UI muss also einen frei editierbaren Endpoint statt nur
   „localhost" anbieten.
 - **Backend-Ergänzungen:** `admin_get_tour_planning_summary()` (§40.5) ist
-  geplant; weitere minimale Migrationen für die konkret benötigten atomaren
-  Schreib-/Konfliktprüfungen (§40.3) erst nach Bestandsabgleich festlegen.
-  Keine pauschale Zusage „nur eine Migration“. Änderungen einzeln versionieren,
-  als echte `authenticated`-Rolle mit und ohne Adminrecht testen und den
-  tatsächlich eingespielten Stand prüfen (§26). Die vorliegende Spezifikation
-  allein verändert weder Datenbank noch produktive App.
+  inzwischen im Repository umgesetzt (§40.10). Weitere gebündelte
+  Planungs-RPCs, additive Hotel-Felder sowie minimale Migrationen für die
+  konkret benötigten atomaren Schreib-/Konfliktprüfungen (§40.3) erst nach
+  Bestandsabgleich festlegen. Keine pauschale Zusage „nur eine Migration“.
+  Änderungen einzeln versionieren, als echte `authenticated`-Rolle mit und
+  ohne Adminrecht testen und den tatsächlich eingespielten Stand prüfen (§26).
+  Die vorliegende Spezifikation allein verändert weder Datenbank noch
+  produktive App.
 
 
 ### 40.10 Implementierung im Ordner `macos/` (10.09.2026)
