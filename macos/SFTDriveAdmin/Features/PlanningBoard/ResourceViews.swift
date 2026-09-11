@@ -169,6 +169,7 @@ extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
     @Published var confirmations: [AccommodationConfirmation] = []
     @Published var registrations: [TourRegistration] = []
     @Published var users: [AdminUser] = []
+    @Published var matrix: [DataRow] = []
     @Published var night = ""
     @Published var selection: Set<String> = []
 }
@@ -178,13 +179,44 @@ struct AccommodationView: View {
     @StateObject private var model = AccommodationModel()
     @State private var confirmReminder = false
     private var missing: [TourRegistration] { model.registrations.filter { row in !model.confirmations.contains { $0.user_id == row.user_id && $0.night_date == model.night } } }
+    private var nights: [String] { TourDates.days(start: tour.start_date, end: tour.end_date, nights: true) }
     var body: some View {
         VStack(alignment: .leading) {
             ResourceListView(services: services, kind: .hotels, parentID: tour.id, tour: tour).frame(minHeight: 180)
-            Divider(); Text("Übernachtungsbestätigungen").font(.headline)
+            Divider()
+            // §36.8/§38.10: eine echte Matrix -- Zeile je bestätigtem Teilnehmer,
+            // Spalte je Übernachtungsnacht -- statt nur einer Nacht auf einmal, damit
+            // der Admin den Gesamtstatus (vollständig/teilweise/nicht bestätigt) ohne
+            // Durchklicken jeder Nacht erkennt. Nutzt dieselben bereits gebündelt
+            // geladenen Teilnehmermatrix-Daten wie die Teilnehmer- und die
+            // tourübergreifende Planungsansicht (kein zusätzlicher Request je Nacht).
+            Text("Hotelmatrix").font(.headline)
+            if model.matrix.isEmpty {
+                Text("Keine bestätigten Teilnehmer.").foregroundStyle(.secondary).padding(.vertical, 6)
+            } else {
+                ScrollView(.horizontal) {
+                    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                        GridRow {
+                            Text("Teilnehmer").bold()
+                            ForEach(nights, id: \.self) { night in Text(shortNight(night)).bold().font(.caption) }
+                        }
+                        Divider()
+                        ForEach(model.matrix.filter { $0.values.text("status") == "confirmed" }) { row in
+                            GridRow {
+                                Text("\(row.values.text("username")) · \(row.values.text("vehicle"))")
+                                ForEach(nights, id: \.self) { night in
+                                    let cell = accommodationCell(row, night: night)
+                                    Text(cell.label).font(.caption).foregroundStyle(cell.confirmed ? .green : .orange)
+                                }
+                            }
+                        }
+                    }
+                }.frame(maxHeight: 220)
+            }
+            Divider(); Text("Gezielte Erinnerung je Nacht").font(.headline)
             ErrorBanner(message: model.error)
             if let notice = model.notice { Text(notice).font(.caption) }
-            Picker("Nacht", selection: $model.night) { ForEach(TourDates.days(start: tour.start_date, end: tour.end_date, nights: true), id: \.self) { Text($0).tag($0) } }
+            Picker("Nacht", selection: $model.night) { ForEach(nights, id: \.self) { Text($0).tag($0) } }
             Text("\(model.registrations.count - missing.count) / \(model.registrations.count) bestätigt")
             List(model.registrations, selection: $model.selection) { row in
                 let confirmation = model.confirmations.first { $0.user_id == row.user_id && $0.night_date == model.night }
@@ -202,6 +234,7 @@ struct AccommodationView: View {
                 model.confirmations = try await services.planning.accommodation(tour.id)
                 model.registrations = try await services.people.registrations(tour.id).filter { $0.status == "confirmed" }
                 model.users = try await services.people.users()
+                model.matrix = try await services.planning.participantMatrix([tour.id])
             }
         }.onChange(of: model.night) { _, _ in model.selection = [] }
         .confirmationDialog("Ausgewählte Teilnehmer an die Übernachtungsbestätigung für \(model.night) erinnern?", isPresented: $confirmReminder, titleVisibility: .visible) {
@@ -211,6 +244,15 @@ struct AccommodationView: View {
                 model.selection = []
             } } }
         }
+    }
+    private func shortNight(_ night: String) -> String { night.count >= 10 ? String(night.suffix(5)) : night }
+    private func accommodationCell(_ row: DataRow, night targetNight: String) -> (label: String, confirmed: Bool) {
+        guard case .array(let allNights) = row.values["accommodation"],
+              let entry = allNights.first(where: { value in guard case .object(let n) = value else { return false }; return n.text("night_date") == targetNight }),
+              case .object(let fields) = entry else { return ("–", false) }
+        guard fields.boolean("confirmed") else { return ("Offen", false) }
+        if let hotelName = fields.text("hotel_name").nilIfEmpty { return (hotelName, true) }
+        return (fields.text("choice") == "other_accommodation" ? "Andere Unterkunft" : "Bestätigt", true)
     }
 }
 
