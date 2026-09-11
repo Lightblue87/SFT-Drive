@@ -35,6 +35,12 @@ struct ResourceListView: View {
                     if kind == .menu { Text("\(row.values.text("price")) € · \(row.values.boolean("is_available") ? "Verfügbar" : "Deaktiviert")").font(.caption) }
                     HStack {
                         Button("Bearbeiten") { editor = .init(existing: row) }
+                        if kind == .menu { Button("Duplizieren") {
+                            var copy = row.values; copy.removeValue(forKey: "id"); copy.removeValue(forKey: "created_at"); copy.removeValue(forKey: "updated_at")
+                            copy["name"] = .string(row.values.text("name") + " (Kopie)")
+                            copy["sort_order"] = .number(Double(row.values.integer("sort_order") + 1))
+                            editor = .init(initial: copy)
+                        } }
                         if kind == .stops && row.values.text("type") == "restaurant" { Button("Speisekarte & Bestellungen") { restaurant = row } }
                         Button("Löschen", role: .destructive) { deleting = row }
                     }.buttonStyle(.bordered)
@@ -60,7 +66,7 @@ struct ResourceListView: View {
         let start = row.values.text("night_date")
         let end = row.values.text("night_date_end")
         var text = "Nacht: \(start)" + (end.isEmpty || end == start ? "" : " – \(end)")
-        if !row.values.text("price_per_night").isEmpty { text += " · \(row.values.text("price_per_night")) € / Nacht" }
+        if !row.values.text("price_per_night").isEmpty { text += " · \(row.values.text("price_per_night")) \(row.values.text("price_unit").nilIfEmpty ?? "€ / Nacht")" }
         return text
     }
 }
@@ -180,8 +186,14 @@ struct AccommodationView: View {
             if let notice = model.notice { Text(notice).font(.caption) }
             Picker("Nacht", selection: $model.night) { ForEach(TourDates.days(start: tour.start_date, end: tour.end_date, nights: true), id: \.self) { Text($0).tag($0) } }
             Text("\(model.registrations.count - missing.count) / \(model.registrations.count) bestätigt")
-            List(missing, selection: $model.selection) { row in
-                Text("\(model.users.first(where: { $0.id == row.user_id })?.username ?? row.user_id) · Übernachtung noch nicht bestätigt").tag(row.user_id)
+            List(model.registrations, selection: $model.selection) { row in
+                let confirmation = model.confirmations.first { $0.user_id == row.user_id && $0.night_date == model.night }
+                HStack {
+                    Text(model.users.first(where: { $0.id == row.user_id })?.username ?? row.user_id)
+                    Spacer()
+                    if let confirmation { Text(confirmation.accommodation_choice == "other_accommodation" ? "Andere Unterkunft" : confirmation.hotel_suggestion_id == nil ? "Bestätigt" : "Hotelvorschlag gewählt").foregroundStyle(.green) }
+                    else { Text("Übernachtung noch nicht bestätigt").foregroundStyle(.orange) }
+                }.tag(row.user_id)
             }.frame(minHeight: 100)
             Button("Auswahl erinnern (\(model.selection.count))") { confirmReminder = true }.disabled(model.selection.isEmpty || model.busy)
         }.task {

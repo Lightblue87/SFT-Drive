@@ -38,7 +38,7 @@ protocol AIProvider {
 }
 enum ExtractionSchema {
     static func keys(_ kind: ExtractionKind) -> [String] {
-        kind == .hotel_offer ? ["name", "arrival", "departure", "booking_deadline", "note", "address", "url"] : ["name", "reservation_time", "order_deadline", "note", "address", "menu_items"]
+        kind == .hotel_offer ? ["name", "arrival", "departure", "booking_deadline", "note", "address", "hotel_url", "booking_url", "price_per_night", "price_unit", "room_type", "breakfast_details", "parking_details", "cancellation_terms", "allotment_details", "contact"] : ["name", "reservation_time", "order_deadline", "note", "address", "reservation_people", "reservation_contact", "reservation_status", "menu_items"]
     }
     static func schema(_ kind: ExtractionKind) -> Payload {
         var properties: Payload = [:]
@@ -46,8 +46,12 @@ enum ExtractionSchema {
         if kind == .restaurant {
             properties["menu_items"] = .object(["type": .string("array"), "maxItems": .number(100), "items": .object([
                 "type": .string("object"), "properties": .object(["name": .object(["type": .string("string")]),
-                "price": .object(["type": .array([.string("number"), .string("null")])]), "evidence": .object(["type": .string("string")])]),
-                "required": .array([.string("name"), .string("price"), .string("evidence")]), "additionalProperties": .bool(false)])])
+                "price": .object(["type": .array([.string("number"), .string("null")])]),
+                "description": .object(["type": .array([.string("string"), .string("null")])]),
+                "allergen_info": .object(["type": .array([.string("string"), .string("null")])]),
+                "is_vegetarian": .object(["type": .string("boolean")]), "is_vegan": .object(["type": .string("boolean")]),
+                "evidence": .object(["type": .string("string")])]),
+                "required": .array(["name","price","description","allergen_info","is_vegetarian","is_vegan","evidence"].map(JSONValue.string)), "additionalProperties": .bool(false)])])
         }
         properties["evidence"] = .object(["type": .string("object"), "properties": .object(Dictionary(uniqueKeysWithValues: keys(kind).map { ($0, .object(["type": .string("string")])) })), "additionalProperties": .bool(false)])
         return ["type": .string("object"), "properties": .object(properties), "required": .array((keys(kind) + ["evidence"]).map(JSONValue.string)), "additionalProperties": .bool(false)]
@@ -61,7 +65,7 @@ enum ExtractionSchema {
             if key == "menu_items" {
                 guard case .array(let items) = value, items.count <= 100 else { throw AppError("Ungültige KI-Speisekarte.") }
                 for item in items {
-                    guard case .object(let fields) = item, Set(fields.keys) == Set(["name", "price", "evidence"]),
+                    guard case .object(let fields) = item, Set(fields.keys) == Set(["name", "price", "description", "allergen_info", "is_vegetarian", "is_vegan", "evidence"]),
                           !fields.text("name").isEmpty, fields.text("name").count <= 200,
                           !fields.text("evidence").isEmpty, source.contains(fields.text("evidence")) else { throw AppError("Gericht ohne gültigen Quelltextbeleg.") }
                     if fields["price"] != .null {
@@ -78,7 +82,7 @@ enum ExtractionSchema {
             if ["arrival", "departure", "booking_deadline", "reservation_time", "order_deadline"].contains(key) && !excerpt.contains(String(text.prefix(4))) {
                 throw AppError("Jahr ist nicht durch die Mail belegt. Datum manuell klären: \(key)")
             }
-            if key == "url" { try FormValidation.validate(["url": value], fields: [.init("url", "URL", .url)]) }
+            if ["hotel_url", "booking_url"].contains(key) { try FormValidation.validate([key: value], fields: [.init(key, "URL", .url)]) }
             sources[key] = excerpt
         }
         var values = payload; values.removeValue(forKey: "evidence")

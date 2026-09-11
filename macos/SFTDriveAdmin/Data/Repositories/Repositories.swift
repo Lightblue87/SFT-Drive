@@ -76,6 +76,13 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
         try await action("admin_save_tour", ["p_id": .string(id), "p_expected": expected.map(JSONValue.object) ?? .null,
             "p_tour": .object(tour), "p_member": .object(member), "p_participant": .object(participant)])
     }
+    func copyPlanning(sourceID: String, targetID: String, stages: Bool, hotels: Bool, restaurants: Bool) async throws {
+        try await action("admin_copy_tour_planning", [
+            "p_source_id": .string(sourceID), "p_target_id": .string(targetID),
+            "p_copy_stages": .bool(stages), "p_copy_hotels": .bool(hotels),
+            "p_copy_restaurants": .bool(restaurants)
+        ])
+    }
     func cancel(_ tour: Tour, reason: String) async throws -> String? {
         try await action("admin_cancel_tour", ["p_tour_id": .string(tour.id), "p_reason": .string(reason)])
         do {
@@ -168,6 +175,18 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
     func accommodation(_ tourID: String) async throws -> [AccommodationConfirmation] {
         let records = try await rows("tour_accommodation_confirmations", key: "tour_id", value: tourID)
         return try JSONDecoder().decode([AccommodationConfirmation].self, from: JSONEncoder().encode(records))
+    }
+    func participantMatrix(_ tourIDs: [String]) async throws -> [DataRow] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        let params: Payload = ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]
+        return try await client.rpc("admin_get_participant_matrix_bulk", params: params).execute().value
+    }
+    func deadlines(_ tourIDs: [String]) async throws -> [PlanningDeadline] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        let params: Payload = ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]
+        return try await client.rpc("admin_get_planning_deadlines_bulk", params: params).execute().value
     }
     func reminder(tourID: String, night: String, userIDs: [String]) async throws -> String? {
         try await action("admin_send_accommodation_reminder", ["p_tour_id": .string(tourID), "p_night_date": .string(night), "p_user_ids": .array(userIDs.map(JSONValue.string))])

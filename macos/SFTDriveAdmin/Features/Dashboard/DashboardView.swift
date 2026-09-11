@@ -1,24 +1,33 @@
 import SwiftUI
 
 enum DashboardMetric: String, Identifiable, CaseIterable {
-    case pending, waitlisted
+    case pending, waitlisted, accommodation, meals, checkIn, deadlines
     var id: String { rawValue }
     var title: String {
         switch self {
         case .pending: return "Fahrzeuge bestätigen"
         case .waitlisted: return "Warteliste"
+        case .accommodation: return "Unterkunft offen"
+        case .meals: return "Essen offen"
+        case .checkIn: return "Check-in offen"
+        case .deadlines: return "Fristen"
         }
     }
     var symbol: String {
         switch self {
         case .pending: return "person.badge.clock"
         case .waitlisted: return "clock"
+        case .accommodation: return "bed.double"
+        case .meals: return "fork.knife"
+        case .checkIn: return "checkmark.circle"
+        case .deadlines: return "calendar.badge.exclamationmark"
         }
     }
     var statuses: Set<String> {
         switch self {
         case .pending: return ["pending"]
         case .waitlisted: return ["waitlisted"]
+        default: return []
         }
     }
     func count(_ summary: PlanningSummary?) -> Int {
@@ -26,6 +35,10 @@ enum DashboardMetric: String, Identifiable, CaseIterable {
         switch self {
         case .pending: return summary.pending
         case .waitlisted: return summary.waitlisted
+        case .accommodation: return summary.nights.reduce(0) { $0 + max(0, summary.confirmed_vehicles - $1.confirmed) }
+        case .meals: return summary.restaurants.reduce(0) { $0 + max(0, summary.confirmed_vehicles - $1.orders) }
+        case .checkIn: return max(0, summary.confirmed_vehicles - summary.checked_in)
+        case .deadlines: return 0
         }
     }
 }
@@ -59,13 +72,26 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
     @Published var expandedInfo: DashboardInfo?
     @Published var expandedTours: Set<String> = []
     @Published var registrations: [String: [TourRegistration]] = [:]
+    @Published var matrix: [String: [DataRow]] = [:]
+    @Published var deadlines: [String: [PlanningDeadline]] = [:]
     let toursRepository: ToursRepository
     let people: PeopleRepository
     let planning: PlanningRepository
     init(toursRepository: ToursRepository, people: PeopleRepository, planning: PlanningRepository) {
         self.toursRepository = toursRepository; self.people = people; self.planning = planning
     }
-    func total(_ metric: DashboardMetric) -> Int { tours.reduce(0) { $0 + metric.count(summaries[$1.id]) } }
+    func count(_ metric: DashboardMetric, tour: Tour) -> Int {
+        if metric == .deadlines {
+            let now = Date(), horizon = now.addingTimeInterval(7 * 86_400)
+            return deadlines[tour.id, default: []].filter { deadline in
+                guard let date = TourDates.instant(deadline.due_at) else { return false }
+                return date >= now && date <= horizon
+            }.count
+        }
+        if metric == .checkIn && !tour.check_in_enabled { return 0 }
+        return metric.count(summaries[tour.id])
+    }
+    func total(_ metric: DashboardMetric) -> Int { tours.reduce(0) { $0 + count(metric, tour: $1) } }
     // Klarname ist Admin-Inhalt (§5/§12 "Admin kann ... Klarname sehen").
     func name(_ row: TourRegistration) -> String {
         guard let user = users.first(where: { $0.id == row.user_id }) else { return row.user_id }
@@ -78,6 +104,7 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
             users = try await people.users()
             let rows = try await planning.summaries(tours.map(\.id))
             summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
+            deadlines = Dictionary(grouping: try await planning.deadlines(tours.map(\.id)), by: \.tour_id)
             // A failed summary must not silently read as an empty/zero planning
             // state (PR #18 review) -- surface which tours it affects.
             let failed = rows.filter { $0.summary == nil }
@@ -122,8 +149,13 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
         }
     }
     func setExpanded(_ tourID: String, _ expanded: Bool) {
-        if expanded { expandedTours.insert(tourID); Task { await loadRegistrations(tourID) } }
+        if expanded { expandedTours.insert(tourID); Task { await loadRegistrations(tourID); await loadMatrix(tourID) } }
         else { expandedTours.remove(tourID) }
+    }
+    func loadMatrix(_ tourID: String) async {
+        guard matrix[tourID] == nil else { return }
+        do { matrix[tourID] = try await planning.participantMatrix([tourID]) }
+        catch { self.error = error.localizedDescription }
     }
     func loadRegistrations(_ tourID: String) async {
         guard registrations[tourID] == nil else { return }
@@ -139,6 +171,19 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
             // registration change itself already succeeded above.
             do { summaries[row.tour_id] = try await planning.summary(row.tour_id) }
             catch { self.error = "Aktion ausgeführt, aber aktuelle Zahlen für diese Tour konnten nicht neu geladen werden: \(error.localizedDescription)" }
+        }
+    }
+    func remindAccommodation(_ row: DataRow, tourID: String) async {
+        guard case .array(let nights) = row.values["accommodation"] else { return }
+        let openNights = nights.compactMap { value -> String? in
+            guard case .object(let night) = value, !night.boolean("confirmed") else { return nil }
+            return night.text("night_date").nilIfEmpty
+        }
+        await perform {
+            for night in openNights {
+                if let warning = try await planning.reminder(tourID: tourID, night: night, userIDs: [row.values.text("user_id")]) { notice = warning }
+            }
+            if notice == nil { notice = "Gezielte Erinnerung für \(openNights.count) offene Übernachtung(en) versendet." }
         }
     }
 }
@@ -162,6 +207,7 @@ struct DashboardView: View {
                     Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy)
                 }
                 ErrorBanner(message: model.error)
+                if let notice = model.notice { Text(notice).foregroundStyle(.secondary) }
                 if model.tours.isEmpty && !model.busy {
                     ContentUnavailableView("Keine anstehenden Touren", systemImage: "map", description: Text("Veröffentlichte Touren erscheinen hier."))
                 } else {
@@ -202,7 +248,7 @@ struct DashboardView: View {
         }.buttonStyle(.plain)
     }
     private func drillDown(_ metric: DashboardMetric) -> some View {
-        let relevant = model.tours.filter { metric.count(model.summaries[$0.id]) > 0 }
+        let relevant = model.tours.filter { model.count(metric, tour: $0) > 0 }
         return VStack(alignment: .leading, spacing: 4) {
             Text(metric.title).font(.title3.bold())
             if relevant.isEmpty {
@@ -219,7 +265,7 @@ struct DashboardView: View {
                             Text(tour.title).bold()
                             Text(tour.start_date).foregroundStyle(.secondary).font(.caption)
                             Spacer()
-                            Text("\(metric.count(model.summaries[tour.id]))").foregroundStyle(.secondary)
+                            Text("\(model.count(metric, tour: tour))").foregroundStyle(.secondary)
                         }
                     }.padding(.vertical, 6)
                     Divider()
@@ -351,7 +397,27 @@ struct DashboardView: View {
     @ViewBuilder private func tourRows(_ tour: Tour, metric: DashboardMetric) -> some View {
         if let rows = model.registrations[tour.id] {
             let filtered = rows.filter { metric.statuses.contains($0.status) }.sorted { $0.registered_at < $1.registered_at }
-            if filtered.isEmpty {
+            if metric.statuses.isEmpty {
+                if metric == .deadlines {
+                    let now = Date(), horizon = now.addingTimeInterval(7 * 86_400)
+                    ForEach(model.deadlines[tour.id, default: []].filter {
+                        guard let date = TourDates.instant($0.due_at) else { return false }; return date >= now && date <= horizon
+                    }) { deadline in
+                        HStack { Text(deadline.title).bold(); Spacer(); Text(TourDates.displayDate(deadline.due_at)).foregroundStyle(.orange) }.padding(.vertical, 5)
+                    }
+                }
+                else if let rows = model.matrix[tour.id] {
+                    ForEach(rows.filter { needsAction($0, metric: metric) }) { row in
+                        HStack {
+                            Text("\(row.values.text("username")) · \(row.values.text("vehicle"))").bold(); Spacer()
+                            Text(actionLabel(row, metric: metric)).foregroundStyle(.orange)
+                            if metric == .accommodation {
+                                Button("Erinnern") { Task { await model.remindAccommodation(row, tourID: tour.id) } }.disabled(model.busy)
+                            }
+                        }.padding(.vertical, 5)
+                    }
+                } else { ProgressView().padding(.vertical, 8) }
+            } else if filtered.isEmpty {
                 Text("Keine Einträge mehr.").foregroundStyle(.secondary).padding(.vertical, 6)
             } else {
                 ForEach(filtered) { row in
@@ -376,5 +442,16 @@ struct DashboardView: View {
         } else {
             ProgressView().padding(.vertical, 10).frame(maxWidth: .infinity)
         }
+    }
+    private func needsAction(_ row: DataRow, metric: DashboardMetric) -> Bool {
+        guard row.values.text("status") == "confirmed" else { return false }
+        if metric == .checkIn { return row.values.text("checked_in_at").isEmpty }
+        let key = metric == .accommodation ? "accommodation" : "restaurants"
+        guard case .array(let values) = row.values[key] else { return false }
+        return values.contains { value in guard case .object(let item) = value else { return false }; return metric == .accommodation ? !item.boolean("confirmed") : !item.boolean("ordered") }
+    }
+    private func actionLabel(_ row: DataRow, metric: DashboardMetric) -> String {
+        if metric == .checkIn { return "Check-in offen" }
+        return metric == .accommodation ? "Unterkunft bestätigen/erinnern" : "Essensauswahl offen"
     }
 }

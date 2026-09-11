@@ -7,6 +7,7 @@ import SwiftUI
     @Published var filter = "all"
     @Published var query = ""
     @Published var results: [String] = []
+    @Published var matrix: [DataRow] = []
     let repository: PeopleRepository
     let tourID: String
     init(_ repository: PeopleRepository, tourID: String) { self.repository = repository; self.tourID = tourID }
@@ -16,6 +17,7 @@ import SwiftUI
             let people = try await repository.users()
             try Task.checkCancellation()
             rows = registrations; users = people
+            matrix = try await PlanningRepository(repository.client).participantMatrix([tourID])
             selection.formIntersection(Set(rows.map(\.id)))
         }
     }
@@ -87,6 +89,21 @@ struct RegistrationsView: View {
                 Button("Auswahl bestätigen") { action = "approve_tour_registration" }.disabled(model.selection.isEmpty)
                 Button("Auswahl entfernen", role: .destructive) { action = "admin_remove_registration" }.disabled(model.selection.isEmpty)
             }
+            GroupBox("Teilnehmermatrix") {
+                if model.matrix.isEmpty { Text("Keine bestätigten Teilnehmer.").foregroundStyle(.secondary) }
+                else { ScrollView(.horizontal) { Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                    GridRow { Text("Teilnehmer").bold(); Text("Status").bold(); Text("Personen").bold(); Text("Unterkunft").bold(); Text("Essen").bold(); Text("Check-in").bold() }
+                    Divider()
+                    ForEach(model.matrix) { row in GridRow {
+                        Text("\(row.values.text("username")) · \(row.values.text("vehicle"))")
+                        Text(Labels.status(row.values.text("status")))
+                        Text("\(row.values.integer("persons"))")
+                        Text(row.values.text("status") == "confirmed" ? matrixAccommodation(row) : "–")
+                        Text(row.values.text("status") == "confirmed" ? matrixMeals(row) : "–")
+                        Text(row.values.text("status") == "confirmed" ? (row.values.text("checked_in_at").isEmpty ? "Offen" : "Eingecheckt") : "–")
+                    } }
+                } } }
+            }
             if let selected, model.selection.count == 1 {
                 GroupBox("\(model.displayName(selected)) · \(selected.vehicle_manufacturer) \(selected.vehicle_model)") {
                     HStack {
@@ -112,6 +129,14 @@ struct RegistrationsView: View {
         .confirmationDialog("\(model.selection.count) ausgewählte Anmeldungen ändern? \(action == "admin_remove_registration" ? "Entfernen gibt Plätze frei und kann Wartelisten-Nachrücken auslösen." : "Die serverseitigen Teilnahme- und Kapazitätsregeln gelten weiterhin.")", isPresented: Binding(get: { action != nil }, set: { if !$0 { action = nil } }), titleVisibility: .visible) {
             Button("Auswahl ändern", role: .destructive) { let selectedAction = action!; action = nil; Task { await model.apply(selectedAction) } }
         }
+    }
+    private func matrixAccommodation(_ row: DataRow) -> String {
+        guard case .array(let nights) = row.values["accommodation"] else { return "–" }
+        return nights.compactMap { value -> String? in guard case .object(let night) = value else { return nil }; return night.boolean("confirmed") ? (night.text("hotel_name").nilIfEmpty ?? (night.text("choice") == "other_accommodation" ? "Andere Unterkunft" : "Bestätigt")) : "Offen" }.joined(separator: " | ")
+    }
+    private func matrixMeals(_ row: DataRow) -> String {
+        guard case .array(let stops) = row.values["restaurants"] else { return "–" }
+        return stops.compactMap { value -> String? in guard case .object(let stop) = value else { return nil }; return "\(stop.text("title")): \(stop.boolean("ordered") ? "bestellt" : "offen")" }.joined(separator: " | ")
     }
     // §35.1: Klarname und Kennzeichen nur mit ausdrücklicher Admin-Auswahl in den Export
     // aufnehmen, Standard aus -- analog zur bestehenden PWA-Checkbox "Klarname & Kennzeichen

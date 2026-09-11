@@ -16,6 +16,15 @@ export interface HotelSuggestion {
    * zum Vorschlag selbst — keine persönlichen Zahlungs-/Buchungsdaten (§36.3). */
   price_per_night: number | null
   url: string | null
+  hotel_url: string | null
+  booking_url: string | null
+  price_unit: string | null
+  room_type: string | null
+  breakfast_details: string | null
+  parking_details: string | null
+  cancellation_terms: string | null
+  allotment_details: string | null
+  contact: string | null
   address: string | null
   note: string | null
   booking_deadline: string | null
@@ -33,4 +42,6 @@ export interface AccommodationConfirmation {
   user_id: string
   night_date: string
   confirmed_at: string
+  accommodation_choice: 'suggested_hotel' | 'other_accommodation' | null
+  hotel_suggestion_id: string | null
 }

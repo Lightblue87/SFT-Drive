@@ -117,6 +117,9 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
   const closed = settings.ordering_deadline_at && now > new Date(settings.ordering_deadline_at)
 
   const totalSelected = Object.values(quantities).reduce((sum, q) => sum + q, 0)
+  const selectedItems = items.filter((item) => (quantities[item.id] ?? 0) > 0)
+  const pricedTotal = selectedItems.reduce((sum, item) => sum + (item.price ?? 0) * (quantities[item.id] ?? 0), 0)
+  const hasUnpriced = selectedItems.some((item) => item.price == null)
 
   return (
     <div className="mt-3.5 rounded-2xl border border-sft-amber/25 bg-sft-amber/[0.05] p-3.5">
@@ -148,7 +151,15 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
             {items.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-3">
                 <span className="text-[13px]">
-                  {item.name}
+                  <span className="font-medium">{item.name}</span>
+                  {item.price != null && <span className="ml-2 text-sft-gray">{item.price.toFixed(2)} €</span>}
+                  {item.description && <span className="mt-0.5 block text-sft-gray">{item.description}</span>}
+                  {(item.is_vegetarian || item.is_vegan) && (
+                    <span className="mt-0.5 block font-mono text-[10px] text-sft-gray">
+                      {[item.is_vegetarian && 'VEGETARISCH', item.is_vegan && 'VEGAN'].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                  {item.allergen_info && <span className="mt-0.5 block text-[11px] text-sft-gray">Allergene: {item.allergen_info}</span>}
                   {/* Nicht mehr verfügbar, steht aber noch in der Bestellung:
                       nur noch reduzierbar, damit es gezielt entfernt werden kann. */}
                   {!item.is_available && (
@@ -189,6 +200,18 @@ export function MealOrderForm({ restaurantStopId, personCount }: Props) {
               Du hast {personCount} {personCount === 1 ? 'Person' : 'Personen'} für diese Tour angegeben, aber
               aktuell {totalSelected} {totalSelected === 1 ? 'Gericht' : 'Gerichte'} ausgewählt.
             </p>
+          )}
+
+          {totalSelected > 0 && (
+            <div className="mt-3 border-t border-white/10 pt-3 text-right">
+              {selectedItems.map((item) => item.price != null && (
+                <div key={item.id} className="text-[12px] text-sft-gray">
+                  {quantities[item.id]} × {item.name}: {(item.price * quantities[item.id]).toFixed(2)} €
+                </div>
+              ))}
+              <div className="mt-1 font-semibold">Gesamtsumme{hasUnpriced ? ' der bepreisten Positionen' : ''}: {pricedTotal.toFixed(2)} €</div>
+              {hasUnpriced && <div className="text-[11px] text-sft-amber">Mindestens eine Position hat noch keinen Preis.</div>}
+            </div>
           )}
 
           {error && <p className="mt-2.5 text-sm text-sft-red">{error}</p>}

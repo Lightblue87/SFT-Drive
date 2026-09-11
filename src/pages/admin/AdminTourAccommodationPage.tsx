@@ -44,6 +44,15 @@ const EMPTY_SUGGESTION_FORM = {
   booking_deadline: '',
   night_date_end: '',
   price_per_night: '',
+  price_unit: '€ / Zimmer / Nacht',
+  hotel_url: '',
+  booking_url: '',
+  room_type: '',
+  breakfast_details: '',
+  parking_details: '',
+  cancellation_terms: '',
+  allotment_details: '',
+  contact: '',
 }
 
 type OverallStatus = 'all' | 'partial' | 'none'
@@ -152,6 +161,15 @@ export function AdminTourAccommodationPage() {
       night_date: night,
       night_date_end: endNight,
       price_per_night: price,
+      price_unit: price == null ? null : (form.price_unit.trim() || null),
+      hotel_url: form.hotel_url.trim() || null,
+      booking_url: form.booking_url.trim() || null,
+      room_type: form.room_type.trim() || null,
+      breakfast_details: form.breakfast_details.trim() || null,
+      parking_details: form.parking_details.trim() || null,
+      cancellation_terms: form.cancellation_terms.trim() || null,
+      allotment_details: form.allotment_details.trim() || null,
+      contact: form.contact.trim() || null,
       name: form.name.trim(),
       url: form.url.trim() || null,
       address: form.address.trim() || null,
@@ -295,7 +313,7 @@ export function AdminTourAccommodationPage() {
                   </div>
                 )}
                 {s.price_per_night != null && (
-                  <div className="mt-0.5 text-[13px] text-sft-gray">{s.price_per_night.toFixed(2)} € / Nacht</div>
+                  <div className="mt-0.5 text-[13px] text-sft-gray">{s.price_per_night.toFixed(2)} {s.price_unit || '€ / Nacht'}</div>
                 )}
                 {(s.address || s.note) && (
                   <div className="mt-1 font-mono text-[11px] leading-relaxed text-sft-gray">
@@ -304,11 +322,9 @@ export function AdminTourAccommodationPage() {
                     {s.note}
                   </div>
                 )}
-                {s.url && (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-block text-[13px] font-medium text-sft-red underline">
-                    Hotel öffnen
-                  </a>
-                )}
+                {[s.room_type && `Zimmer: ${s.room_type}`, s.breakfast_details && `Frühstück: ${s.breakfast_details}`, s.parking_details && `Parkplatz: ${s.parking_details}`, s.cancellation_terms && `Stornierung: ${s.cancellation_terms}`, s.allotment_details && `Kontingent: ${s.allotment_details}`, s.contact && `Kontakt: ${s.contact}`].filter((line): line is string => Boolean(line)).map((line) => <div key={line} className="mt-0.5 text-[12px] text-sft-gray">{line}</div>)}
+                {(s.hotel_url || s.url) && <a href={s.hotel_url || s.url || undefined} target="_blank" rel="noopener noreferrer" className="mr-3 mt-1 inline-block text-xs text-sft-red underline">Hotel öffnen</a>}
+                {s.booking_url && <a href={s.booking_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-sft-red underline">Buchungsseite</a>}
                 {s.booking_deadline && (
                   <div className="mt-1 font-mono text-[10px] text-sft-gray-dim">
                     BUCHUNG BIS {formatDate(s.booking_deadline).toUpperCase()}
@@ -323,12 +339,6 @@ export function AdminTourAccommodationPage() {
                 onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, name: e.target.value } }))}
                 placeholder="Hotelname"
                 className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
-              />
-              <input
-                value={form.url}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, url: e.target.value } }))}
-                placeholder="Link (optional)"
-                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 font-mono text-[13px] text-sft-white"
               />
               <input
                 value={form.address}
@@ -354,6 +364,10 @@ export function AdminTourAccommodationPage() {
                 placeholder="Preis pro Nacht in € (optional)"
                 className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
               />
+              <input value={form.price_unit} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, price_unit: e.target.value } }))} placeholder="Preiseinheit, z. B. € / Zimmer / Nacht" className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />
+              <input value={form.hotel_url} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, hotel_url: e.target.value } }))} placeholder="Hotel-URL" className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />
+              <input value={form.booking_url} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, booking_url: e.target.value } }))} placeholder="Direkter Buchungslink" className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />
+              {(['room_type','breakfast_details','parking_details','cancellation_terms','allotment_details','contact'] as const).map((key) => <input key={key} value={form[key]} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, [key]: e.target.value } }))} placeholder={({room_type:'Zimmerart',breakfast_details:'Frühstück',parking_details:'Parkplatz',cancellation_terms:'Stornierungsbedingungen',allotment_details:'Kontingent',contact:'Kontakt'} as const)[key]} className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />)}
               <label className="block min-w-0">
                 <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
                   ÜBERNACHTUNG BIS (OPTIONAL, FÜR MEHRERE NÄCHTE)
@@ -401,6 +415,8 @@ export function AdminTourAccommodationPage() {
                   {shownParticipants.map((p) => {
                     const done = confirmedUserIds.has(p.userId)
                     const selected = selection.includes(p.userId)
+                    const confirmation = confirmations.find((c) => c.night_date === night && c.user_id === p.userId)
+                    const chosenHotel = nightSuggestions.find((s) => s.id === confirmation?.hotel_suggestion_id)
                     return (
                       <button
                         key={p.userId}
@@ -435,7 +451,7 @@ export function AdminTourAccommodationPage() {
                         </span>
                         <span className="min-w-0 flex-1 truncate font-medium">{p.username}</span>
                         <span className={done ? 'flex-none text-[#5fd3b4]' : 'flex-none text-sft-gray'}>
-                          {done ? '✓ bestätigt' : 'Übernachtung noch nicht bestätigt'}
+                          {done ? `✓ ${chosenHotel?.name ?? (confirmation?.accommodation_choice === 'other_accommodation' ? 'andere Unterkunft' : 'bestätigt')}` : 'Übernachtung noch nicht bestätigt'}
                         </span>
                       </button>
                     )

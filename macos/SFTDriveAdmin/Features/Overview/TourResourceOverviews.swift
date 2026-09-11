@@ -1,5 +1,46 @@
 import SwiftUI
 
+struct GlobalPlanningView: View {
+    let services: AppServices
+    var body: some View {
+        TabView {
+            DashboardView(services: services).tabItem { Label("Teilnahme & To-dos", systemImage: "checklist") }
+            GlobalParticipantMatrixView(services: services).tabItem { Label("Teilnehmermatrix", systemImage: "tablecells") }
+            HotelsOverviewView(services: services).tabItem { Label("Übernachtungen", systemImage: "bed.double") }
+            RestaurantsOverviewView(services: services).tabItem { Label("Restaurants", systemImage: "fork.knife") }
+        }.navigationTitle("Planung")
+    }
+}
+
+@MainActor final class GlobalMatrixModel: ScreenModel {
+    @Published var tours: [Tour] = []
+    @Published var rows: [DataRow] = []
+    @Published var query = ""
+    func load(_ services: AppServices) async { await perform { tours = try await services.tours.upcoming(); rows = try await services.planning.participantMatrix(tours.map(\.id)) } }
+}
+struct GlobalParticipantMatrixView: View {
+    let services: AppServices
+    @StateObject private var model = GlobalMatrixModel()
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack { TextField("Teilnehmer, Fahrzeug oder Tour", text: $model.query).textFieldStyle(.roundedBorder); Button("Aktualisieren") { Task { await model.load(services) } } }
+            ErrorBanner(message: model.error)
+            Table(model.rows.filter { row in model.query.isEmpty || "\(row.values.text("username")) \(row.values.text("vehicle")) \(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? "")".localizedCaseInsensitiveContains(model.query) }) {
+                TableColumn("Tour") { row in Text(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? row.values.text("tour_id")) }
+                TableColumn("Teilnehmer") { Text($0.values.text("username")) }
+                TableColumn("Fahrzeug") { Text($0.values.text("vehicle")) }
+                TableColumn("Status") { Text(Labels.status($0.values.text("status"))) }
+                TableColumn("Personen") { Text("\($0.values.integer("persons"))") }.width(65)
+                TableColumn("Hotel") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "accommodation", state: "confirmed") == 0 ? "Vollständig" : "\(openCount(row, key: "accommodation", state: "confirmed")) offen") : "–") }
+                TableColumn("Essen") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "restaurants", state: "ordered") == 0 ? "Vollständig" : "\(openCount(row, key: "restaurants", state: "ordered")) offen") : "–") }
+                TableColumn("Check-in") { Text($0.values.text("status") == "confirmed" ? ($0.values.text("checked_in_at").isEmpty ? "Offen" : "Ja") : "–") }
+            }
+            RefreshFooter(time: model.refreshedAt, busy: model.busy)
+        }.padding().task { await model.load(services) }
+    }
+    private func openCount(_ row: DataRow, key: String, state: String) -> Int { guard case .array(let values) = row.values[key] else { return 0 }; return values.filter { value in guard case .object(let item) = value else { return false }; return !item.boolean(state) }.count }
+}
+
 @MainActor final class TourResourceOverviewModel: ScreenModel {
     @Published var tours: [Tour] = []
     @Published var summaries: [String: PlanningSummary] = [:]

@@ -52,9 +52,11 @@ final class CoreTests: XCTestCase {
     func testRestaurantMenuRequiresEvidenceAndValidPrice() throws {
         var payload: Payload = Dictionary(uniqueKeysWithValues: ExtractionSchema.keys(.restaurant).map { ($0, .null) })
         payload["evidence"] = .object([:])
-        payload["menu_items"] = .array([.object(["name": .string("Pasta"), "price": .number(12.5), "evidence": .string("Pasta 12,50")])])
+        let details: Payload = ["name": .string("Pasta"), "price": .number(12.5), "description": .null, "allergen_info": .null, "is_vegetarian": .bool(true), "is_vegan": .bool(false), "evidence": .string("Pasta 12,50")]
+        payload["menu_items"] = .array([.object(details)])
         XCTAssertNoThrow(try ExtractionSchema.validate(payload, kind: .restaurant, source: "Pasta 12,50"))
-        payload["menu_items"] = .array([.object(["name": .string("Pasta"), "price": .number(-1), "evidence": .string("Pasta 12,50")])])
+        var invalid = details; invalid["price"] = .number(-1)
+        payload["menu_items"] = .array([.object(invalid)])
         XCTAssertThrowsError(try ExtractionSchema.validate(payload, kind: .restaurant, source: "Pasta 12,50"))
     }
     func testNoDateIsInferredFromMissingFields() throws {

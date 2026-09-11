@@ -7044,3 +7044,35 @@ Implementierung, automatisierte Prüfung und produktive Bereitstellung.
   Backend-Bereitstellung, manuelle UI-/Login-/Offline-Prüfung
   und Installation auf einem zweiten Mac separat dokumentieren. Ein
   Repository-Commit ist kein Nachweis für produktiv eingespielte Migrationen.
+
+### 40.11 Erweiterung in PR #19 (11.09.2026)
+
+PR #19 setzt die verbindlichen Produktentscheidungen aus §36 und §38 als
+zusammenhängenden Planungs-Workflow um. Bis zum Merge und zur gesonderten
+Produktivmigration ist dies **Repository-Stand, nicht Produktivstand**:
+
+- Dashboard-To-dos mit Drilldown Kategorie → Tour → Teilnehmer/Objekt und
+  Aktionen für Teilnahme, Warteliste, Unterkunft, Essen, Check-in und
+  gebündelt geladene Tour-, Hotel- und Restaurantfristen.
+- Tour-Workspace mit Übersicht, Tourdaten, Tagesplanung, Teilnehmermatrix,
+  Restaurants, Übernachtungen, Kommunikation, Medien und angebundener
+  optionaler KI-Assistenz; Hotels und Restaurants bleiben tourbezogen und
+  werden zusätzlich unter „Planung“ tourübergreifend kontrolliert.
+- Achtstufiger, zwischenspeichernder Flow für neue, bestehende und duplizierte
+  Touren. Beim Duplizieren sind Tagesplanung, Hotelvorschläge sowie
+  Restaurants/Speisekarten einzeln wählbar. Datum, Uhrzeit, Fristen und Preise
+  werden bewusst nicht blind übernommen.
+- Vollständige Hotelvorschlagsdaten einschließlich Preis/Preiseinheit und
+  externer Links sowie Teilnehmerwahl „vorgeschlagenes Hotel“ oder „andere
+  Unterkunft“. Persönliche Buchungsnummern und Zahlungsdaten bleiben verboten.
+- Hotelmatrix pro Nacht, Teilnehmermatrix je Tour und tourübergreifend,
+  gezielte Unterkunftserinnerung sowie Restaurant-Vorbestellung mit
+  Gerichtsduplikat, Mengen, Einzelpreisen und Gesamtsumme.
+- Neue gebündelte Admin-Abfragen für Registrierungen, Teilnehmermatrix und
+  Fristen vermeiden N+1-Aufrufe bei den globalen Übersichten.
+
+Vor der produktiven Abnahme bleiben die SQL-Migrationen in Reihenfolge
+einzuspielen und die reale macOS-/PWA-Oberfläche mit Ein- und Mehrtagestour,
+ungültigem Zeitraum, geänderten Tourdaten und Legacy-Datensätzen manuell zu
+prüfen. Diese Betriebs- und Geräteprüfung kann nicht durch den PR allein als
+erledigt gelten.

@@ -47,8 +47,8 @@ declare
 begin
   if auth.uid() is null or not public.is_admin() then raise exception 'FORBIDDEN' using errcode='42501'; end if;
   case p_kind
-    when 'stops' then tbl:='tour_stops'; parent_col:='tour_id'; allowed:=array['title','type','description','location_name','address','starts_at','sort_order'];
-    when 'hotels' then tbl:='tour_hotel_suggestions'; parent_col:='tour_id'; allowed:=array['night_date','night_date_end','price_per_night','name','url','address','note','booking_deadline','sort_order'];
+    when 'stops' then tbl:='tour_stops'; parent_col:='tour_id'; allowed:=array['title','type','description','location_name','address','starts_at','reservation_people','reservation_contact','reservation_status','sort_order'];
+    when 'hotels' then tbl:='tour_hotel_suggestions'; parent_col:='tour_id'; allowed:=array['night_date','night_date_end','price_per_night','price_unit','name','url','hotel_url','booking_url','address','room_type','breakfast_details','parking_details','cancellation_terms','allotment_details','contact','note','booking_deadline','sort_order'];
     when 'stages' then tbl:='tour_stages'; parent_col:='tour_id'; allowed:=array['stage_date','stage_number','title','route_url'];
     when 'menu' then tbl:='menu_items'; parent_col:='restaurant_stop_id'; allowed:=array['name','description','price','is_available','is_vegetarian','is_vegan','allergen_info','sort_order'];
     when 'restaurantSettings' then tbl:='restaurant_stop_settings'; parent_col:='tour_stop_id'; pk:='tour_stop_id'; allowed:=array['ordering_enabled','ordering_open_at','ordering_deadline_at','restaurant_note'];

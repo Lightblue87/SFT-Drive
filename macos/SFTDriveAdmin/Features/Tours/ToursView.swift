@@ -66,7 +66,7 @@ struct ToursView: View {
             do { try await Task.sleep(for: .milliseconds(250)); await model.load() } catch { }
         }
         .sheet(item: $editor) { request in
-            TourEditorView(repository: services.tours, request: request) { editor = nil; Task { await model.load() } }
+            TourEditorView(services: services, request: request) { editor = nil; Task { await model.load() } }
         }
     }
 }
@@ -132,6 +132,7 @@ struct TagesplanungTab: View {
     let services: AppServices
     let tour: Tour
     let multiDay: Bool
+    @StateObject private var model = DayPlanningModel()
     var body: some View {
         // Kein umschließender ScrollView: StagesView und ResourceListView enthalten
         // jeweils eine eigene List, die innerhalb eines unbegrenzten vertikalen
@@ -139,13 +140,31 @@ struct TagesplanungTab: View {
         // auf #19) -- StagesView bekommt stattdessen eine feste, selbst scrollbare
         // Höhe, ResourceListView füllt den verbleibenden Platz des VStack.
         VStack(alignment: .leading, spacing: 16) {
+            Text("Tagesablauf").font(.headline)
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(TourDates.days(start: tour.start_date, end: tour.end_date), id: \.self) { day in
+                        GroupBox(day) {
+                            let events = model.stops.filter { $0.values.text("starts_at").hasPrefix(day) }.sorted { $0.values.text("starts_at") < $1.values.text("starts_at") }
+                            VStack(alignment: .leading, spacing: 6) {
+                                if events.isEmpty { Text("Noch keine zeitlich zugeordneten Stopps.").foregroundStyle(.secondary) }
+                                ForEach(events) { event in Label("\(event.values.text("starts_at")) · \(event.values.text("title"))", systemImage: event.values.text("type") == "restaurant" ? "fork.knife" : "mappin") }
+                            }.frame(width: 280, alignment: .leading)
+                        }
+                    }
+                }
+            }.frame(height: 145)
             if multiDay {
                 StagesView(services: services, tour: tour).frame(minHeight: 220, maxHeight: 260)
                 Divider()
             }
             ResourceListView(services: services, kind: .stops, parentID: tour.id, tour: tour)
-        }
+        }.task { await model.load(services.content, tourID: tour.id) }
     }
+}
+@MainActor final class DayPlanningModel: ScreenModel {
+    @Published var stops: [DataRow] = []
+    func load(_ repository: ContentRepository, tourID: String) async { await perform { stops = try await repository.load(.stops, parentID: tourID) } }
 }
 @MainActor final class RestaurantsTabModel: ScreenModel {
     @Published var stops: [DataRow] = []
@@ -246,12 +265,18 @@ struct MediaTab: View {
     @Published var status = "draft"
     @Published var loaded = false
     @Published var conflict: Payload?
+    @Published var workingTour: Tour?
+    @Published var copyStages = true
+    @Published var copyHotels = true
+    @Published var copyRestaurants = true
+    private var planningCopied = false
     var expected: Payload?
     var initial: Payload = [:]
     var savedID = UUID().uuidString.lowercased()
     let repository: ToursRepository
     let request: TourEditorRequest
     init(repository: ToursRepository, request: TourEditorRequest) { self.repository = repository; self.request = request }
+    var draftKey: String { "tour-flow-\(request.duplicate ? "duplicate" : "edit")-\(request.sourceID ?? "new")" }
     var combined: Payload { ["tour": .object(fields), "member": .object(member), "participant": .object(participant), "status": .string(status)] }
     var dirty: Bool { loaded && combined != initial }
     var allowedStatuses: [String] {
@@ -272,14 +297,22 @@ struct MediaTab: View {
             if let source = request.sourceID {
                 let snapshot = try await repository.details(source)
                 if case .object(let value) = snapshot["tour"] { fields.merge(value) { _, new in new }; status = value.text("status") }
+                if case .object(let value) = snapshot["tour"] { workingTour = try? JSONDecoder().decode(Tour.self, from: JSONEncoder().encode(value)) }
                 if case .object(let value) = snapshot["member"] { member = value }
                 if case .object(let value) = snapshot["participant"] { participant = value }
                 if request.duplicate {
+                    workingTour = nil
                     fields["title"] = .string(fields.text("title") + " (Kopie)"); status = "draft"
                     for key in ["start_date", "end_date", "meeting_at", "planned_end_at", "registration_open_at", "registration_close_at", "passenger_edit_deadline_at"] { fields[key] = .null }
                 } else { expected = snapshot; savedID = source }
             }
             loaded = true; initial = combined
+            if let data = UserDefaults.standard.data(forKey: draftKey), let draft = try? JSONDecoder().decode(Payload.self, from: data) {
+                if case .object(let value) = draft["tour"] { fields = value }
+                if case .object(let value) = draft["member"] { member = value }
+                if case .object(let value) = draft["participant"] { participant = value }
+                status = draft.text("status").nilIfEmpty ?? status
+            }
         }
     }
     func save() async -> Bool {
@@ -291,7 +324,13 @@ struct MediaTab: View {
             let p = try FormValidation.payload(participant, fields: TourFormSchema.participantFields)
             do {
                 try await repository.save(id: savedID, expected: expected, tour: payload, member: m, participant: p)
-                saved = true; initial = combined
+                let fresh = try await repository.details(savedID); expected = fresh
+                if case .object(let value) = fresh["tour"] { workingTour = try JSONDecoder().decode(Tour.self, from: JSONEncoder().encode(value)) }
+                if request.duplicate, !planningCopied, let sourceID = request.sourceID {
+                    try await repository.copyPlanning(sourceID: sourceID, targetID: savedID, stages: copyStages, hotels: copyHotels, restaurants: copyRestaurants)
+                    planningCopied = true
+                }
+                saved = true; initial = combined; UserDefaults.standard.removeObject(forKey: draftKey); UserDefaults.standard.removeObject(forKey: draftKey + "-step")
             } catch {
                 // Never retry an ambiguously completed write blindly. Fetch for review.
                 conflict = try? await repository.details(savedID)
@@ -300,23 +339,33 @@ struct MediaTab: View {
         }
         return saved
     }
+    func persistDraft() { if let data = try? JSONEncoder().encode(combined) { UserDefaults.standard.set(data, forKey: draftKey) } }
 }
 struct TourEditorView: View {
     @StateObject private var model: TourEditorModel
+    let services: AppServices
     let close: () -> Void
     @State private var confirmDiscard = false
     @State private var destructiveAction: String?
     @State private var reason = ""
     @State private var importCover = false
-    init(repository: ToursRepository, request: TourEditorRequest, close: @escaping () -> Void) {
-        _model = StateObject(wrappedValue: TourEditorModel(repository: repository, request: request)); self.close = close
+    @State private var step = 0
+    private let steps = ["Grundlagen", "Zeitraum", "Teilnahme", "Tagesplanung", "Übernachtungen", "Restaurants", "Kommunikation & Medien", "Prüfen"]
+    init(services: AppServices, request: TourEditorRequest, close: @escaping () -> Void) {
+        self.services = services; _model = StateObject(wrappedValue: TourEditorModel(repository: services.tours, request: request)); self.close = close
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack { Text(model.request.duplicate ? "Tour duplizieren" : "Tour bearbeiten").font(.title2.bold()); Spacer()
+            HStack { Text(model.request.duplicate ? "Tour duplizieren" : model.request.sourceID == nil ? "Neue Tour" : "Tour bearbeiten").font(.title2.bold()); Spacer()
                 Button("Abbrechen") { if model.dirty { confirmDiscard = true } else { close() } }.keyboardShortcut(.cancelAction)
-                Button("Speichern") { Task { if await model.save() { close() } } }.buttonStyle(.borderedProminent).keyboardShortcut("s").disabled(model.busy || !model.loaded)
+                Button(step == steps.count - 1 ? "Speichern & schließen" : "Zwischenspeichern") { Task { if await model.save(), step == steps.count - 1 { close() } } }.buttonStyle(.borderedProminent).keyboardShortcut("s").disabled(model.busy || !model.loaded)
             }.padding()
+            HStack {
+                Button("Zurück") { step = max(0, step - 1) }.disabled(step == 0)
+                Picker("Schritt", selection: $step) { ForEach(Array(steps.enumerated()), id: \.offset) { index, title in Text("\(index + 1). \(title)").tag(index) } }.frame(maxWidth: 360)
+                Button("Weiter") { step = min(steps.count - 1, step + 1) }.disabled(step == steps.count - 1)
+                Spacer(); Text("Schritt \(step + 1) von \(steps.count)").foregroundStyle(.secondary)
+            }.padding(.horizontal)
             ErrorBanner(message: model.error)
             if let notice = model.notice { Text(notice).foregroundStyle(.orange).padding() }
             if model.conflict != nil {
@@ -332,12 +381,25 @@ struct TourEditorView: View {
                 }.padding()
             }
             Form {
-                Section("Öffentliche Tourdaten") { FormFields(fields: TourFormSchema.publicFields, values: $model.fields)
+                if step == 0 { Section("Grundlagen") { FormFields(fields: fields(["title","region","short_description","public_description","route_length_km"]), values: $model.fields)
                     Button("Titelbild auswählen …") { importCover = true }
                     Picker("Status", selection: $model.status) { ForEach(model.allowedStatuses, id: \.self) { Text(Labels.status($0)).tag($0) } }
                 }
-                Section("Mitglieder") { FormFields(fields: TourFormSchema.memberFields, values: $model.member) }
-                Section("Bestätigte Teilnehmer") { FormFields(fields: TourFormSchema.participantFields, values: $model.participant) }
+                    if model.request.duplicate { Section("Wiederverwendbare Planung übernehmen") {
+                        Toggle("Tagesrouten und allgemeine Stopps", isOn: $model.copyStages)
+                        Toggle("Hotelvorschläge", isOn: $model.copyHotels)
+                        Toggle("Restaurants und Speisekarten", isOn: $model.copyRestaurants)
+                        Text("Datumswerte, Uhrzeiten, Fristen und Preise werden absichtlich nicht übernommen und müssen für die neue Tour festgelegt werden.").font(.caption).foregroundStyle(.secondary)
+                    } }
+                }
+                if step == 1 { Section("Zeitraum und Treffpunkt") { FormFields(fields: fields(["start_date","end_date","meeting_at","planned_end_at","meeting_point_public"]), values: $model.fields) } }
+                if step == 2 { Section("Teilnahmebedingungen und Anmeldung") { FormFields(fields: fields(["max_vehicles","confirmation_mode","license_plate_required","min_power_ps","max_power_ps","min_driver_age","registration_open_at","registration_close_at","passenger_edit_deadline_at","check_in_enabled","check_in_open_minutes_before","check_in_close_minutes_after"]), values: $model.fields) } }
+                if step == 3 { Section("Tagesplanung") { if let tour = model.workingTour { TagesplanungTab(services: services, tour: tour, multiDay: tour.end_date > tour.start_date).frame(minHeight: 420) } else { Text("Zuerst zwischenspeichern, dann werden Tourtage, Routen und Stopps hier im selben Flow freigeschaltet.") } } }
+                if step == 4 { Section("Übernachtungen") { if let tour = model.workingTour, tour.end_date > tour.start_date { AccommodationView(services: services, tour: tour).frame(minHeight: 420) } else { Text("Mehrtagestour mit gültigem Zeitraum zwischenspeichern, um Hotelvorschläge direkt hier zu planen.") } } }
+                if step == 5 { Section("Restaurants und Essen") { if let tour = model.workingTour { RestaurantsTab(services: services, tour: tour).frame(minHeight: 420) } else { Text("Tour zwischenspeichern, um Restaurants und Speisekarten direkt hier anzulegen.") } } }
+                if step == 6 { Section("Kommunikation") { FormFields(fields: TourFormSchema.memberFields, values: $model.member); FormFields(fields: TourFormSchema.participantFields, values: $model.participant) }
+                    Section("Medien") { FormFields(fields: fields(["cover_image_url","youtube_url","youtube_embed"]), values: $model.fields) } }
+                if step == 7 { Section("Prüfen und veröffentlichen") { LabeledContent("Titel", value: model.fields.text("title")); LabeledContent("Zeitraum", value: "\(model.fields.text("start_date")) – \(model.fields.text("end_date"))"); LabeledContent("Status", value: Labels.status(model.status)); Text("Vor Veröffentlichung Datum, Uhrzeiten, Fristen, Preise und Kapazitäten nochmals bewusst prüfen.").foregroundStyle(.secondary) } }
                 if model.expected != nil {
                     Section("Verwaltung") {
                         if ["published", "registration_closed"].contains(originalStatus) {
@@ -351,7 +413,9 @@ struct TourEditorView: View {
                 }
             }.formStyle(.grouped).disabled(model.busy || !model.loaded)
         }.frame(width: 760, height: 760).interactiveDismissDisabled(model.dirty || model.busy).protectDraft(model.dirty)
-        .task { await model.load() }
+        .task { await model.load(); step = min(steps.count - 1, max(0, UserDefaults.standard.integer(forKey: model.draftKey + "-step"))) }
+        .onChange(of: model.combined) { _, _ in if model.loaded { model.persistDraft() } }
+        .onChange(of: step) { _, value in UserDefaults.standard.set(value, forKey: model.draftKey + "-step") }
         .confirmationDialog("Ungespeicherte Änderungen verwerfen?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Verwerfen", role: .destructive, action: close); Button("Weiter bearbeiten", role: .cancel) { }
         }
@@ -378,4 +442,5 @@ struct TourEditorView: View {
         }
     }
     private var originalStatus: String { if case .object(let tour) = model.expected?["tour"] { return tour.text("status") }; return "draft" }
+    private func fields(_ ids: Set<String>) -> [FormField] { TourFormSchema.publicFields.filter { ids.contains($0.id) } }
 }
