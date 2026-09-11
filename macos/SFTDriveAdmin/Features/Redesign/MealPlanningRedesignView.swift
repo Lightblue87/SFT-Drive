@@ -254,7 +254,7 @@ struct MealPlanningRedesignView: View {
             .font(SFT.mono(10, .medium))
             .tracking(0.8)
             .foregroundStyle(SFT.inkTertiary)
-            .frame(width: width, maxWidth: maxWidth, alignment: alignment)
+            .frame(minWidth: width, idealWidth: width, maxWidth: width ?? maxWidth, alignment: alignment)
     }
 
     private func format(_ value: Decimal, suffix: String = "") -> String {
