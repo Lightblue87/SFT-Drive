@@ -49,6 +49,16 @@ try {
  const withParticipants=await snapshot();
  await bad(()=>rpc('admin_save_tour',[tourID,withParticipants,{...values,status:'published',max_vehicles:1,title:'Must rollback'}, {member_description:'Bad'},{}]),/VEHICLE_DATA_INVALID/);
  check((await snapshot()).tour.title,'Testfahrt');
+ // Two titles differing only in umlaut case must reduce to the same base slug
+ // (matching the PWA's own slugify(), which lower-cases before stripping
+ // diacritics) and therefore collide, receiving the numeric-suffix
+ // disambiguation instead of silently diverging into two different slugs.
+ const slugTourA='00000000-0000-0000-0000-000000000012';
+ const slugTourB='00000000-0000-0000-0000-000000000013';
+ check((await rpc('admin_save_tour',[slugTourA,null,{...values,title:'Über Nacht',start_date:'2027-08-01',end_date:'2027-08-01'},{},{}])).code,'OK');
+ check((await rpc('admin_save_tour',[slugTourB,null,{...values,title:'über nacht',start_date:'2027-08-01',end_date:'2027-08-01'},{},{}])).code,'OK');
+ check((await db.query('select slug from public.tours where id=$1',[slugTourA])).rows[0].slug,'uber-nacht-2027-08-01');
+ check((await db.query('select slug from public.tours where id=$1',[slugTourB])).rows[0].slug,'uber-nacht-2027-08-01-2');
  const hotelID='00000000-0000-0000-0000-000000000020';
  check((await rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Testhotel',night_date:'2027-06-18',sort_order:0}])).code,'OK');
  const hotelBefore=(await db.query('select to_jsonb(h) v from tour_hotel_suggestions h where id=$1',[hotelID])).rows[0].v;
@@ -65,8 +75,17 @@ try {
  await bad(()=>rpc('admin_create_restaurant',[importID,tourID,{title:'Rollback',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Invalid',price:-1}]]),/INVALID_PRICE/);
  check((await db.query('select * from tour_stops where id=$1',[importID])).rows.length,0);
  check((await rpc('admin_create_restaurant',[importID,tourID,{title:'Imported',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Soup',price:9.5}]])).code,'OK');
+ // A retry with the exact same client-generated IDs and byte-identical payload (e.g. after
+ // an ambiguous network failure) must succeed idempotently instead of falsely conflicting.
+ check((await rpc('admin_create_restaurant',[importID,tourID,{title:'Imported',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Soup',price:9.5}]])).code,'OK');
  await bad(()=>rpc('admin_create_restaurant',[importID,tourID,{title:'Duplicate'}, {}, []]),/CONFLICT/);
  const menuID='00000000-0000-0000-0000-000000000040';
+ const breakStopID='00000000-0000-0000-0000-000000000032';
+ check((await rpc('admin_save_tour_resource',['stops',breakStopID,tourID,null,{title:'Kaffeepause',type:'break',starts_at:'2027-06-18T14:00:00Z',sort_order:5}])).code,'OK');
+ // Retrying the exact same create with a timestamptz field must succeed idempotently
+ // even though to_jsonb() normalizes the stored value to Postgres's own "+00:00"
+ // text form while the client still sends the original "Z"-suffixed ISO string.
+ check((await rpc('admin_save_tour_resource',['stops',breakStopID,tourID,null,{title:'Kaffeepause',type:'break',starts_at:'2027-06-18T14:00:00Z',sort_order:5}])).code,'OK');
  check((await rpc('admin_save_tour_resource',['stops',stopID,tourID,null,{title:'Restaurant',type:'restaurant',sort_order:0}])).code,'OK');
  check((await rpc('admin_save_tour_resource',['restaurantSettings',stopID,stopID,null,{ordering_enabled:true}])).code,'OK');
  check((await rpc('admin_save_tour_resource',['menu',menuID,stopID,null,{name:'Pasta',price:12.50,is_available:true,is_vegetarian:true,is_vegan:false,sort_order:0}])).code,'OK');
