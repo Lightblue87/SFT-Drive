@@ -27,7 +27,7 @@ struct ResourceListView: View {
                 Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly)
             }.disabled(model.busy)
             ErrorBanner(message: model.error)
-            if model.rows.isEmpty && !model.busy { ContentUnavailableView("Noch keine Einträge", systemImage: "list.bullet.rectangle") }
+            if model.rows.isEmpty && !model.busy { ContentUnavailableView("Noch keine Einträge", systemImage: kind.symbol) }
             List(model.rows) { row in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(row.values.text(kind.nameKey).isEmpty ? kind.title : row.values.text(kind.nameKey)).font(.headline)

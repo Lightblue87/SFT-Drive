@@ -24,6 +24,17 @@ enum ResourceKind: String, CaseIterable, Identifiable {
         case .menu: return "Speisekarte"; case .restaurantSettings: return "Bestellfenster" }
     }
     var nameKey: String { self == .menu || self == .hotels ? "name" : self == .restaurantSettings ? "restaurant_note" : "title" }
+    // Eigenes Piktogramm je Ressourcentyp für den Leerzustand -- zuvor nutzten
+    // alle Typen dasselbe generische "list.bullet.rectangle", während der
+    // Restaurant-Bereich bereits sein eigenes "fork.knife" zeigte (uneinheitliches
+    // Bild, Nutzerfeedback). "bed.double" für Hotels stimmt mit dem bereits an
+    // anderer Stelle (Dashboard "Unterkunft offen") verwendeten Symbol überein.
+    var symbol: String {
+        switch self {
+        case .stops: return "mappin.and.ellipse"; case .hotels: return "bed.double"
+        case .stages: return "map"; case .menu: return "fork.knife"; case .restaurantSettings: return "clock"
+        }
+    }
     var fields: [FormField] {
         switch self {
         case .stops: return [
