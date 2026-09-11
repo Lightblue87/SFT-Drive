@@ -65,6 +65,9 @@ try {
  await bad(()=>rpc('admin_create_restaurant',[importID,tourID,{title:'Rollback',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Invalid',price:-1}]]),/INVALID_PRICE/);
  check((await db.query('select * from tour_stops where id=$1',[importID])).rows.length,0);
  check((await rpc('admin_create_restaurant',[importID,tourID,{title:'Imported',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Soup',price:9.5}]])).code,'OK');
+ // A retry with the exact same client-generated IDs and byte-identical payload (e.g. after
+ // an ambiguous network failure) must succeed idempotently instead of falsely conflicting.
+ check((await rpc('admin_create_restaurant',[importID,tourID,{title:'Imported',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Soup',price:9.5}]])).code,'OK');
  await bad(()=>rpc('admin_create_restaurant',[importID,tourID,{title:'Duplicate'}, {}, []]),/CONFLICT/);
  const menuID='00000000-0000-0000-0000-000000000040';
  check((await rpc('admin_save_tour_resource',['stops',stopID,tourID,null,{title:'Restaurant',type:'restaurant',sort_order:0}])).code,'OK');
