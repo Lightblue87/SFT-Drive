@@ -53,6 +53,7 @@ struct RegistrationsView: View {
     @State private var action: String?
     @State private var adding = false
     @State private var totalPersons = 1
+    @State private var includePrivateExportFields = false
     init(services: AppServices, tour: Tour) {
         self.services = services; self.tour = tour
         _model = StateObject(wrappedValue: RegistrationsModel(services.people, tourID: tour.id))
@@ -73,6 +74,7 @@ struct RegistrationsView: View {
                     Button("Entfernen", role: .destructive) { action = "admin_remove_registration" }
                 }.disabled(model.selection.isEmpty || model.busy)
                 Button("CSV exportieren") { export() }
+                Toggle("Klarname & Kennzeichen einschließen", isOn: $includePrivateExportFields).toggleStyle(.checkbox)
                 Button("Laden", systemImage: "arrow.clockwise") { Task { await model.load() } }.labelStyle(.iconOnly)
             }
             Table(model.filtered, selection: $model.selection) {
@@ -111,10 +113,21 @@ struct RegistrationsView: View {
             Button("Auswahl ändern", role: .destructive) { let selectedAction = action!; action = nil; Task { await model.apply(selectedAction) } }
         }
     }
+    // §35.1: Klarname und Kennzeichen nur mit ausdrücklicher Admin-Auswahl in den Export
+    // aufnehmen, Standard aus -- analog zur bestehenden PWA-Checkbox "Klarname & Kennzeichen
+    // einschließen" in AdminTourFormPage/Teilnehmerverwaltung.
     private func export() {
         do {
-            let rows = model.filtered.map { [model.name($0), $0.vehicle_manufacturer, $0.vehicle_model, String($0.vehicle_power_ps), String($0.passenger_count + 1), Labels.status($0.status)] }
-            try ExportDialog.save(CSV.encode([["Username", "Hersteller", "Modell", "PS", "Personen", "Status"]] + rows), name: "Teilnehmer.csv")
+            let header = ["Username", "Hersteller", "Modell", "PS", "Personen", "Status"] + (includePrivateExportFields ? ["Vorname", "Nachname", "Kennzeichen"] : [])
+            let rows = model.filtered.map { row -> [String] in
+                var fields = [model.name(row), row.vehicle_manufacturer, row.vehicle_model, String(row.vehicle_power_ps), String(row.passenger_count + 1), Labels.status(row.status)]
+                if includePrivateExportFields {
+                    let user = model.users.first { $0.id == row.user_id }
+                    fields += [user?.first_name ?? "", user?.last_name ?? "", row.license_plate ?? ""]
+                }
+                return fields
+            }
+            try ExportDialog.save(CSV.encode([header] + rows), name: "Teilnehmer.csv")
         } catch { model.error = error.localizedDescription }
     }
 }
