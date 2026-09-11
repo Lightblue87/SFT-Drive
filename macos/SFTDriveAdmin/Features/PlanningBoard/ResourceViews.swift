@@ -27,7 +27,15 @@ struct ResourceListView: View {
                 Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly)
             }.disabled(model.busy)
             ErrorBanner(message: model.error)
-            if model.rows.isEmpty && !model.busy { ContentUnavailableView("Noch keine Einträge", systemImage: kind.symbol) }
+            // ContentUnavailableView blendet sein Icon aus, wenn der verfügbare Platz
+            // knapp ist (adaptives Kompakt-Layout) -- in schmal gehaltenen Containern
+            // wie der Hotelvorschläge-Box (frame(minHeight: 180) in AccommodationView)
+            // verschwand das Piktogramm dadurch trotz gesetztem systemImage komplett
+            // (Nutzerfeedback). Eigener, nicht-adaptiver Leerzustand zeigt Icon und
+            // Text immer gemeinsam, unabhängig von der verfügbaren Höhe.
+            if model.rows.isEmpty && !model.busy {
+                Label("Noch keine Einträge", systemImage: kind.symbol).foregroundStyle(.secondary).padding(.vertical, 10)
+            }
             List(model.rows) { row in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(row.values.text(kind.nameKey).isEmpty ? kind.title : row.values.text(kind.nameKey)).font(.headline)
@@ -182,7 +190,7 @@ struct AccommodationView: View {
     private var nights: [String] { TourDates.days(start: tour.start_date, end: tour.end_date, nights: true) }
     var body: some View {
         VStack(alignment: .leading) {
-            ResourceListView(services: services, kind: .hotels, parentID: tour.id, tour: tour).frame(minHeight: 180)
+            ResourceListView(services: services, kind: .hotels, parentID: tour.id, tour: tour).frame(minHeight: 180, alignment: .top)
             Divider()
             // §36.8/§38.10: eine echte Matrix -- Zeile je bestätigtem Teilnehmer,
             // Spalte je Übernachtungsnacht -- statt nur einer Nacht auf einmal, damit
