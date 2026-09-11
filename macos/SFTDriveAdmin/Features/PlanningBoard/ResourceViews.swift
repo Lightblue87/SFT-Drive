@@ -27,14 +27,28 @@ struct ResourceListView: View {
                 Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly)
             }.disabled(model.busy)
             ErrorBanner(message: model.error)
-            if model.rows.isEmpty && !model.busy { ContentUnavailableView("Noch keine Einträge", systemImage: "list.bullet.rectangle") }
+            // ContentUnavailableView blendet sein Icon aus, wenn der verfügbare Platz
+            // knapp ist (adaptives Kompakt-Layout) -- in schmal gehaltenen Containern
+            // wie der Hotelvorschläge-Box (frame(minHeight: 180) in AccommodationView)
+            // verschwand das Piktogramm dadurch trotz gesetztem systemImage komplett
+            // (Nutzerfeedback). Eigener, nicht-adaptiver Leerzustand zeigt Icon und
+            // Text immer gemeinsam, unabhängig von der verfügbaren Höhe.
+            if model.rows.isEmpty && !model.busy {
+                Label("Noch keine Einträge", systemImage: kind.symbol).foregroundStyle(.secondary).padding(.vertical, 10)
+            }
             List(model.rows) { row in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(row.values.text(kind.nameKey).isEmpty ? kind.title : row.values.text(kind.nameKey)).font(.headline)
-                    if kind == .hotels { Text("Nacht: \(row.values.text("night_date"))").font(.caption) }
+                    if kind == .hotels { Text(hotelCaption(row)).font(.caption) }
                     if kind == .menu { Text("\(row.values.text("price")) € · \(row.values.boolean("is_available") ? "Verfügbar" : "Deaktiviert")").font(.caption) }
                     HStack {
                         Button("Bearbeiten") { editor = .init(existing: row) }
+                        if kind == .menu { Button("Duplizieren") {
+                            var copy = row.values; copy.removeValue(forKey: "id"); copy.removeValue(forKey: "created_at"); copy.removeValue(forKey: "updated_at")
+                            copy["name"] = .string(row.values.text("name") + " (Kopie)")
+                            copy["sort_order"] = .number(Double(row.values.integer("sort_order") + 1))
+                            editor = .init(initial: copy)
+                        } }
                         if kind == .stops && row.values.text("type") == "restaurant" { Button("Speisekarte & Bestellungen") { restaurant = row } }
                         Button("Löschen", role: .destructive) { deleting = row }
                     }.buttonStyle(.bordered)
@@ -52,8 +66,17 @@ struct ResourceListView: View {
             }
         }
     }
-    private var defaults: Payload { kind == .hotels ? ["night_date": .string(tour.start_date)] : [:] }
+    private var defaults: Payload { kind == .hotels ? ["night_date": .string(tour.start_date), "night_date_end": .string(tour.start_date)] : [:] }
     private func load() async { await model.load(services.content, kind: kind, parentID: parentID) }
+    // Zeigt einen Zeitraum ("18.–20.06.2027"), wenn der Vorschlag mehrere
+    // Nächte abdeckt, statt für jede Nacht denselben Eintrag zu wiederholen.
+    private func hotelCaption(_ row: DataRow) -> String {
+        let start = row.values.text("night_date")
+        let end = row.values.text("night_date_end")
+        var text = "Nacht: \(start)" + (end.isEmpty || end == start ? "" : " – \(end)")
+        if !row.values.text("price_per_night").isEmpty { text += " · \(row.values.text("price_per_night")) \(row.values.text("price_unit").nilIfEmpty ?? "€ / Nacht")" }
+        return text
+    }
 }
 @MainActor final class ResourceEditorModel: ScreenModel {
     @Published var values: Payload = [:]
@@ -91,7 +114,12 @@ struct ResourceEditorView: View {
                 Button("Speichern") {
                     Task { await model.perform {
                         let payload = try FormValidation.payload(model.values, fields: kind.fields)
-                        if kind == .hotels && !TourDates.days(start: tour.start_date, end: tour.end_date, nights: true).contains(payload.text("night_date")) { throw AppError("Gültige Tournacht wählen.") }
+                        if kind == .hotels {
+                            let nights = TourDates.days(start: tour.start_date, end: tour.end_date, nights: true)
+                            guard nights.contains(payload.text("night_date")) else { throw AppError("Gültige Tournacht wählen.") }
+                            let end = payload.text("night_date_end")
+                            if !end.isEmpty && (end < payload.text("night_date") || !nights.contains(end)) { throw AppError("„Übernachtung bis“ muss eine gültige Tournacht sein und darf nicht vor „Übernachtung von“ liegen.") }
+                        }
                         if kind == .restaurantSettings { try FormValidation.window(payload, open: "ordering_open_at", close: "ordering_deadline_at") }
                         do { try await repository.save(kind, id: model.id, parentID: parentID, expected: request.existing?.values, values: payload) }
                         catch {
@@ -107,6 +135,11 @@ struct ResourceEditorView: View {
             model.values = Dictionary(uniqueKeysWithValues: kind.fields.map { ($0.id, $0.initial) })
             model.values.merge(request.existing?.values ?? request.initial) { _, new in new }
             if kind == .stages && model.values.text("route_url").isEmpty { model.values["route_url"] = request.initial["route_url"] ?? model.values["kurviger_url"] ?? .null }
+            // "Übernachtung bis" ist ein Pflichtfeld, damit immer zwei sichtbare
+            // Datumsfelder erscheinen -- bestehende Einträge ohne night_date_end
+            // (vor 20260911050000 angelegt) werden hier defensiv mit night_date
+            // vorbefüllt, statt den Admin mit einem "festlegen"-Button zu stoppen.
+            if kind == .hotels && model.values.text("night_date_end").isEmpty { model.values["night_date_end"] = model.values["night_date"] }
             model.id = request.existing?.id ?? (kind == .restaurantSettings ? parentID : model.id)
             model.initial = model.values
         }
@@ -144,6 +177,7 @@ extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
     @Published var confirmations: [AccommodationConfirmation] = []
     @Published var registrations: [TourRegistration] = []
     @Published var users: [AdminUser] = []
+    @Published var matrix: [DataRow] = []
     @Published var night = ""
     @Published var selection: Set<String> = []
 }
@@ -153,16 +187,53 @@ struct AccommodationView: View {
     @StateObject private var model = AccommodationModel()
     @State private var confirmReminder = false
     private var missing: [TourRegistration] { model.registrations.filter { row in !model.confirmations.contains { $0.user_id == row.user_id && $0.night_date == model.night } } }
+    private var nights: [String] { TourDates.days(start: tour.start_date, end: tour.end_date, nights: true) }
     var body: some View {
         VStack(alignment: .leading) {
-            ResourceListView(services: services, kind: .hotels, parentID: tour.id, tour: tour).frame(minHeight: 180)
-            Divider(); Text("Übernachtungsbestätigungen").font(.headline)
+            ResourceListView(services: services, kind: .hotels, parentID: tour.id, tour: tour).frame(minHeight: 180, alignment: .top)
+            Divider()
+            // §36.8/§38.10: eine echte Matrix -- Zeile je bestätigtem Teilnehmer,
+            // Spalte je Übernachtungsnacht -- statt nur einer Nacht auf einmal, damit
+            // der Admin den Gesamtstatus (vollständig/teilweise/nicht bestätigt) ohne
+            // Durchklicken jeder Nacht erkennt. Nutzt dieselben bereits gebündelt
+            // geladenen Teilnehmermatrix-Daten wie die Teilnehmer- und die
+            // tourübergreifende Planungsansicht (kein zusätzlicher Request je Nacht).
+            Text("Hotelmatrix").font(.headline)
+            if model.matrix.isEmpty {
+                Text("Keine bestätigten Teilnehmer.").foregroundStyle(.secondary).padding(.vertical, 6)
+            } else {
+                ScrollView(.horizontal) {
+                    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                        GridRow {
+                            Text("Teilnehmer").bold()
+                            ForEach(nights, id: \.self) { night in Text(shortNight(night)).bold().font(.caption) }
+                        }
+                        Divider()
+                        ForEach(model.matrix.filter { $0.values.text("status") == "confirmed" }) { row in
+                            GridRow {
+                                Text("\(row.values.text("username")) · \(row.values.text("vehicle"))")
+                                ForEach(nights, id: \.self) { night in
+                                    let cell = accommodationCell(row, night: night)
+                                    Text(cell.label).font(.caption).foregroundStyle(cell.confirmed ? .green : .orange)
+                                }
+                            }
+                        }
+                    }
+                }.frame(maxHeight: 220)
+            }
+            Divider(); Text("Gezielte Erinnerung je Nacht").font(.headline)
             ErrorBanner(message: model.error)
             if let notice = model.notice { Text(notice).font(.caption) }
-            Picker("Nacht", selection: $model.night) { ForEach(TourDates.days(start: tour.start_date, end: tour.end_date, nights: true), id: \.self) { Text($0).tag($0) } }
+            Picker("Nacht", selection: $model.night) { ForEach(nights, id: \.self) { Text($0).tag($0) } }
             Text("\(model.registrations.count - missing.count) / \(model.registrations.count) bestätigt")
-            List(missing, selection: $model.selection) { row in
-                Text("\(model.users.first(where: { $0.id == row.user_id })?.username ?? row.user_id) · Übernachtung noch nicht bestätigt").tag(row.user_id)
+            List(model.registrations, selection: $model.selection) { row in
+                let confirmation = model.confirmations.first { $0.user_id == row.user_id && $0.night_date == model.night }
+                HStack {
+                    Text(model.users.first(where: { $0.id == row.user_id })?.username ?? row.user_id)
+                    Spacer()
+                    if let confirmation { Text(confirmation.accommodation_choice == "other_accommodation" ? "Andere Unterkunft" : confirmation.hotel_suggestion_id == nil ? "Bestätigt" : "Hotelvorschlag gewählt").foregroundStyle(.green) }
+                    else { Text("Übernachtung noch nicht bestätigt").foregroundStyle(.orange) }
+                }.tag(row.user_id)
             }.frame(minHeight: 100)
             Button("Auswahl erinnern (\(model.selection.count))") { confirmReminder = true }.disabled(model.selection.isEmpty || model.busy)
         }.task {
@@ -171,6 +242,7 @@ struct AccommodationView: View {
                 model.confirmations = try await services.planning.accommodation(tour.id)
                 model.registrations = try await services.people.registrations(tour.id).filter { $0.status == "confirmed" }
                 model.users = try await services.people.users()
+                model.matrix = try await services.planning.participantMatrix([tour.id])
             }
         }.onChange(of: model.night) { _, _ in model.selection = [] }
         .confirmationDialog("Ausgewählte Teilnehmer an die Übernachtungsbestätigung für \(model.night) erinnern?", isPresented: $confirmReminder, titleVisibility: .visible) {
@@ -180,6 +252,15 @@ struct AccommodationView: View {
                 model.selection = []
             } } }
         }
+    }
+    private func shortNight(_ night: String) -> String { night.count >= 10 ? String(night.suffix(5)) : night }
+    private func accommodationCell(_ row: DataRow, night targetNight: String) -> (label: String, confirmed: Bool) {
+        guard case .array(let allNights) = row.values["accommodation"],
+              let entry = allNights.first(where: { value in guard case .object(let n) = value else { return false }; return n.text("night_date") == targetNight }),
+              case .object(let fields) = entry else { return ("–", false) }
+        guard fields.boolean("confirmed") else { return ("Offen", false) }
+        if let hotelName = fields.text("hotel_name").nilIfEmpty { return (hotelName, true) }
+        return (fields.text("choice") == "other_accommodation" ? "Andere Unterkunft" : "Bestätigt", true)
     }
 }
 

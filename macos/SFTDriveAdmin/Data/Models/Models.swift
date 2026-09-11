@@ -6,9 +6,20 @@ struct HotelSuggestion: Codable, Sendable, Identifiable {
     var id: String
     var tour_id: String
     var night_date: String
+    var night_date_end: String?
     var name: String
+    var price_per_night: Decimal?
+    var price_unit: String?
     var url: String?
+    var hotel_url: String?
+    var booking_url: String?
     var address: String?
+    var room_type: String?
+    var breakfast_details: String?
+    var parking_details: String?
+    var cancellation_terms: String?
+    var allotment_details: String?
+    var contact: String?
     var note: String?
     var booking_deadline: String?
     var sort_order: Int
@@ -20,6 +31,8 @@ struct AccommodationConfirmation: Codable, Sendable, Identifiable {
     var user_id: String
     var night_date: String
     var confirmed_at: String
+    var accommodation_choice: String?
+    var hotel_suggestion_id: String?
 }
 
 struct RestaurantStopSettings: Codable, Sendable {
@@ -193,4 +206,11 @@ struct RestaurantSummary: Decodable, Identifiable, Sendable {
     let title: String
     let orders: Int
     let dishes: Int
+}
+struct PlanningDeadline: Decodable, Identifiable, Sendable {
+    var id: String { "\(tour_id)-\(kind)-\(due_at)" }
+    let tour_id: String
+    let kind: String
+    let title: String
+    let due_at: String
 }

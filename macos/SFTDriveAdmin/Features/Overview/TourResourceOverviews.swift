@@ -1,5 +1,46 @@
 import SwiftUI
 
+struct GlobalPlanningView: View {
+    let services: AppServices
+    var body: some View {
+        TabView {
+            DashboardView(services: services).tabItem { Label("Teilnahme & To-dos", systemImage: "checklist") }
+            GlobalParticipantMatrixView(services: services).tabItem { Label("Teilnehmermatrix", systemImage: "tablecells") }
+            HotelsOverviewView(services: services).tabItem { Label("Übernachtungen", systemImage: "bed.double") }
+            RestaurantsOverviewView(services: services).tabItem { Label("Restaurants", systemImage: "fork.knife") }
+        }.navigationTitle("Planung")
+    }
+}
+
+@MainActor final class GlobalMatrixModel: ScreenModel {
+    @Published var tours: [Tour] = []
+    @Published var rows: [DataRow] = []
+    @Published var query = ""
+    func load(_ services: AppServices) async { await perform { tours = try await services.tours.upcoming(); rows = try await services.planning.participantMatrix(tours.map(\.id)) } }
+}
+struct GlobalParticipantMatrixView: View {
+    let services: AppServices
+    @StateObject private var model = GlobalMatrixModel()
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack { TextField("Teilnehmer, Fahrzeug oder Tour", text: $model.query).textFieldStyle(.roundedBorder); Button("Aktualisieren") { Task { await model.load(services) } } }
+            ErrorBanner(message: model.error)
+            Table(model.rows.filter { row in model.query.isEmpty || "\(row.values.text("username")) \(row.values.text("vehicle")) \(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? "")".localizedCaseInsensitiveContains(model.query) }) {
+                TableColumn("Tour") { row in Text(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? row.values.text("tour_id")) }
+                TableColumn("Teilnehmer") { Text($0.values.text("username")) }
+                TableColumn("Fahrzeug") { Text($0.values.text("vehicle")) }
+                TableColumn("Status") { Text(Labels.status($0.values.text("status"))) }
+                TableColumn("Personen") { Text("\($0.values.integer("persons"))") }.width(65)
+                TableColumn("Hotel") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "accommodation", state: "confirmed") == 0 ? "Vollständig" : "\(openCount(row, key: "accommodation", state: "confirmed")) offen") : "–") }
+                TableColumn("Essen") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "restaurants", state: "ordered") == 0 ? "Vollständig" : "\(openCount(row, key: "restaurants", state: "ordered")) offen") : "–") }
+                TableColumn("Check-in") { Text($0.values.text("status") == "confirmed" ? ($0.values.text("checked_in_at").isEmpty ? "Offen" : "Ja") : "–") }
+            }
+            RefreshFooter(time: model.refreshedAt, busy: model.busy)
+        }.padding().task { await model.load(services) }
+    }
+    private func openCount(_ row: DataRow, key: String, state: String) -> Int { guard case .array(let values) = row.values[key] else { return 0 }; return values.filter { value in guard case .object(let item) = value else { return false }; return !item.boolean(state) }.count }
+}
+
 @MainActor final class TourResourceOverviewModel: ScreenModel {
     @Published var tours: [Tour] = []
     @Published var summaries: [String: PlanningSummary] = [:]
@@ -83,6 +124,8 @@ struct RestaurantsOverviewView: View {
     let services: AppServices
     @StateObject private var model: TourResourceOverviewModel
     @State private var openStop: DataRow?
+    @State private var creating = false
+    @State private var deleting: DataRow?
     init(services: AppServices) {
         self.services = services
         _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
@@ -94,9 +137,13 @@ struct RestaurantsOverviewView: View {
             ErrorBanner(message: model.error)
             HSplitView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack { Text("Restaurant").font(.title3.bold()); Spacer(); Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy) }.padding()
+                    HStack {
+                        Text("Restaurant").font(.title3.bold()); Spacer()
+                        Button("Neuer Restaurant-Stopp", systemImage: "plus") { creating = true }.disabled(model.busy || model.tours.isEmpty)
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy)
+                    }.padding()
                     if withRestaurants.isEmpty && !model.busy {
-                        ContentUnavailableView("Keine Restaurant-Stopps", systemImage: "fork.knife", description: Text("Restaurant-Stopps werden je Tour unter Tourenverwaltung → Stopps angelegt."))
+                        ContentUnavailableView("Keine Restaurant-Stopps", systemImage: "fork.knife", description: Text("Über „Neuer Restaurant-Stopp“ oben oder je Tour unter Tourenverwaltung → Stopps anlegen."))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         List(withRestaurants, selection: $model.selection) { tour in
@@ -123,6 +170,7 @@ struct RestaurantsOverviewView: View {
                                 }
                                 Spacer()
                                 Button("Öffnen") { openStop = stop }
+                                Button("Löschen", role: .destructive) { deleting = stop }
                             }
                         }
                         Text("Neue Restaurant-Stopps: Tourenverwaltung → Tour → Stopps → Hinzufügen (Typ „Restaurant“), danach hier oder dort „Speisekarte & Bestellungen“ öffnen.")
@@ -134,5 +182,60 @@ struct RestaurantsOverviewView: View {
         .sheet(item: $openStop) { stop in
             if let tour = selected { RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await model.load() } } }
         }
+        .confirmationDialog("Restaurant-Stopp endgültig löschen? Bereits eingereichte Bestellungen verhindern das Löschen -- diese müssten zuerst storniert werden.", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button("Löschen", role: .destructive) {
+                guard let stop = deleting, let tour = selected else { return }; deleting = nil
+                Task { await model.perform { try await services.content.remove(.stops, id: stop.id, parentID: tour.id, expected: stop.values) }; await model.load() }
+            }
+        }
+        .sheet(isPresented: $creating) {
+            NewRestaurantStopSheet(services: services, tours: model.tours) { newTourID in
+                creating = false
+                if let newTourID { model.selection = newTourID; Task { await model.load() } }
+            }
+        }
+    }
+}
+
+/// Erlaubt das Anlegen eines neuen Restaurant-Stopps direkt aus der
+/// tourübergreifenden Restaurant-Übersicht heraus (statt nur über
+/// Tourenverwaltung → Tour → Stopps), inklusive Auswahl der Zieltour --
+/// erzeugt lediglich den Stopp (Typ "restaurant"); Bestellfenster und
+/// Speisekarte werden wie bisher danach über "Öffnen" gepflegt.
+@MainActor final class NewRestaurantStopModel: ScreenModel {
+    @Published var tourID = ""
+    @Published var title = ""
+}
+struct NewRestaurantStopSheet: View {
+    let services: AppServices
+    let tours: [Tour]
+    let close: (String?) -> Void
+    @StateObject private var model = NewRestaurantStopModel()
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Neuer Restaurant-Stopp").font(.headline)
+            ErrorBanner(message: model.error)
+            Form {
+                Picker("Tour", selection: $model.tourID) {
+                    Text("Auswählen").tag("")
+                    ForEach(tours) { Text("\($0.title) · \($0.start_date)").tag($0.id) }
+                }
+                TextField("Bezeichnung", text: $model.title)
+            }.formStyle(.grouped)
+            HStack {
+                Button("Abbrechen") { close(nil) }
+                Spacer()
+                Button("Anlegen") {
+                    Task { await model.perform {
+                        let name = model.title.trimmingCharacters(in: .whitespaces)
+                        guard !model.tourID.isEmpty, !name.isEmpty else { throw AppError("Bitte Tour und Bezeichnung wählen.") }
+                        let id = UUID().uuidString.lowercased()
+                        let payload: Payload = ["title": .string(name), "type": .string("restaurant"), "sort_order": .number(0)]
+                        try await services.content.save(.stops, id: id, parentID: model.tourID, expected: nil, values: payload)
+                        close(model.tourID)
+                    } }
+                }.buttonStyle(.borderedProminent).disabled(model.busy)
+            }
+        }.padding().frame(width: 420, height: 240)
     }
 }

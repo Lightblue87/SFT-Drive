@@ -67,9 +67,34 @@ try {
  await bad(()=>rpc('admin_save_tour_resource',['users',hotelID,tourID,null,{}]),/INVALID_RESOURCE/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,hotelBefore,{user_id:admin}]),/INVALID_PAYLOAD/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000021',tourID,null,{name:'Bad',night_date:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
+ // night_date_end/price_per_night: covers multiple consecutive nights + organizer's advertised nightly rate (§36.2/§36.5).
+ const hotelRangeID='00000000-0000-0000-0000-000000000022';
+ check((await rpc('admin_save_tour_resource',['hotels',hotelRangeID,tourID,null,{name:'Mehrnächte-Hotel',night_date:'2027-06-18',night_date_end:'2027-06-19',price_per_night:89.5,sort_order:1}])).code,'OK');
+ check(Number((await db.query('select night_date_end,price_per_night from tour_hotel_suggestions where id=$1',[hotelRangeID])).rows[0].price_per_night),89.5);
+ // A price without an explicit unit would otherwise be shown with an invented
+ // "€ / Nacht" fallback in the participant view that might actually mean per
+ // room or per person (Codex review on #19) -- admin_save_tour_resource must
+ // default the unit itself, even when the client omits the key entirely
+ // (as this call does) rather than sending it as an explicit empty string.
+ check((await db.query('select price_unit from tour_hotel_suggestions where id=$1',[hotelRangeID])).rows[0].price_unit,'€ / Nacht');
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000023',tourID,null,{name:'Bad end',night_date:'2027-06-18',night_date_end:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000024',tourID,null,{name:'Bad order',night_date:'2027-06-19',night_date_end:'2027-06-18'}]),/INVALID_NIGHT_DATE/);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000025',tourID,null,{name:'Bad price',night_date:'2027-06-18',price_per_night:-5}]),/INVALID_PRICE/);
+ // admin_save_tour() must also reject shortening the tour past a hotel range's
+ // night_date_end, not just its night_date (Codex review on #19): hotelRangeID
+ // covers 18./19.06., so shortening end_date to the 19th still leaves the 18th
+ // a valid night on its own but abandons the suggestion's range end.
+ const beforeShorten=await snapshot();
+ await bad(()=>rpc('admin_save_tour',[tourID,beforeShorten,{end_date:'2027-06-19'},{},{}]),/DATE_RANGE_CONFLICT/);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000026',tourID,null,{name:'Bad unit',night_date:'2027-06-18',price_unit:'€'}]),/tour_hotel_price_unit_chk/);
  await identity(member);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-19',true])).code,'OK');
+ check((await rpc('set_accommodation_choice',[tourID,'2027-06-18',true,'suggested_hotel',hotelRangeID])).code,'OK');
+ await bad(()=>rpc('set_accommodation_choice',[tourID,'2027-06-19',true,'suggested_hotel','00000000-0000-0000-0000-000000000099']),/INVALID_HOTEL_SUGGESTION/);
  await identity(second);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');
+ check((await rpc('set_accommodation_choice',[tourID,'2027-06-18',true,'other_accommodation',null])).code,'OK');
  await identity(admin);
+ const matrix=await rpc('admin_get_participant_matrix_bulk',[[tourID]]);
+ check(matrix.length,2);check(matrix.find(r=>r.user_id===member).accommodation[0].hotel_name,'Mehrnächte-Hotel');check(matrix.find(r=>r.user_id===second).accommodation[0].choice,'other_accommodation');
  const stopID='00000000-0000-0000-0000-000000000030';
  const importID='00000000-0000-0000-0000-000000000031';
  await bad(()=>rpc('admin_create_restaurant',[importID,tourID,{title:'Rollback',sort_order:0},{ordering_enabled:false},[{id:'00000000-0000-0000-0000-000000000041',name:'Invalid',price:-1}]]),/INVALID_PRICE/);
@@ -109,7 +134,40 @@ try {
  check(bulk.length,2);
  const bulkOk=bulk.find(r=>r.tour_id===tourID);check(bulkOk.error,null);check(bulkOk.summary.confirmed_vehicles,1);
  const bulkMissing=bulk.find(r=>r.tour_id==='00000000-0000-0000-0000-000000000099');check(bulkMissing.summary,null);check(/TOUR_NOT_FOUND/.test(bulkMissing.error),true);
+ // Bundled multi-tour registrations RPC (Dashboard "Teilnehmer"/"Bestätigte
+ // Fahrzeuge" drilldowns): one request instead of a loop per tour (§4 N+1-Regel).
+ const regsBulk=(await db.query('select * from public.admin_get_registrations_bulk($1::uuid[])',[[tourID]])).rows;
+ check(regsBulk.length,regs.length);check(regsBulk.every(r=>r.tour_id===tourID),true);
+ const deadlines=(await db.query('select * from public.admin_get_planning_deadlines_bulk($1::uuid[])',[[tourID]])).rows;
+ check(deadlines.some(d=>d.kind==='hotel_booking'),false);check(deadlines.some(d=>d.kind==='meal_order'),false);
+ // Guided duplicate flow: reusable structures are copied, while new-tour dates,
+ // times, deadlines and prices are deliberately reset for conscious review.
+ const copyTourID='00000000-0000-0000-0000-000000000014';
+ check((await rpc('admin_save_tour',[copyTourID,null,{...values,title:'Planungskopie',start_date:'2027-09-01',end_date:'2027-09-03'},{},{}])).code,'OK');
+ const copied=await rpc('admin_copy_tour_planning',[tourID,copyTourID,true,true,true]);
+ check(copied.code,'OK');check(copied.hotels,2);check(copied.restaurants,2);
+ const copiedHotel=(await db.query('select * from tour_hotel_suggestions where tour_id=$1 order by sort_order limit 1',[copyTourID])).rows[0];
+ check(copiedHotel.night_date.toISOString().slice(0,10),'2027-09-01');check(copiedHotel.booking_deadline,null);check(copiedHotel.price_per_night,null);
+ const copiedRestaurant=(await db.query("select * from tour_stops where tour_id=$1 and type='restaurant' and title='Restaurant'",[copyTourID])).rows[0];
+ check(copiedRestaurant.starts_at,null);check(copiedRestaurant.reservation_status,'planned');
+ const copiedMenu=(await db.query('select * from menu_items where restaurant_stop_id=$1',[copiedRestaurant.id])).rows[0];
+ check(copiedMenu.name,'Pasta');check(copiedMenu.price,null);
+ await bad(()=>rpc('admin_copy_tour_planning',[tourID,copyTourID,true,true,true]),/TARGET_PLANNING_NOT_EMPTY/);
+ // Codex review on #19: deleting a hotel suggestion a participant had selected
+ // previously left an orphaned confirmation (accommodation_choice='suggested_hotel'
+ // with hotel_suggestion_id nulled by the FK's old ON DELETE SET NULL, which
+ // violates the pair check during that internal UPDATE and made the delete
+ // itself fail). Must cascade-delete the confirmation instead, cleanly
+ // requiring the participant to reconfirm rather than blocking the deletion.
+ const hotelRangeRow=(await db.query('select to_jsonb(h) v from tour_hotel_suggestions h where id=$1',[hotelRangeID])).rows[0].v;
+ check((await rpc('admin_delete_tour_resource',['hotels',hotelRangeID,tourID,hotelRangeRow])).code,'OK');
+ check((await db.query('select * from tour_accommodation_confirmations where user_id=$1 and night_date=$2',[member,'2027-06-18'])).rows.length,0);
+ await identity(member);await bad(()=>db.query('select * from public.admin_get_registrations_bulk($1::uuid[])',[[tourID]]),/FORBIDDEN/);
+ await identity(admin);
  await identity(member);await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Attack'}]),/FORBIDDEN/);
+ await bad(()=>rpc('admin_get_participant_matrix_bulk',[[tourID]]),/FORBIDDEN/);
+ await bad(()=>db.query('select * from public.admin_get_planning_deadlines_bulk($1::uuid[])',[[tourID]]),/FORBIDDEN/);
+ await bad(()=>rpc('admin_copy_tour_planning',[tourID,copyTourID,true,true,true]),/FORBIDDEN/);
  await bad(()=>db.query('select * from public.admin_get_tour_planning_summaries($1::uuid[])',[[tourID]]),/FORBIDDEN/);
  await bad(()=>rpc('admin_replace_meal_order',[stopID,regs[0].id,orderBefore,[]]),/FORBIDDEN/);
  check((await db.query('select * from profiles where id=$1',[second])).rows.length,0);

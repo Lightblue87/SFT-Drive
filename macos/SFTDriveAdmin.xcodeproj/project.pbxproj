@@ -1,82 +1,381 @@
 // !$*UTF8*$!
-{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
-E8EBB972E364C7D0B347FEF6 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/AI/AIProvider.swift"; sourceTree = SOURCE_ROOT; };
-B3C4B5BC67579E2BEC8956CB = { isa = PBXBuildFile; fileRef = E8EBB972E364C7D0B347FEF6; };
-3101BB76B735DC9314A39D1E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/AI/ExtractionReviewView.swift"; sourceTree = SOURCE_ROOT; };
-3BE25E1E1B0661D6130C2C5B = { isa = PBXBuildFile; fileRef = 3101BB76B735DC9314A39D1E; };
-B1EC589E84D76E60452EDEE4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/App/SFTDriveAdminApp.swift"; sourceTree = SOURCE_ROOT; };
-2BBC44422A2A10F08A66C1BE = { isa = PBXBuildFile; fileRef = B1EC589E84D76E60452EDEE4; };
-10BE42C99E7AF7CA9303DF22 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Auth/AuthManager.swift"; sourceTree = SOURCE_ROOT; };
-6FA3927C2C9A1940658621EF = { isa = PBXBuildFile; fileRef = 10BE42C99E7AF7CA9303DF22; };
-EC47CA5CF86F5BD46B9C0DC6 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Auth/KeychainStore.swift"; sourceTree = SOURCE_ROOT; };
-EC4D6344DEE0677F8184B5FA = { isa = PBXBuildFile; fileRef = EC47CA5CF86F5BD46B9C0DC6; };
-B54C0A191987809823BB4D55 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Data/AppServices.swift"; sourceTree = SOURCE_ROOT; };
-3FA86532F51B4EAC5E329ABF = { isa = PBXBuildFile; fileRef = B54C0A191987809823BB4D55; };
-0870EABADF652F3DFC81EF05 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Data/Models/Models.swift"; sourceTree = SOURCE_ROOT; };
-97ACA0BD4D49932C51A9921D = { isa = PBXBuildFile; fileRef = 0870EABADF652F3DFC81EF05; };
-B926ED4F83526CB77B8B8BF7 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Data/Repositories/Repositories.swift"; sourceTree = SOURCE_ROOT; };
-897895561656CC63137A4172 = { isa = PBXBuildFile; fileRef = B926ED4F83526CB77B8B8BF7; };
-9AAF43189F61CCB6811BBA5B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift"; sourceTree = SOURCE_ROOT; };
-E0965722A8D53899DBD415DA = { isa = PBXBuildFile; fileRef = 9AAF43189F61CCB6811BBA5B; };
-065C0ACDB3B2D4B897FE8663 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift"; sourceTree = SOURCE_ROOT; };
-0F2E482DC568BCA35735998C = { isa = PBXBuildFile; fileRef = 065C0ACDB3B2D4B897FE8663; };
-DF1D21E0F7D53157222CAB62 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/Registrations/RegistrationsView.swift"; sourceTree = SOURCE_ROOT; };
-AE6E9ED749D01CE9EACE91FE = { isa = PBXBuildFile; fileRef = DF1D21E0F7D53157222CAB62; };
-E8CCDB8D55BFB49298CA1427 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/Settings/SettingsViews.swift"; sourceTree = SOURCE_ROOT; };
-9D3B1CAC9BD6ACE94B7E681E = { isa = PBXBuildFile; fileRef = E8CCDB8D55BFB49298CA1427; };
-795763FFE4F5D876F4FEF805 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/Tours/ToursView.swift"; sourceTree = SOURCE_ROOT; };
-7DC605DBDA52ACFA2F16FBEA = { isa = PBXBuildFile; fileRef = 795763FFE4F5D876F4FEF805; };
-CACA6DBF5D755B28E79E2FC4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/Users/UsersView.swift"; sourceTree = SOURCE_ROOT; };
-F7AD455B0A7DB4915B110C82 = { isa = PBXBuildFile; fileRef = CACA6DBF5D755B28E79E2FC4; };
-9935BD5391C9EDA6687352C7 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Shared/DateAndExport.swift"; sourceTree = SOURCE_ROOT; };
-2C96258162C1EEF894C4416F = { isa = PBXBuildFile; fileRef = 9935BD5391C9EDA6687352C7; };
-667B0E07C92765300E668221 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Shared/DraftProtection.swift"; sourceTree = SOURCE_ROOT; };
-52660D1B9D544EDC73785676 = { isa = PBXBuildFile; fileRef = 667B0E07C92765300E668221; };
-DB22FB42C299EC4904B417DB = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Shared/FormSchema.swift"; sourceTree = SOURCE_ROOT; };
-419670DFA9294EF0FB1ACEAE = { isa = PBXBuildFile; fileRef = DB22FB42C299EC4904B417DB; };
-F53259171738D9FFDE03C275 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Shared/JSONValue.swift"; sourceTree = SOURCE_ROOT; };
-A0807760B066C517F8EB5CB2 = { isa = PBXBuildFile; fileRef = F53259171738D9FFDE03C275; };
-6FB75F20F5C21D55E2BF8208 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Shared/Views.swift"; sourceTree = SOURCE_ROOT; };
-F2BD21BA4CE67C5CCC10D7F6 = { isa = PBXBuildFile; fileRef = 6FB75F20F5C21D55E2BF8208; };
-D60D7F1399067E1625D64C72 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "SFTDriveAdmin/Assets.xcassets"; sourceTree = SOURCE_ROOT; };
-7D1944B811FF37517AEEBDCC = { isa = PBXBuildFile; fileRef = D60D7F1399067E1625D64C72; };
-87BC1D39DD7C2742EBA50869 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/Dashboard/DashboardView.swift"; sourceTree = SOURCE_ROOT; };
-F16A59593F5A6BFF92618DC3 = { isa = PBXBuildFile; fileRef = 87BC1D39DD7C2742EBA50869; };
-3D502D3CA9A804EBAAC17340 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift"; sourceTree = SOURCE_ROOT; };
-CDD9DDA9AC92B232FEC07BBB = { isa = PBXBuildFile; fileRef = 3D502D3CA9A804EBAAC17340; };
-BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B3C4B5BC67579E2BEC8956CB,3BE25E1E1B0661D6130C2C5B,2BBC44422A2A10F08A66C1BE,6FA3927C2C9A1940658621EF,EC4D6344DEE0677F8184B5FA,3FA86532F51B4EAC5E329ABF,97ACA0BD4D49932C51A9921D,897895561656CC63137A4172,E0965722A8D53899DBD415DA,0F2E482DC568BCA35735998C,AE6E9ED749D01CE9EACE91FE,9D3B1CAC9BD6ACE94B7E681E,7DC605DBDA52ACFA2F16FBEA,F7AD455B0A7DB4915B110C82,2C96258162C1EEF894C4416F,52660D1B9D544EDC73785676,419670DFA9294EF0FB1ACEAE,A0807760B066C517F8EB5CB2,F2BD21BA4CE67C5CCC10D7F6,F16A59593F5A6BFF92618DC3,CDD9DDA9AC92B232FEC07BBB,); runOnlyForDeploymentPostprocessing = 0; };
-AF1F1D46639E68A0C4431C45 = { isa = PBXBuildFile; productRef = 81AF11420E261B7C4C2F5FEE; };
-7561BFB015D8F536760CB671 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (AF1F1D46639E68A0C4431C45,); runOnlyForDeploymentPostprocessing = 0; };
-0189424A5A60FED329FA868E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (7D1944B811FF37517AEEBDCC,); runOnlyForDeploymentPostprocessing = 0; };
-38A007151ABE87CC01A5B6E9 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SFTDriveAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
-FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9,); name = Products; sourceTree = "<group>"; };
-64292B1C2B2E13EAD8788FC8 = { isa = PBXGroup; children = (E8EBB972E364C7D0B347FEF6,3101BB76B735DC9314A39D1E,B1EC589E84D76E60452EDEE4,10BE42C99E7AF7CA9303DF22,EC47CA5CF86F5BD46B9C0DC6,B54C0A191987809823BB4D55,0870EABADF652F3DFC81EF05,B926ED4F83526CB77B8B8BF7,9AAF43189F61CCB6811BBA5B,065C0ACDB3B2D4B897FE8663,DF1D21E0F7D53157222CAB62,E8CCDB8D55BFB49298CA1427,795763FFE4F5D876F4FEF805,CACA6DBF5D755B28E79E2FC4,9935BD5391C9EDA6687352C7,667B0E07C92765300E668221,DB22FB42C299EC4904B417DB,F53259171738D9FFDE03C275,6FB75F20F5C21D55E2BF8208,D60D7F1399067E1625D64C72,87BC1D39DD7C2742EBA50869,3D502D3CA9A804EBAAC17340,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
-5B2FB32768E94DF2B310CA2C = { isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/supabase/supabase-swift.git"; requirement = { kind = exactVersion; version = 2.55.2; }; };
-81AF11420E261B7C4C2F5FEE = { isa = XCSwiftPackageProductDependency; package = 5B2FB32768E94DF2B310CA2C; productName = Supabase; };
-89E1FD6268CC0F221A2BE178 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; CLANG_ENABLE_MODULES = YES; }; };
-7082CC0B6FC1282FCEABD07A = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
- PRODUCT_NAME = SFTDriveAdmin; PRODUCT_BUNDLE_IDENTIFIER = "de.sportfahrertreff.sft-drive-admin";
- INFOPLIST_FILE = Config/Info.plist; GENERATE_INFOPLIST_FILE = NO;
- ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
- CODE_SIGN_STYLE = Manual; CODE_SIGN_IDENTITY = "-"; ENABLE_APP_SANDBOX = NO;
- SWIFT_OPTIMIZATION_LEVEL = "-Onone";
- SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
- LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
- CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1.0;
- }; };
-E6DE6C99132752C914FEF632 = { isa = XCBuildConfiguration; name = Release; buildSettings = { MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; CLANG_ENABLE_MODULES = YES; }; };
-639A7CA24D39909E713B47F7 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
- PRODUCT_NAME = SFTDriveAdmin; PRODUCT_BUNDLE_IDENTIFIER = "de.sportfahrertreff.sft-drive-admin";
- INFOPLIST_FILE = Config/Info.plist; GENERATE_INFOPLIST_FILE = NO;
- ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
- CODE_SIGN_STYLE = Manual; CODE_SIGN_IDENTITY = "-"; ENABLE_APP_SANDBOX = NO;
- SWIFT_OPTIMIZATION_LEVEL = "-O";
- SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
- LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
- CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1.0;
- }; };
-862894B703A6DEDF96A9DD6C = { isa = XCConfigurationList; buildConfigurations = (89E1FD6268CC0F221A2BE178,E6DE6C99132752C914FEF632,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-C57128001CE614BF8549D6BB = { isa = XCConfigurationList; buildConfigurations = (7082CC0B6FC1282FCEABD07A,639A7CA24D39909E713B47F7,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = C57128001CE614BF8549D6BB; buildPhases = (BCE16DD0260827ECF338C787,7561BFB015D8F536760CB671,0189424A5A60FED329FA868E,); buildRules = (); dependencies = (); name = SFTDriveAdmin; packageProductDependencies = (81AF11420E261B7C4C2F5FEE,); productName = SFTDriveAdmin; productReference = 38A007151ABE87CC01A5B6E9; productType = "com.apple.product-type.application"; };
-98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1640; }; buildConfigurationList = 862894B703A6DEDF96A9DD6C; compatibilityVersion = "Xcode 14.0"; developmentRegion = de; hasScannedForEncodings = 0; knownRegions = (de,en,Base,); mainGroup = 64292B1C2B2E13EAD8788FC8; productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E,); packageReferences = (5B2FB32768E94DF2B310CA2C,); };
-}; rootObject = 98F54143AB4E86B28C3AFEE0; }
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 63;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0F2E482DC568BCA35735998C /* SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065C0ACDB3B2D4B897FE8663 /* SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift */; };
+		2BBC44422A2A10F08A66C1BE /* SFTDriveAdmin/App/SFTDriveAdminApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EC589E84D76E60452EDEE4 /* SFTDriveAdmin/App/SFTDriveAdminApp.swift */; };
+		2C96258162C1EEF894C4416F /* SFTDriveAdmin/Shared/DateAndExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9935BD5391C9EDA6687352C7 /* SFTDriveAdmin/Shared/DateAndExport.swift */; };
+		3BE25E1E1B0661D6130C2C5B /* SFTDriveAdmin/AI/ExtractionReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3101BB76B735DC9314A39D1E /* SFTDriveAdmin/AI/ExtractionReviewView.swift */; };
+		3FA86532F51B4EAC5E329ABF /* SFTDriveAdmin/Data/AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54C0A191987809823BB4D55 /* SFTDriveAdmin/Data/AppServices.swift */; };
+		419670DFA9294EF0FB1ACEAE /* SFTDriveAdmin/Shared/FormSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB22FB42C299EC4904B417DB /* SFTDriveAdmin/Shared/FormSchema.swift */; };
+		52660D1B9D544EDC73785676 /* SFTDriveAdmin/Shared/DraftProtection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667B0E07C92765300E668221 /* SFTDriveAdmin/Shared/DraftProtection.swift */; };
+		6FA3927C2C9A1940658621EF /* SFTDriveAdmin/Auth/AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BE42C99E7AF7CA9303DF22 /* SFTDriveAdmin/Auth/AuthManager.swift */; };
+		7D1944B811FF37517AEEBDCC /* SFTDriveAdmin/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */; };
+		7DC605DBDA52ACFA2F16FBEA /* SFTDriveAdmin/Features/Tours/ToursView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795763FFE4F5D876F4FEF805 /* SFTDriveAdmin/Features/Tours/ToursView.swift */; };
+		897895561656CC63137A4172 /* SFTDriveAdmin/Data/Repositories/Repositories.swift in Sources */ = {isa = PBXBuildFile; fileRef = B926ED4F83526CB77B8B8BF7 /* SFTDriveAdmin/Data/Repositories/Repositories.swift */; };
+		97ACA0BD4D49932C51A9921D /* SFTDriveAdmin/Data/Models/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0870EABADF652F3DFC81EF05 /* SFTDriveAdmin/Data/Models/Models.swift */; };
+		9D3B1CAC9BD6ACE94B7E681E /* SFTDriveAdmin/Features/Settings/SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CCDB8D55BFB49298CA1427 /* SFTDriveAdmin/Features/Settings/SettingsViews.swift */; };
+		A0807760B066C517F8EB5CB2 /* SFTDriveAdmin/Shared/JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F53259171738D9FFDE03C275 /* SFTDriveAdmin/Shared/JSONValue.swift */; };
+		AE6E9ED749D01CE9EACE91FE /* SFTDriveAdmin/Features/Registrations/RegistrationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF1D21E0F7D53157222CAB62 /* SFTDriveAdmin/Features/Registrations/RegistrationsView.swift */; };
+		AF1F1D46639E68A0C4431C45 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 81AF11420E261B7C4C2F5FEE /* Supabase */; };
+		B3C4B5BC67579E2BEC8956CB /* SFTDriveAdmin/AI/AIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8EBB972E364C7D0B347FEF6 /* SFTDriveAdmin/AI/AIProvider.swift */; };
+		CDD9DDA9AC92B232FEC07BBB /* SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D502D3CA9A804EBAAC17340 /* SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift */; };
+		E0965722A8D53899DBD415DA /* SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AAF43189F61CCB6811BBA5B /* SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift */; };
+		EC4D6344DEE0677F8184B5FA /* SFTDriveAdmin/Auth/KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC47CA5CF86F5BD46B9C0DC6 /* SFTDriveAdmin/Auth/KeychainStore.swift */; };
+		F16A59593F5A6BFF92618DC3 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BC1D39DD7C2742EBA50869 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift */; };
+		F2BD21BA4CE67C5CCC10D7F6 /* SFTDriveAdmin/Shared/Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FB75F20F5C21D55E2BF8208 /* SFTDriveAdmin/Shared/Views.swift */; };
+		F7AD455B0A7DB4915B110C82 /* SFTDriveAdmin/Features/Users/UsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACA6DBF5D755B28E79E2FC4 /* SFTDriveAdmin/Features/Users/UsersView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		065C0ACDB3B2D4B897FE8663 /* SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift; sourceTree = SOURCE_ROOT; };
+		0870EABADF652F3DFC81EF05 /* SFTDriveAdmin/Data/Models/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Data/Models/Models.swift; sourceTree = SOURCE_ROOT; };
+		10BE42C99E7AF7CA9303DF22 /* SFTDriveAdmin/Auth/AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Auth/AuthManager.swift; sourceTree = SOURCE_ROOT; };
+		3101BB76B735DC9314A39D1E /* SFTDriveAdmin/AI/ExtractionReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/AI/ExtractionReviewView.swift; sourceTree = SOURCE_ROOT; };
+		38A007151ABE87CC01A5B6E9 /* SFTDriveAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SFTDriveAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3D502D3CA9A804EBAAC17340 /* SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift; sourceTree = SOURCE_ROOT; };
+		667B0E07C92765300E668221 /* SFTDriveAdmin/Shared/DraftProtection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/DraftProtection.swift; sourceTree = SOURCE_ROOT; };
+		6FB75F20F5C21D55E2BF8208 /* SFTDriveAdmin/Shared/Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/Views.swift; sourceTree = SOURCE_ROOT; };
+		795763FFE4F5D876F4FEF805 /* SFTDriveAdmin/Features/Tours/ToursView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Tours/ToursView.swift; sourceTree = SOURCE_ROOT; };
+		87BC1D39DD7C2742EBA50869 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Dashboard/DashboardView.swift; sourceTree = SOURCE_ROOT; };
+		9935BD5391C9EDA6687352C7 /* SFTDriveAdmin/Shared/DateAndExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/DateAndExport.swift; sourceTree = SOURCE_ROOT; };
+		9AAF43189F61CCB6811BBA5B /* SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift; sourceTree = SOURCE_ROOT; };
+		B1EC589E84D76E60452EDEE4 /* SFTDriveAdmin/App/SFTDriveAdminApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/App/SFTDriveAdminApp.swift; sourceTree = SOURCE_ROOT; };
+		B54C0A191987809823BB4D55 /* SFTDriveAdmin/Data/AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Data/AppServices.swift; sourceTree = SOURCE_ROOT; };
+		B926ED4F83526CB77B8B8BF7 /* SFTDriveAdmin/Data/Repositories/Repositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Data/Repositories/Repositories.swift; sourceTree = SOURCE_ROOT; };
+		CACA6DBF5D755B28E79E2FC4 /* SFTDriveAdmin/Features/Users/UsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Users/UsersView.swift; sourceTree = SOURCE_ROOT; };
+		D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SFTDriveAdmin/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		DB22FB42C299EC4904B417DB /* SFTDriveAdmin/Shared/FormSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/FormSchema.swift; sourceTree = SOURCE_ROOT; };
+		DF1D21E0F7D53157222CAB62 /* SFTDriveAdmin/Features/Registrations/RegistrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Registrations/RegistrationsView.swift; sourceTree = SOURCE_ROOT; };
+		E8CCDB8D55BFB49298CA1427 /* SFTDriveAdmin/Features/Settings/SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Settings/SettingsViews.swift; sourceTree = SOURCE_ROOT; };
+		E8EBB972E364C7D0B347FEF6 /* SFTDriveAdmin/AI/AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/AI/AIProvider.swift; sourceTree = SOURCE_ROOT; };
+		EC47CA5CF86F5BD46B9C0DC6 /* SFTDriveAdmin/Auth/KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Auth/KeychainStore.swift; sourceTree = SOURCE_ROOT; };
+		F53259171738D9FFDE03C275 /* SFTDriveAdmin/Shared/JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/JSONValue.swift; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7561BFB015D8F536760CB671 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AF1F1D46639E68A0C4431C45 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		64292B1C2B2E13EAD8788FC8 = {
+			isa = PBXGroup;
+			children = (
+				E8EBB972E364C7D0B347FEF6 /* SFTDriveAdmin/AI/AIProvider.swift */,
+				3101BB76B735DC9314A39D1E /* SFTDriveAdmin/AI/ExtractionReviewView.swift */,
+				B1EC589E84D76E60452EDEE4 /* SFTDriveAdmin/App/SFTDriveAdminApp.swift */,
+				10BE42C99E7AF7CA9303DF22 /* SFTDriveAdmin/Auth/AuthManager.swift */,
+				EC47CA5CF86F5BD46B9C0DC6 /* SFTDriveAdmin/Auth/KeychainStore.swift */,
+				B54C0A191987809823BB4D55 /* SFTDriveAdmin/Data/AppServices.swift */,
+				0870EABADF652F3DFC81EF05 /* SFTDriveAdmin/Data/Models/Models.swift */,
+				B926ED4F83526CB77B8B8BF7 /* SFTDriveAdmin/Data/Repositories/Repositories.swift */,
+				9AAF43189F61CCB6811BBA5B /* SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift */,
+				065C0ACDB3B2D4B897FE8663 /* SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift */,
+				DF1D21E0F7D53157222CAB62 /* SFTDriveAdmin/Features/Registrations/RegistrationsView.swift */,
+				E8CCDB8D55BFB49298CA1427 /* SFTDriveAdmin/Features/Settings/SettingsViews.swift */,
+				795763FFE4F5D876F4FEF805 /* SFTDriveAdmin/Features/Tours/ToursView.swift */,
+				CACA6DBF5D755B28E79E2FC4 /* SFTDriveAdmin/Features/Users/UsersView.swift */,
+				9935BD5391C9EDA6687352C7 /* SFTDriveAdmin/Shared/DateAndExport.swift */,
+				667B0E07C92765300E668221 /* SFTDriveAdmin/Shared/DraftProtection.swift */,
+				DB22FB42C299EC4904B417DB /* SFTDriveAdmin/Shared/FormSchema.swift */,
+				F53259171738D9FFDE03C275 /* SFTDriveAdmin/Shared/JSONValue.swift */,
+				6FB75F20F5C21D55E2BF8208 /* SFTDriveAdmin/Shared/Views.swift */,
+				D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */,
+				87BC1D39DD7C2742EBA50869 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift */,
+				3D502D3CA9A804EBAAC17340 /* SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift */,
+				FBDC4F23F93125BBEEAE800C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FBDC4F23F93125BBEEAE800C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				38A007151ABE87CC01A5B6E9 /* SFTDriveAdmin.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0E8A3AD980EC179856012B7E /* SFTDriveAdmin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C57128001CE614BF8549D6BB /* Build configuration list for PBXNativeTarget "SFTDriveAdmin" */;
+			buildPhases = (
+				BCE16DD0260827ECF338C787 /* Sources */,
+				7561BFB015D8F536760CB671 /* Frameworks */,
+				0189424A5A60FED329FA868E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SFTDriveAdmin;
+			packageProductDependencies = (
+				81AF11420E261B7C4C2F5FEE /* Supabase */,
+			);
+			productName = SFTDriveAdmin;
+			productReference = 38A007151ABE87CC01A5B6E9 /* SFTDriveAdmin.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2660;
+			};
+			buildConfigurationList = 862894B703A6DEDF96A9DD6C /* Build configuration list for PBXProject "SFTDriveAdmin" */;
+			compatibilityVersion = "Xcode 15.3";
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				de,
+				en,
+				Base,
+			);
+			mainGroup = 64292B1C2B2E13EAD8788FC8;
+			packageReferences = (
+				5B2FB32768E94DF2B310CA2C /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
+			productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0E8A3AD980EC179856012B7E /* SFTDriveAdmin */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0189424A5A60FED329FA868E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D1944B811FF37517AEEBDCC /* SFTDriveAdmin/Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BCE16DD0260827ECF338C787 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B3C4B5BC67579E2BEC8956CB /* SFTDriveAdmin/AI/AIProvider.swift in Sources */,
+				3BE25E1E1B0661D6130C2C5B /* SFTDriveAdmin/AI/ExtractionReviewView.swift in Sources */,
+				2BBC44422A2A10F08A66C1BE /* SFTDriveAdmin/App/SFTDriveAdminApp.swift in Sources */,
+				6FA3927C2C9A1940658621EF /* SFTDriveAdmin/Auth/AuthManager.swift in Sources */,
+				EC4D6344DEE0677F8184B5FA /* SFTDriveAdmin/Auth/KeychainStore.swift in Sources */,
+				3FA86532F51B4EAC5E329ABF /* SFTDriveAdmin/Data/AppServices.swift in Sources */,
+				97ACA0BD4D49932C51A9921D /* SFTDriveAdmin/Data/Models/Models.swift in Sources */,
+				897895561656CC63137A4172 /* SFTDriveAdmin/Data/Repositories/Repositories.swift in Sources */,
+				E0965722A8D53899DBD415DA /* SFTDriveAdmin/Features/PlanningBoard/PlanningView.swift in Sources */,
+				0F2E482DC568BCA35735998C /* SFTDriveAdmin/Features/PlanningBoard/ResourceViews.swift in Sources */,
+				AE6E9ED749D01CE9EACE91FE /* SFTDriveAdmin/Features/Registrations/RegistrationsView.swift in Sources */,
+				9D3B1CAC9BD6ACE94B7E681E /* SFTDriveAdmin/Features/Settings/SettingsViews.swift in Sources */,
+				7DC605DBDA52ACFA2F16FBEA /* SFTDriveAdmin/Features/Tours/ToursView.swift in Sources */,
+				F7AD455B0A7DB4915B110C82 /* SFTDriveAdmin/Features/Users/UsersView.swift in Sources */,
+				2C96258162C1EEF894C4416F /* SFTDriveAdmin/Shared/DateAndExport.swift in Sources */,
+				52660D1B9D544EDC73785676 /* SFTDriveAdmin/Shared/DraftProtection.swift in Sources */,
+				419670DFA9294EF0FB1ACEAE /* SFTDriveAdmin/Shared/FormSchema.swift in Sources */,
+				A0807760B066C517F8EB5CB2 /* SFTDriveAdmin/Shared/JSONValue.swift in Sources */,
+				F2BD21BA4CE67C5CCC10D7F6 /* SFTDriveAdmin/Shared/Views.swift in Sources */,
+				F16A59593F5A6BFF92618DC3 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift in Sources */,
+				CDD9DDA9AC92B232FEC07BBB /* SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		639A7CA24D39909E713B47F7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.sportfahrertreff.sft-drive-admin";
+				PRODUCT_NAME = SFTDriveAdmin;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		7082CC0B6FC1282FCEABD07A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.sportfahrertreff.sft-drive-admin";
+				PRODUCT_NAME = SFTDriveAdmin;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		89E1FD6268CC0F221A2BE178 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E6DE6C99132752C914FEF632 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		862894B703A6DEDF96A9DD6C /* Build configuration list for PBXProject "SFTDriveAdmin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				89E1FD6268CC0F221A2BE178 /* Debug */,
+				E6DE6C99132752C914FEF632 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C57128001CE614BF8549D6BB /* Build configuration list for PBXNativeTarget "SFTDriveAdmin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7082CC0B6FC1282FCEABD07A /* Debug */,
+				639A7CA24D39909E713B47F7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5B2FB32768E94DF2B310CA2C /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.55.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		81AF11420E261B7C4C2F5FEE /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5B2FB32768E94DF2B310CA2C /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

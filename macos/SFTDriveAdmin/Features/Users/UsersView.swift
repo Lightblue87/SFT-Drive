@@ -27,13 +27,14 @@ struct UsersView: View {
                     TableColumn("Nachname", value: \.last_name)
                     TableColumn("Rolle") { Text($0.is_admin ? "Admin" : "Mitglied") }
                     TableColumn("Zugang") { Text($0.is_banned ? "Gesperrt" : "Aktiv") }
+                    TableColumn("Registriert") { Text(TourDates.displayDate($0.created_at)) }
                 }.frame(minWidth: 550)
                 if let selected {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
                             Text(selected.username).font(.title2.bold())
                             Text("\(selected.first_name) \(selected.last_name)"); Text(selected.email).textSelection(.enabled)
-                            Text("Registriert: \(selected.created_at)").font(.caption)
+                            Text("Registriert: \(TourDates.displayDate(selected.created_at))").font(.caption)
                             Button(selected.is_admin ? "Adminrolle entziehen" : "Adminrolle vergeben") { operation = "role" }
                             Button(selected.is_banned ? "Entsperren" : "Sperren") { operation = selected.is_banned ? "unban" : "ban" }
                             Button("Konto löschen", role: .destructive) { operation = "delete" }

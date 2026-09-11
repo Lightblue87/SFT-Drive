@@ -118,15 +118,20 @@ struct ExtractionReviewView: View {
     }
     private func openDraft(_ result: StructuredResult) {
         if model.kind == .hotel_offer {
-            var values = result.values; values.removeValue(forKey: "arrival"); values.removeValue(forKey: "departure")
-            values["night_date"] = .string(night); values["sort_order"] = .number(0)
+            var values = result.values
+            let departure = values.text("departure")
+            values.removeValue(forKey: "arrival"); values.removeValue(forKey: "departure")
+            values["night_date"] = .string(night)
+            if let date = TourDates.day(departure), let lastNight = Calendar.current.date(byAdding: .day, value: -1, to: date) { values["night_date_end"] = .string(TourDates.dayString(lastNight)) }
+            else { values["night_date_end"] = .string(night) }
+            values["sort_order"] = .number(0)
             editor = .init(initial: values)
         } else {
             restaurantDraft = true
         }
     }
     private func label(_ key: String) -> String {
-        ["name": "Name", "arrival": "Anreise", "departure": "Abreise", "booking_deadline": "Buchungsfrist", "note": "Hinweise", "address": "Adresse", "url": "Link", "reservation_time": "Reservierungszeit", "order_deadline": "Bestellfrist"][key] ?? key
+        ["name": "Name", "arrival": "Anreise", "departure": "Abreise", "booking_deadline": "Buchungsfrist", "note": "Hinweise", "address": "Adresse", "hotel_url": "Hotel-URL", "booking_url": "Buchungslink", "price_per_night": "Preis", "price_unit": "Preiseinheit", "room_type": "Zimmerart", "breakfast_details": "Frühstück", "parking_details": "Parkplatz", "cancellation_terms": "Stornierung", "allotment_details": "Kontingent", "contact": "Kontakt", "reservation_time": "Reservierungszeit", "order_deadline": "Bestellfrist", "reservation_people": "Reservierte Personen", "reservation_contact": "Kontakt", "reservation_status": "Status"][key] ?? key
     }
 }
 
@@ -170,14 +175,20 @@ struct RestaurantImportReviewView: View {
         }.padding().frame(width: 690, height: 750).interactiveDismissDisabled().protectDraft(true)
         .onAppear {
             stop = Dictionary(uniqueKeysWithValues: ResourceKind.stops.fields.map { ($0.id, $0.initial) })
-            stop.merge(["title": result.values["name"] ?? .null, "description": result.values["note"] ?? .null, "address": result.values["address"] ?? .null, "starts_at": result.values["reservation_time"] ?? .null]) { _, new in new }
+            stop["title"] = result.values["name"] ?? .null
+            stop["description"] = result.values["note"] ?? .null
+            stop["address"] = result.values["address"] ?? .null
+            stop["starts_at"] = result.values["reservation_time"] ?? .null
+            stop["reservation_people"] = result.values["reservation_people"] ?? .null
+            stop["reservation_contact"] = result.values["reservation_contact"] ?? .null
+            stop["reservation_status"] = result.values["reservation_status"] ?? .null
             settings = Dictionary(uniqueKeysWithValues: ResourceKind.restaurantSettings.fields.map { ($0.id, $0.initial) })
             settings["ordering_deadline_at"] = result.values["order_deadline"] ?? .null
             if case .array(let items) = result.values["menu_items"] {
                 menu = items.compactMap { value in
                     guard case .object(let extracted) = value else { return nil }
                     var fields = Dictionary(uniqueKeysWithValues: ResourceKind.menu.fields.map { ($0.id, $0.initial) })
-                    fields["id"] = .string(UUID().uuidString.lowercased()); fields["name"] = extracted["name"]; fields["price"] = extracted["price"]
+                    fields["id"] = .string(UUID().uuidString.lowercased()); fields["name"] = extracted["name"]; fields["price"] = extracted["price"]; fields["description"] = extracted["description"]; fields["allergen_info"] = extracted["allergen_info"]; fields["is_vegetarian"] = extracted["is_vegetarian"]; fields["is_vegan"] = extracted["is_vegan"]
                     return DataRow(fields)
                 }
             }

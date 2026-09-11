@@ -24,15 +24,33 @@ enum ResourceKind: String, CaseIterable, Identifiable {
         case .menu: return "Speisekarte"; case .restaurantSettings: return "Bestellfenster" }
     }
     var nameKey: String { self == .menu || self == .hotels ? "name" : self == .restaurantSettings ? "restaurant_note" : "title" }
+    // Eigenes Piktogramm je Ressourcentyp für den Leerzustand -- zuvor nutzten
+    // alle Typen dasselbe generische "list.bullet.rectangle", während der
+    // Restaurant-Bereich bereits sein eigenes "fork.knife" zeigte (uneinheitliches
+    // Bild, Nutzerfeedback). "bed.double" für Hotels stimmt mit dem bereits an
+    // anderer Stelle (Dashboard "Unterkunft offen") verwendeten Symbol überein.
+    var symbol: String {
+        switch self {
+        case .stops: return "mappin.and.ellipse"; case .hotels: return "bed.double"
+        case .stages: return "map"; case .menu: return "fork.knife"; case .restaurantSettings: return "clock"
+        }
+    }
     var fields: [FormField] {
         switch self {
         case .stops: return [
             .init("title", "Bezeichnung", required: true), .init("type", "Art", .choice(["restaurant", "meeting", "fuel", "break", "hotel", "viewpoint", "other"]), required: true, initial: .string("restaurant")),
             .init("description", "Beschreibung", .multiline), .init("location_name", "Ort"), .init("address", "Adresse"),
-            .init("starts_at", "Zeitpunkt (Europe/Berlin)", .instant), .init("sort_order", "Reihenfolge", .integer, required: true, initial: .number(0))]
+            .init("starts_at", "Reservierungs-/Stoppzeit (Europe/Berlin)", .instant), .init("reservation_people", "Reservierte Personen", .integer),
+            .init("reservation_contact", "Kontakt"), .init("reservation_status", "Reservierungsstatus", .choice(["planned","requested","confirmed","cancelled"])),
+            .init("sort_order", "Reihenfolge", .integer, required: true, initial: .number(0))]
         case .hotels: return [
-            .init("night_date", "Übernachtung am", .date, required: true), .init("name", "Hotel", required: true),
-            .init("url", "Hotel-Link", .url), .init("address", "Adresse"), .init("note", "Hinweise", .multiline),
+            .init("night_date", "Übernachtung von", .date, required: true),
+            .init("night_date_end", "Übernachtung bis", .date, required: true),
+            .init("name", "Hotel", required: true), .init("price_per_night", "Preis", .decimal), .init("price_unit", "Preiseinheit"),
+            .init("hotel_url", "Hotel-URL", .url), .init("booking_url", "Buchungslink", .url), .init("address", "Adresse"),
+            .init("room_type", "Zimmerart"), .init("breakfast_details", "Frühstück"), .init("parking_details", "Parkplatz"),
+            .init("cancellation_terms", "Stornierung", .multiline), .init("allotment_details", "Kontingent"), .init("contact", "Kontakt"),
+            .init("note", "Hinweise", .multiline),
             .init("booking_deadline", "Buchungsfrist", .date), .init("sort_order", "Reihenfolge", .integer, required: true, initial: .number(0))]
         case .stages: return [
             .init("stage_date", "Tourtag", .date, required: true), .init("stage_number", "Tag", .integer, required: true),
