@@ -52,7 +52,7 @@ struct ResourceListView: View {
             }
         }
     }
-    private var defaults: Payload { kind == .hotels ? ["night_date": .string(tour.start_date)] : [:] }
+    private var defaults: Payload { kind == .hotels ? ["night_date": .string(tour.start_date), "night_date_end": .string(tour.start_date)] : [:] }
     private func load() async { await model.load(services.content, kind: kind, parentID: parentID) }
     // Zeigt einen Zeitraum ("18.–20.06.2027"), wenn der Vorschlag mehrere
     // Nächte abdeckt, statt für jede Nacht denselben Eintrag zu wiederholen.
@@ -121,6 +121,11 @@ struct ResourceEditorView: View {
             model.values = Dictionary(uniqueKeysWithValues: kind.fields.map { ($0.id, $0.initial) })
             model.values.merge(request.existing?.values ?? request.initial) { _, new in new }
             if kind == .stages && model.values.text("route_url").isEmpty { model.values["route_url"] = request.initial["route_url"] ?? model.values["kurviger_url"] ?? .null }
+            // "Übernachtung bis" ist ein Pflichtfeld, damit immer zwei sichtbare
+            // Datumsfelder erscheinen -- bestehende Einträge ohne night_date_end
+            // (vor 20260911050000 angelegt) werden hier defensiv mit night_date
+            // vorbefüllt, statt den Admin mit einem "festlegen"-Button zu stoppen.
+            if kind == .hotels && model.values.text("night_date_end").isEmpty { model.values["night_date_end"] = model.values["night_date"] }
             model.id = request.existing?.id ?? (kind == .restaurantSettings ? parentID : model.id)
             model.initial = model.values
         }
