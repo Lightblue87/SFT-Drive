@@ -18,6 +18,10 @@ enum TourDates {
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.date(from: text) ?? ISO8601DateFormatter().date(from: text)
     }
+    static func displayDate(_ text: String) -> String {
+        guard let date = instant(text) else { return text }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
     static func days(start: String, end: String, nights: Bool = false) -> [String] {
         guard var date = day(start), let last = day(end), date <= last else { return [] }
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone

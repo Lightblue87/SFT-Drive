@@ -67,6 +67,13 @@ try {
  await bad(()=>rpc('admin_save_tour_resource',['users',hotelID,tourID,null,{}]),/INVALID_RESOURCE/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,hotelBefore,{user_id:admin}]),/INVALID_PAYLOAD/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000021',tourID,null,{name:'Bad',night_date:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
+ // night_date_end/price_per_night: covers multiple consecutive nights + organizer's advertised nightly rate (§36.2/§36.5).
+ const hotelRangeID='00000000-0000-0000-0000-000000000022';
+ check((await rpc('admin_save_tour_resource',['hotels',hotelRangeID,tourID,null,{name:'Mehrnächte-Hotel',night_date:'2027-06-18',night_date_end:'2027-06-19',price_per_night:89.5,sort_order:1}])).code,'OK');
+ check(Number((await db.query('select night_date_end,price_per_night from tour_hotel_suggestions where id=$1',[hotelRangeID])).rows[0].price_per_night),89.5);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000023',tourID,null,{name:'Bad end',night_date:'2027-06-18',night_date_end:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000024',tourID,null,{name:'Bad order',night_date:'2027-06-19',night_date_end:'2027-06-18'}]),/INVALID_NIGHT_DATE/);
+ await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000025',tourID,null,{name:'Bad price',night_date:'2027-06-18',price_per_night:-5}]),/INVALID_PRICE/);
  await identity(member);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-19',true])).code,'OK');
  await identity(second);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');
  await identity(admin);

@@ -31,7 +31,7 @@ struct ResourceListView: View {
             List(model.rows) { row in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(row.values.text(kind.nameKey).isEmpty ? kind.title : row.values.text(kind.nameKey)).font(.headline)
-                    if kind == .hotels { Text("Nacht: \(row.values.text("night_date"))").font(.caption) }
+                    if kind == .hotels { Text(hotelCaption(row)).font(.caption) }
                     if kind == .menu { Text("\(row.values.text("price")) € · \(row.values.boolean("is_available") ? "Verfügbar" : "Deaktiviert")").font(.caption) }
                     HStack {
                         Button("Bearbeiten") { editor = .init(existing: row) }
@@ -54,6 +54,15 @@ struct ResourceListView: View {
     }
     private var defaults: Payload { kind == .hotels ? ["night_date": .string(tour.start_date)] : [:] }
     private func load() async { await model.load(services.content, kind: kind, parentID: parentID) }
+    // Zeigt einen Zeitraum ("18.–20.06.2027"), wenn der Vorschlag mehrere
+    // Nächte abdeckt, statt für jede Nacht denselben Eintrag zu wiederholen.
+    private func hotelCaption(_ row: DataRow) -> String {
+        let start = row.values.text("night_date")
+        let end = row.values.text("night_date_end")
+        var text = "Nacht: \(start)" + (end.isEmpty || end == start ? "" : " – \(end)")
+        if !row.values.text("price_per_night").isEmpty { text += " · \(row.values.text("price_per_night")) € / Nacht" }
+        return text
+    }
 }
 @MainActor final class ResourceEditorModel: ScreenModel {
     @Published var values: Payload = [:]
@@ -91,7 +100,12 @@ struct ResourceEditorView: View {
                 Button("Speichern") {
                     Task { await model.perform {
                         let payload = try FormValidation.payload(model.values, fields: kind.fields)
-                        if kind == .hotels && !TourDates.days(start: tour.start_date, end: tour.end_date, nights: true).contains(payload.text("night_date")) { throw AppError("Gültige Tournacht wählen.") }
+                        if kind == .hotels {
+                            let nights = TourDates.days(start: tour.start_date, end: tour.end_date, nights: true)
+                            guard nights.contains(payload.text("night_date")) else { throw AppError("Gültige Tournacht wählen.") }
+                            let end = payload.text("night_date_end")
+                            if !end.isEmpty && (end < payload.text("night_date") || !nights.contains(end)) { throw AppError("„Übernachtung bis“ muss eine gültige Tournacht sein und darf nicht vor „Übernachtung von“ liegen.") }
+                        }
                         if kind == .restaurantSettings { try FormValidation.window(payload, open: "ordering_open_at", close: "ordering_deadline_at") }
                         do { try await repository.save(kind, id: model.id, parentID: parentID, expected: request.existing?.values, values: payload) }
                         catch {

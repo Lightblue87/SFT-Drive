@@ -4,6 +4,7 @@ import { formatDate } from '@/utils/date'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 import type { HotelSuggestion, AccommodationConfirmation } from '@/types/accommodation'
+import { hotelSuggestionCoversNight } from '@/types/accommodation'
 
 interface Props {
   tourId: string
@@ -83,7 +84,7 @@ export function AccommodationSection({
       {error && <p className="px-4 pb-2 text-sm text-sft-red">{error}</p>}
       <div className="flex flex-col">
         {nights.map((night, i) => {
-          const suggestions = hotelSuggestions.filter((s) => s.night_date === night)
+          const suggestions = hotelSuggestions.filter((s) => hotelSuggestionCoversNight(s, night))
           const confirmed = confirmedNights.has(night)
 
           return (
@@ -97,6 +98,9 @@ export function AccommodationSection({
                   {suggestions.map((s) => (
                     <div key={s.id} className="text-[13px]">
                       <div className="font-medium">{s.name}</div>
+                      {s.price_per_night != null && (
+                        <div className="mt-0.5 text-sft-gray">{s.price_per_night.toFixed(2)} € / Nacht</div>
+                      )}
                       {s.address && <div className="mt-0.5 text-sft-gray">{s.address}</div>}
                       {s.note && <div className="mt-0.5 text-sft-gray">{s.note}</div>}
                       {s.url && (

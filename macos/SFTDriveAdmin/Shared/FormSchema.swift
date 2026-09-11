@@ -31,7 +31,9 @@ enum ResourceKind: String, CaseIterable, Identifiable {
             .init("description", "Beschreibung", .multiline), .init("location_name", "Ort"), .init("address", "Adresse"),
             .init("starts_at", "Zeitpunkt (Europe/Berlin)", .instant), .init("sort_order", "Reihenfolge", .integer, required: true, initial: .number(0))]
         case .hotels: return [
-            .init("night_date", "Übernachtung am", .date, required: true), .init("name", "Hotel", required: true),
+            .init("night_date", "Übernachtung von", .date, required: true),
+            .init("night_date_end", "Übernachtung bis (optional, für mehrere Nächte)", .date),
+            .init("name", "Hotel", required: true), .init("price_per_night", "Preis pro Nacht (€)", .decimal),
             .init("url", "Hotel-Link", .url), .init("address", "Adresse"), .init("note", "Hinweise", .multiline),
             .init("booking_deadline", "Buchungsfrist", .date), .init("sort_order", "Reihenfolge", .integer, required: true, initial: .number(0))]
         case .stages: return [

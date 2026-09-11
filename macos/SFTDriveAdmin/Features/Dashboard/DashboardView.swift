@@ -30,11 +30,33 @@ enum DashboardMetric: String, Identifiable, CaseIterable {
     }
 }
 
+enum DashboardInfo: String, Identifiable, CaseIterable {
+    case tours, next, people, vehicles
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .tours: return "Kommende Touren"
+        case .next: return "Nächste Tour"
+        case .people: return "Teilnehmerplätze gesamt"
+        case .vehicles: return "Bestätigte Fahrzeuge"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .tours: return "calendar"
+        case .next: return "arrow.right.circle"
+        case .people: return "person.2"
+        case .vehicles: return "steeringwheel"
+        }
+    }
+}
+
 @MainActor final class DashboardModel: ScreenModel {
     @Published var tours: [Tour] = []
     @Published var summaries: [String: PlanningSummary] = [:]
     @Published var users: [AdminUser] = []
     @Published var expandedMetric: DashboardMetric?
+    @Published var expandedInfo: DashboardInfo?
     @Published var expandedTours: Set<String> = []
     @Published var registrations: [String: [TourRegistration]] = [:]
     let toursRepository: ToursRepository
@@ -65,7 +87,8 @@ enum DashboardMetric: String, Identifiable, CaseIterable {
             }
         }
     }
-    func toggle(_ metric: DashboardMetric) { expandedMetric = expandedMetric == metric ? nil : metric }
+    func toggle(_ metric: DashboardMetric) { expandedMetric = expandedMetric == metric ? nil : metric; expandedInfo = nil }
+    func toggleInfo(_ info: DashboardInfo) { expandedInfo = expandedInfo == info ? nil : info; expandedMetric = nil }
     func setExpanded(_ tourID: String, _ expanded: Bool) {
         if expanded { expandedTours.insert(tourID); Task { await loadRegistrations(tourID) } }
         else { expandedTours.remove(tourID) }
@@ -111,25 +134,30 @@ struct DashboardView: View {
                     ContentUnavailableView("Keine anstehenden Touren", systemImage: "map", description: Text("Veröffentlichte Touren erscheinen hier."))
                 } else {
                     LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], spacing: 12) {
-                        infoTile("Kommende Touren", "\(model.tours.count)", "calendar")
-                        if let next = model.tours.first { infoTile("Nächste Tour", "\(next.start_date) · \(next.title)", "arrow.right.circle") }
-                        infoTile("Teilnehmerplätze gesamt", "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.people ?? 0) })", "person.2")
-                        infoTile("Bestätigte Fahrzeuge", "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.confirmed_vehicles ?? 0) })", "steeringwheel")
+                        infoTile(.tours, "\(model.tours.count)")
+                        if let next = model.tours.first { infoTile(.next, "\(next.start_date) · \(next.title)") }
+                        infoTile(.people, "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.people ?? 0) })")
+                        infoTile(.vehicles, "\(model.tours.reduce(0) { $0 + (model.summaries[$1.id]?.confirmed_vehicles ?? 0) })")
                         ForEach(DashboardMetric.allCases) { metric in
                             metricTile(metric)
                         }
                     }
                     if let metric = model.expandedMetric { drillDown(metric) }
+                    if let info = model.expandedInfo { infoDrillDown(info) }
                 }
                 RefreshFooter(time: model.refreshedAt, busy: model.busy)
             }.padding(28)
         }.navigationTitle("Dashboard").task { await model.load() }
     }
-    private func infoTile(_ title: String, _ value: String, _ symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: symbol).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 22, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(18).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
+    private func infoTile(_ info: DashboardInfo, _ value: String) -> some View {
+        Button { model.toggleInfo(info) } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(info.title, systemImage: info.symbol).font(.caption).foregroundStyle(.secondary)
+                Text(value).font(.system(size: 22, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
+                .background(model.expandedInfo == info ? Color.sftRed.opacity(0.18) : Color.gray.opacity(0.15), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(model.expandedInfo == info ? Color.sftRed : .clear, lineWidth: 1.5))
+        }.buttonStyle(.plain)
     }
     private func metricTile(_ metric: DashboardMetric) -> some View {
         Button { model.toggle(metric) } label: {
@@ -166,6 +194,37 @@ struct DashboardView: View {
                 }
             }
         }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+    }
+    private func infoDrillDown(_ info: DashboardInfo) -> some View {
+        // "Nächste Tour" zeigt gezielt nur diese eine Tour, die übrigen drei
+        // listen alle kommenden Touren mit dem jeweils passenden Wert je Tour.
+        let list = info == .next ? Array(model.tours.prefix(1)) : model.tours
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(info.title).font(.title3.bold())
+            if list.isEmpty {
+                Text("Keine Touren vorhanden.").foregroundStyle(.secondary).padding(.vertical, 8)
+            } else {
+                ForEach(list) { tour in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tour.title).bold()
+                            Text("\(tour.start_date) · \(tour.region)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let value = infoValue(info, tour) { Text(value).foregroundStyle(.secondary) }
+                    }.padding(.vertical, 6)
+                    Divider()
+                }
+            }
+        }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+    }
+    private func infoValue(_ info: DashboardInfo, _ tour: Tour) -> String? {
+        let summary = model.summaries[tour.id]
+        switch info {
+        case .tours, .next: return nil
+        case .people: return summary.map { "\($0.people) Personen" }
+        case .vehicles: return summary.map { "\($0.confirmed_vehicles) Fahrzeuge" }
+        }
     }
     @ViewBuilder private func tourRows(_ tour: Tour, metric: DashboardMetric) -> some View {
         if let rows = model.registrations[tour.id] {

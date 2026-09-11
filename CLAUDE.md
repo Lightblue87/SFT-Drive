@@ -5696,6 +5696,22 @@ sind verbindlicher Zielzustand, aber gegenüber dem nachfolgend beschriebenen
 produktiven Stand noch nicht vollständig umgesetzt. Sie sind additiv per
 neuer Migration und ohne Umschreiben der bestehenden Migration einzuführen.
 
+**Nachtrag 11.09.2026 (Migration `20260911050000_hotel_price_and_night_range.sql`,
+umgesetzt):** `tour_hotel_suggestions` um `night_date_end date null` und
+`price_per_night numeric(8,2) null` ergänzt. `night_date_end` (NULL =
+"deckt nur `night_date` ab") erlaubt, dass ein Hotelvorschlag mehrere
+aufeinanderfolgende Übernachtungen abdeckt, ohne den Eintrag mit allen
+Details für jede Nacht zu wiederholen — Teilnehmer- und Admin-UI (PWA
+`AccommodationSection`/`AdminTourAccommodationPage`, Mac-App
+`ResourceListView`/`admin_save_tour_resource`) ordnen einen Vorschlag über
+`night_date <= Nacht <= coalesce(night_date_end, night_date)` jeder
+betroffenen Nacht zu, statt exakter Gleichheit. `price_per_night` ist
+ausdrücklich die vom Hotel genannte organisatorische Preisangabe zum
+Vorschlag selbst (wie Name/Adresse/Buchungsfrist) — **keine** Abweichung von
+§36.3/§36.12 ("keine Zahlungsinformationen/Buchungsnummern"), die weiterhin
+für persönliche Teilnehmer-Zahlungsdaten gelten, welche SFT Drive nach wie
+vor nicht erfasst.
+
 - `tour_hotel_suggestions` (Hotelvorschläge, Participant-Inhalt, gleiches
   RLS-Muster wie `tour_stops`/`tour_stages`: bestätigte Teilnehmer und Admins
   lesen, nur Admins schreiben) und `tour_accommodation_confirmations`
