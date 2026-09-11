@@ -86,6 +86,17 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
                 error = "Planungsdaten konnten nicht geladen werden für: \(titles)."
             }
         }
+        // Bereits sichtbare Drilldowns sollen nach "Aktualisieren" ebenfalls
+        // frische Registrierungsdaten zeigen statt beliebig alten Cache-Stand
+        // (Codex-Review auf #19) -- Cache leeren und gezielt nur die aktuell
+        // geöffneten Ansichten neu laden, kein globales Nachladen aller Touren.
+        registrations = [:]
+        switch expandedInfo {
+        case .next: if let id = tours.first?.id { await loadRegistrations(id) }
+        case .people, .vehicles: await loadAllRegistrations()
+        case .tours, nil: break
+        }
+        for tourID in expandedTours { await loadRegistrations(tourID) }
     }
     func toggle(_ metric: DashboardMetric) { expandedMetric = expandedMetric == metric ? nil : metric; expandedInfo = nil }
     func toggleInfo(_ info: DashboardInfo) {
@@ -297,12 +308,17 @@ struct DashboardView: View {
             } else if confirmedByTour.isEmpty {
                 Text("Keine bestätigten Teilnehmer.").foregroundStyle(.secondary).padding(.vertical, 8)
             } else {
+                // Die Kachel zeigt die Personenzahl (1 + passenger_count je Fahrzeug),
+                // nicht die Fahrzeug-/Zeilenzahl -- eine Zeile je Zeile hier reicht
+                // deshalb zum Abgleich nicht; Personenzahl pro Zeile und Gesamtsumme
+                // machen die Zahlen wieder nachvollziehbar (Codex-Review auf #19).
+                Text("\(confirmedByTour.reduce(0) { $0 + $1.1.passenger_count + 1 }) Personen in \(confirmedByTour.count) Fahrzeugen").font(.caption).foregroundStyle(.secondary)
                 ForEach(Array(confirmedByTour.enumerated()), id: \.offset) { _, pair in
                     let (tour, row) = pair
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(model.name(row)).bold()
-                            Text("\(tour.title) · \(row.vehicle_manufacturer) \(row.vehicle_model)").font(.caption).foregroundStyle(.secondary)
+                            Text("\(tour.title) · \(row.vehicle_manufacturer) \(row.vehicle_model) · \(row.passenger_count + 1) Personen").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                     }.padding(.vertical, 4)

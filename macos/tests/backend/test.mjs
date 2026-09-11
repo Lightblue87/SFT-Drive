@@ -74,6 +74,12 @@ try {
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000023',tourID,null,{name:'Bad end',night_date:'2027-06-18',night_date_end:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000024',tourID,null,{name:'Bad order',night_date:'2027-06-19',night_date_end:'2027-06-18'}]),/INVALID_NIGHT_DATE/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000025',tourID,null,{name:'Bad price',night_date:'2027-06-18',price_per_night:-5}]),/INVALID_PRICE/);
+ // admin_save_tour() must also reject shortening the tour past a hotel range's
+ // night_date_end, not just its night_date (Codex review on #19): hotelRangeID
+ // covers 18./19.06., so shortening end_date to the 19th still leaves the 18th
+ // a valid night on its own but abandons the suggestion's range end.
+ const beforeShorten=await snapshot();
+ await bad(()=>rpc('admin_save_tour',[tourID,beforeShorten,{end_date:'2027-06-19'},{},{}]),/DATE_RANGE_CONFLICT/);
  await identity(member);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-19',true])).code,'OK');
  await identity(second);check((await rpc('set_accommodation_confirmation',[tourID,'2027-06-18',true])).code,'OK');
  await identity(admin);

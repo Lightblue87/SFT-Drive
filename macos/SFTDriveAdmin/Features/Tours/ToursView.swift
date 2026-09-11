@@ -133,11 +133,17 @@ struct TagesplanungTab: View {
     let tour: Tour
     let multiDay: Bool
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if multiDay { StagesView(services: services, tour: tour); Divider() }
-                ResourceListView(services: services, kind: .stops, parentID: tour.id, tour: tour)
+        // Kein umschließender ScrollView: StagesView und ResourceListView enthalten
+        // jeweils eine eigene List, die innerhalb eines unbegrenzten vertikalen
+        // ScrollView keine Höhe ableiten kann und dadurch kollabiert (Codex-Review
+        // auf #19) -- StagesView bekommt stattdessen eine feste, selbst scrollbare
+        // Höhe, ResourceListView füllt den verbleibenden Platz des VStack.
+        VStack(alignment: .leading, spacing: 16) {
+            if multiDay {
+                StagesView(services: services, tour: tour).frame(minHeight: 220, maxHeight: 260)
+                Divider()
             }
+            ResourceListView(services: services, kind: .stops, parentID: tour.id, tour: tour)
         }
     }
 }
