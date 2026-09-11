@@ -33,22 +33,26 @@ struct ToursView: View {
         VStack(spacing: 0) {
             ErrorBanner(message: model.error)
             HSplitView {
-                VStack {
+                VStack(alignment: .leading, spacing: 0) {
                     HStack { TextField("Touren suchen", text: $model.query).textFieldStyle(.roundedBorder)
                         Toggle("Archiv", isOn: $model.archived).toggleStyle(.checkbox) }.padding()
-                    Table(model.tours.sorted(using: sortOrder), selection: $model.selection, sortOrder: $sortOrder) {
-                        TableColumn("Ausfahrt", value: \.title).width(min: 150, ideal: 230)
-                        TableColumn("Beginn", value: \.start_date).width(100)
-                        TableColumn("Region", value: \.region)
-                        TableColumn("Status") { StatusBadge(value: $0.status) }
+                    if model.tours.isEmpty && !model.busy {
+                        ContentUnavailableView("Keine Touren", systemImage: "map", description: Text("Suche ändern oder eine Ausfahrt anlegen."))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        Table(model.tours.sorted(using: sortOrder), selection: $model.selection, sortOrder: $sortOrder) {
+                            TableColumn("Ausfahrt", value: \.title).width(min: 150, ideal: 230)
+                            TableColumn("Beginn", value: \.start_date).width(100)
+                            TableColumn("Region", value: \.region)
+                            TableColumn("Status") { StatusBadge(value: $0.status) }
+                        }
+                        if model.more { Button("Weitere Touren laden") { Task { await model.load(append: true) } }.disabled(model.busy).padding(8) }
                     }
-                    if model.more { Button("Weitere Touren laden") { Task { await model.load(append: true) } }.disabled(model.busy) }
-                    if model.tours.isEmpty && !model.busy { ContentUnavailableView("Keine Touren", systemImage: "map", description: Text("Suche ändern oder eine Ausfahrt anlegen.")) }
-                }.frame(minWidth: 450)
+                }.frame(minWidth: 450, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 if let selected {
                     TourWorkspace(services: services, tour: selected, edit: { editor = .init(sourceID: selected.id) })
-                        .id(selected.id).frame(minWidth: 440)
-                } else { ContentUnavailableView("Ausfahrt auswählen", systemImage: "steeringwheel").frame(minWidth: 400) }
+                        .id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else { ContentUnavailableView("Ausfahrt auswählen", systemImage: "steeringwheel").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
             }
             RefreshFooter(time: model.refreshedAt, busy: model.busy)
         }

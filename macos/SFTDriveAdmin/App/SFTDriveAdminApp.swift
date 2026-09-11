@@ -61,10 +61,14 @@ struct LoginView: View {
     private func login() { let secret = password; password = ""; Task { await auth.login(email: email, password: secret) } }
 }
 enum AppSection: String, CaseIterable, Identifiable {
-    case dashboard = "Dashboard", tours = "Touren", users = "Nutzer", notifications = "Mitteilungen", legal = "Impressum & Datenschutz"
+    case dashboard = "Dashboard", tours = "Touren", restaurants = "Restaurant", hotels = "Hotels", users = "Nutzer", notifications = "Mitteilungen", legal = "Impressum & Datenschutz"
     var id: String { rawValue }
     var icon: String {
-        switch self { case .dashboard: return "square.grid.2x2"; case .tours: return "steeringwheel"; case .users: return "person.2"; case .notifications: return "bell"; case .legal: return "doc.text" }
+        switch self {
+        case .dashboard: return "square.grid.2x2"; case .tours: return "steeringwheel"
+        case .restaurants: return "fork.knife"; case .hotels: return "bed.double.fill"
+        case .users: return "person.2"; case .notifications: return "bell"; case .legal: return "doc.text"
+        }
     }
 }
 struct AdminShell: View {
@@ -81,34 +85,12 @@ struct AdminShell: View {
             switch selection ?? .dashboard {
             case .dashboard: DashboardView(services: services)
             case .tours: ToursView(services: services)
+            case .restaurants: RestaurantsOverviewView(services: services)
+            case .hotels: HotelsOverviewView(services: services)
             case .users: UsersView(repository: services.people)
             case .notifications: NotificationsView(services: services)
             case .legal: LegalSettingsView(repository: services.content)
             }
         }
-    }
-}
-struct DashboardView: View {
-    let services: AppServices
-    @StateObject private var model = ScreenModel()
-    @State private var tours: [Tour] = []
-    @State private var selection: String?
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text("Ausfahrten im Blick").font(.largeTitle.bold())
-            Text("Planung, Teilnehmer und Organisation an einem Ort.").foregroundStyle(.secondary)
-            ErrorBanner(message: model.error)
-            Picker("Ausfahrt", selection: $selection) {
-                Text("Tour auswählen").tag(String?.none)
-                ForEach(tours) { Text("\($0.start_date) · \($0.title)").tag(Optional($0.id)) }
-            }.padding(.vertical)
-            if let tour = tours.first(where: { $0.id == selection }) { PlanningView(repository: services.planning, tour: tour).id(tour.id) }
-            else { ContentUnavailableView("Ausfahrt auswählen", systemImage: "map") }
-        }.padding(28).navigationTitle("Dashboard")
-        .task { await model.perform {
-            tours = try await services.tours.list(query: "", offset: 0, archived: false)
-            let today = TourDates.dayString(Date())
-            selection = tours.filter { $0.end_date >= today && $0.status != "cancelled" }.sorted { $0.start_date < $1.start_date }.first?.id ?? tours.first?.id
-        } }
     }
 }

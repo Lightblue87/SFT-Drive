@@ -102,7 +102,15 @@ try {
  check(s.confirmed_vehicles,2);check(s.people,4);check(s.nights.map(n=>n.confirmed),[2,1]);check(s.all_nights_confirmed,1);check(s.restaurants[0].orders,2);check(s.restaurants[0].dishes,4);
  await rpc('admin_remove_registration',[regs.find(r=>r.user_id===second).id,null]);
  s=await rpc('admin_get_tour_planning_summary',[tourID]);check(s.confirmed_vehicles,1);check(s.people,2);check(s.restaurants[0].orders,1);check(s.restaurants[0].dishes,2);check(s.nights.map(n=>n.confirmed),[1,1]);
+ // Bundled multi-tour summary RPC (PR #18 review): one request for many tours,
+ // a bad ID in the batch must not sink the whole call -- it comes back as its
+ // own null-summary/error row instead.
+ const bulk=(await db.query('select * from public.admin_get_tour_planning_summaries($1::uuid[])',[[tourID,'00000000-0000-0000-0000-000000000099']])).rows;
+ check(bulk.length,2);
+ const bulkOk=bulk.find(r=>r.tour_id===tourID);check(bulkOk.error,null);check(bulkOk.summary.confirmed_vehicles,1);
+ const bulkMissing=bulk.find(r=>r.tour_id==='00000000-0000-0000-0000-000000000099');check(bulkMissing.summary,null);check(/TOUR_NOT_FOUND/.test(bulkMissing.error),true);
  await identity(member);await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Attack'}]),/FORBIDDEN/);
+ await bad(()=>db.query('select * from public.admin_get_tour_planning_summaries($1::uuid[])',[[tourID]]),/FORBIDDEN/);
  await bad(()=>rpc('admin_replace_meal_order',[stopID,regs[0].id,orderBefore,[]]),/FORBIDDEN/);
  check((await db.query('select * from profiles where id=$1',[second])).rows.length,0);
  await db.exec('reset role');await db.query("delete from user_roles where user_id=$1 and role='admin'",[admin]);await identity(admin);

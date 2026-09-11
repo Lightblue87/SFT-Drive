@@ -166,6 +166,11 @@ struct AdminUser: Decodable, Identifiable, Sendable {
     let is_admin: Bool
     let is_banned: Bool
 }
+struct TourPlanningSummaryRow: Decodable, Sendable {
+    let tour_id: String
+    let summary: PlanningSummary?
+    let error: String?
+}
 struct PlanningSummary: Decodable, Sendable {
     let confirmed_vehicles: Int
     let people: Int

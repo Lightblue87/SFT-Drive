@@ -41,6 +41,29 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
         return try await request.order("start_date", ascending: false).order("id")
             .range(from: offset, to: offset + 99).execute().value
     }
+    // For Dashboard/Restaurant/Hotels overviews: filtered and sorted server-side so
+    // relevant upcoming tours can't fall outside a client-side-filtered page (PR #18
+    // review) -- list(archived:false) alone sorts newest-start-date-first and only
+    // filters "upcoming" locally afterwards, which can drop near-term tours once
+    // there are more than one page of them.
+    func upcoming() async throws -> [Tour] {
+        try await requireAdmin()
+        let today = TourDates.dayString(Date())
+        // Paginate to exhaustion (mirrors Repository.rows()) rather than a fixed cutoff --
+        // a hard cap here would silently drop tours beyond it (PR #18 review).
+        var result: [Tour] = []; var offset = 0
+        while true {
+            try Task.checkCancellation()
+            let page: [Tour] = try await client.from("tours").select()
+                .gte("end_date", value: today).neq("status", value: "cancelled")
+                .neq("status", value: "draft").neq("status", value: "archived")
+                .order("start_date", ascending: true).order("id")
+                .range(from: offset, to: offset + 199).execute().value
+            result += page
+            if page.count < 200 { return result }
+            offset += 200
+        }
+    }
     func details(_ id: String) async throws -> Payload {
         try await requireAdmin()
         let tour: Payload = try await client.from("tours").select().eq("id", value: id).single().execute().value
@@ -123,6 +146,16 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
         try await requireAdmin()
         return try await client.rpc("admin_get_tour_planning_summary", params: ["p_tour_id": tourID]).execute().value
     }
+    // One request for many tours instead of one admin_get_tour_planning_summary()
+    // call per tour (PR #18 review: N+1 traffic, relevant under §4's free-tier goal).
+    // A tour whose summary failed to compute comes back with summary=nil and a
+    // populated error, rather than silently looking like an empty planning state.
+    func summaries(_ tourIDs: [String]) async throws -> [TourPlanningSummaryRow] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        let params: Payload = ["p_tour_ids": .array(tourIDs.map(JSONValue.string))]
+        return try await client.rpc("admin_get_tour_planning_summaries", params: params).execute().value
+    }
     func accommodation(_ tourID: String) async throws -> [AccommodationConfirmation] {
         let records = try await rows("tour_accommodation_confirmations", key: "tour_id", value: tourID)
         return try JSONDecoder().decode([AccommodationConfirmation].self, from: JSONEncoder().encode(records))
@@ -148,6 +181,17 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
             return try await client.from(kind.table).select().eq(kind.parentKey, value: parentID).execute().value
         }
         return try await rows(kind.table, key: kind.parentKey, value: parentID)
+    }
+    // For the Restaurant overview (PR #18 review): admin_get_tour_planning_summary's
+    // restaurants list only includes stops with ordering_enabled=true, so a newly
+    // created restaurant stop (no settings row yet, or ordering still off) would never
+    // appear there -- exactly the case an admin needs this overview for, to configure
+    // it. Queries tour_stops directly instead, independent of ordering state.
+    func restaurantStops(_ tourIDs: [String]) async throws -> [DataRow] {
+        guard !tourIDs.isEmpty else { return [] }
+        try await requireAdmin()
+        return try await client.from("tour_stops").select().eq("type", value: "restaurant")
+            .in("tour_id", values: tourIDs).execute().value
     }
     func save(_ kind: ResourceKind, id: String, parentID: String, expected: Payload?, values: Payload) async throws {
         try await action("admin_save_tour_resource", ["p_kind": .string(kind.rawValue), "p_id": .string(id),
