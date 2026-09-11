@@ -61,10 +61,14 @@ struct LoginView: View {
     private func login() { let secret = password; password = ""; Task { await auth.login(email: email, password: secret) } }
 }
 enum AppSection: String, CaseIterable, Identifiable {
-    case dashboard = "Dashboard", tours = "Touren", users = "Nutzer", notifications = "Mitteilungen", legal = "Impressum & Datenschutz"
+    case dashboard = "Dashboard", tours = "Touren", restaurants = "Restaurant", hotels = "Hotels", users = "Nutzer", notifications = "Mitteilungen", legal = "Impressum & Datenschutz"
     var id: String { rawValue }
     var icon: String {
-        switch self { case .dashboard: return "square.grid.2x2"; case .tours: return "steeringwheel"; case .users: return "person.2"; case .notifications: return "bell"; case .legal: return "doc.text" }
+        switch self {
+        case .dashboard: return "square.grid.2x2"; case .tours: return "steeringwheel"
+        case .restaurants: return "fork.knife"; case .hotels: return "bed.double.fill"
+        case .users: return "person.2"; case .notifications: return "bell"; case .legal: return "doc.text"
+        }
     }
 }
 struct AdminShell: View {
@@ -81,6 +85,8 @@ struct AdminShell: View {
             switch selection ?? .dashboard {
             case .dashboard: DashboardView(services: services)
             case .tours: ToursView(services: services)
+            case .restaurants: RestaurantsOverviewView(services: services)
+            case .hotels: HotelsOverviewView(services: services)
             case .users: UsersView(repository: services.people)
             case .notifications: NotificationsView(services: services)
             case .legal: LegalSettingsView(repository: services.content)
