@@ -161,7 +161,11 @@ export function AdminTourAccommodationPage() {
       night_date: night,
       night_date_end: endNight,
       price_per_night: price,
-      price_unit: price == null ? null : (form.price_unit.trim() || null),
+      // Ein Preis ohne Einheit würde unten mit einer erfundenen Einheit ("€ / Nacht")
+      // angezeigt, die tatsächlich auch pro Zimmer oder pro Person gemeint sein könnte
+      // (Codex-Review auf #19) -- Einheit deshalb explizit auf denselben Standard setzen,
+      // statt sie leer zu lassen, sobald ein Preis angegeben ist.
+      price_unit: price == null ? null : (form.price_unit.trim() || '€ / Nacht'),
       hotel_url: form.hotel_url.trim() || null,
       booking_url: form.booking_url.trim() || null,
       room_type: form.room_type.trim() || null,

@@ -89,6 +89,20 @@ begin
   if p_kind='hotels' and next_row->>'night_date_end' is not null
     and ((next_row->>'night_date_end')::date < (next_row->>'night_date')::date or (next_row->>'night_date_end')::date >= tour_row.end_date) then raise exception 'INVALID_NIGHT_DATE'; end if;
   if p_kind='hotels' and next_row->>'price_per_night' is not null and (next_row->>'price_per_night')::numeric < 0 then raise exception 'INVALID_PRICE'; end if;
+  -- Ein Preis ohne Einheit würde in der Teilnehmeransicht mit einer erfundenen
+  -- Einheit ("€ / Nacht") angezeigt, die aber z. B. auch pro Zimmer oder pro
+  -- Person gemeint sein könnte (Codex-Review auf #19) -- statt den erfundenen
+  -- Fallback nur clientseitig zu zeigen, wird die Einheit hier serverseitig
+  -- explizit auf denselben Standard gesetzt, sodass die gespeicherten Daten
+  -- ehrlich sind und der symmetrische Constraint unten erfüllt bleibt. Muss
+  -- sowohl next_row (für die untenstehenden Prüfungen) als auch p_values
+  -- (bestimmt, welche Spalten die dynamische insert/update-Anweisung
+  -- überhaupt schreibt) ergänzen, falls der Client den Schlüssel komplett
+  -- weggelassen statt ihn leer mitzusenden hat.
+  if p_kind='hotels' and next_row->>'price_per_night' is not null and coalesce(trim(next_row->>'price_unit'),'')='' then
+    next_row:=next_row||jsonb_build_object('price_unit','€ / Nacht');
+    p_values:=p_values||jsonb_build_object('price_unit','€ / Nacht');
+  end if;
   if p_kind='stages' and (tour_row.start_date= tour_row.end_date or (next_row->>'stage_date')::date is null or (next_row->>'stage_date')::date not between tour_row.start_date and tour_row.end_date
       or (next_row->>'stage_number')::integer <> ((next_row->>'stage_date')::date-tour_row.start_date)+1) then raise exception 'INVALID_STAGE_DATE'; end if;
   if p_kind='stages' and exists(select 1 from public.tour_stages where tour_id=p_parent_id and stage_date=(next_row->>'stage_date')::date and id<>p_id) then raise exception 'STAGE_ALREADY_EXISTS'; end if;

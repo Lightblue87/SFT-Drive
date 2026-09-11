@@ -71,6 +71,12 @@ try {
  const hotelRangeID='00000000-0000-0000-0000-000000000022';
  check((await rpc('admin_save_tour_resource',['hotels',hotelRangeID,tourID,null,{name:'Mehrnächte-Hotel',night_date:'2027-06-18',night_date_end:'2027-06-19',price_per_night:89.5,sort_order:1}])).code,'OK');
  check(Number((await db.query('select night_date_end,price_per_night from tour_hotel_suggestions where id=$1',[hotelRangeID])).rows[0].price_per_night),89.5);
+ // A price without an explicit unit would otherwise be shown with an invented
+ // "€ / Nacht" fallback in the participant view that might actually mean per
+ // room or per person (Codex review on #19) -- admin_save_tour_resource must
+ // default the unit itself, even when the client omits the key entirely
+ // (as this call does) rather than sending it as an explicit empty string.
+ check((await db.query('select price_unit from tour_hotel_suggestions where id=$1',[hotelRangeID])).rows[0].price_unit,'€ / Nacht');
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000023',tourID,null,{name:'Bad end',night_date:'2027-06-18',night_date_end:'2027-06-20'}]),/INVALID_NIGHT_DATE/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000024',tourID,null,{name:'Bad order',night_date:'2027-06-19',night_date_end:'2027-06-18'}]),/INVALID_NIGHT_DATE/);
  await bad(()=>rpc('admin_save_tour_resource',['hotels','00000000-0000-0000-0000-000000000025',tourID,null,{name:'Bad price',night_date:'2027-06-18',price_per_night:-5}]),/INVALID_PRICE/);
@@ -147,6 +153,15 @@ try {
  const copiedMenu=(await db.query('select * from menu_items where restaurant_stop_id=$1',[copiedRestaurant.id])).rows[0];
  check(copiedMenu.name,'Pasta');check(copiedMenu.price,null);
  await bad(()=>rpc('admin_copy_tour_planning',[tourID,copyTourID,true,true,true]),/TARGET_PLANNING_NOT_EMPTY/);
+ // Codex review on #19: deleting a hotel suggestion a participant had selected
+ // previously left an orphaned confirmation (accommodation_choice='suggested_hotel'
+ // with hotel_suggestion_id nulled by the FK's old ON DELETE SET NULL, which
+ // violates the pair check during that internal UPDATE and made the delete
+ // itself fail). Must cascade-delete the confirmation instead, cleanly
+ // requiring the participant to reconfirm rather than blocking the deletion.
+ const hotelRangeRow=(await db.query('select to_jsonb(h) v from tour_hotel_suggestions h where id=$1',[hotelRangeID])).rows[0].v;
+ check((await rpc('admin_delete_tour_resource',['hotels',hotelRangeID,tourID,hotelRangeRow])).code,'OK');
+ check((await db.query('select * from tour_accommodation_confirmations where user_id=$1 and night_date=$2',[member,'2027-06-18'])).rows.length,0);
  await identity(member);await bad(()=>db.query('select * from public.admin_get_registrations_bulk($1::uuid[])',[[tourID]]),/FORBIDDEN/);
  await identity(admin);
  await identity(member);await bad(()=>rpc('admin_save_tour_resource',['hotels',hotelID,tourID,null,{name:'Attack'}]),/FORBIDDEN/);

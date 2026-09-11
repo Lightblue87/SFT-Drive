@@ -118,12 +118,18 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
         // (Codex-Review auf #19) -- Cache leeren und gezielt nur die aktuell
         // geöffneten Ansichten neu laden, kein globales Nachladen aller Touren.
         registrations = [:]
+        // matrix cached the same way as registrations (Codex-Review auf #19): eine
+        // einmal geöffnete Unterkunfts-/Essen-/Check-in-Aufklappliste zeigte nach
+        // "Aktualisieren" weiterhin den alten Stand, obwohl die Zusammenfassung
+        // (summaries) bereits aktualisiert war -- ebenfalls leeren und für die
+        // aktuell aufgeklappten Touren neu laden.
+        matrix = [:]
         switch expandedInfo {
         case .next: if let id = tours.first?.id { await loadRegistrations(id) }
         case .people, .vehicles: await loadAllRegistrations()
         case .tours, nil: break
         }
-        for tourID in expandedTours { await loadRegistrations(tourID) }
+        for tourID in expandedTours { await loadRegistrations(tourID); await loadMatrix(tourID) }
     }
     func toggle(_ metric: DashboardMetric) { expandedMetric = expandedMetric == metric ? nil : metric; expandedInfo = nil }
     func toggleInfo(_ info: DashboardInfo) {

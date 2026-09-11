@@ -11,7 +11,7 @@ alter table public.tour_hotel_suggestions
   add column cancellation_terms text null,
   add column allotment_details text null,
   add column contact text null,
-  add constraint tour_hotel_price_unit_chk check (price_unit is null or price_per_night is not null);
+  add constraint tour_hotel_price_unit_chk check ((price_unit is null) = (price_per_night is null));
 
 alter table public.tour_stops
   add column reservation_people integer null check (reservation_people is null or reservation_people > 0),
@@ -20,7 +20,7 @@ alter table public.tour_stops
 
 alter table public.tour_accommodation_confirmations
   add column accommodation_choice text null,
-  add column hotel_suggestion_id uuid null references public.tour_hotel_suggestions(id) on delete set null,
+  add column hotel_suggestion_id uuid null references public.tour_hotel_suggestions(id) on delete cascade,
   add constraint tour_accommodation_choice_chk check (
     accommodation_choice is null or accommodation_choice in ('suggested_hotel', 'other_accommodation')
   ),

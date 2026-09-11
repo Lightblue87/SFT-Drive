@@ -431,7 +431,17 @@ struct TourEditorView: View {
         .onChange(of: model.combined) { _, _ in if model.loaded { model.persistDraft() } }
         .onChange(of: step) { _, value in UserDefaults.standard.set(value, forKey: model.draftKey + "-step") }
         .confirmationDialog("Ungespeicherte Änderungen verwerfen?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-            Button("Verwerfen", role: .destructive, action: close); Button("Weiter bearbeiten", role: .cancel) { }
+            // "Verwerfen" schloss bisher nur das Sheet, obwohl combined/step laufend
+            // in UserDefaults zwischengespeichert wurden (Codex-Review auf #19) --
+            // beim erneuten Öffnen (oder, bei "new", sogar in einem unabhängigen
+            // zweiten "Neue Tour"-Versuch) kamen die eigentlich verworfenen Werte
+            // sonst zurück. Beide Entwurfsschlüssel jetzt vor dem Schließen entfernen.
+            Button("Verwerfen", role: .destructive) {
+                UserDefaults.standard.removeObject(forKey: model.draftKey)
+                UserDefaults.standard.removeObject(forKey: model.draftKey + "-step")
+                close()
+            }
+            Button("Weiter bearbeiten", role: .cancel) { }
         }
         .confirmationDialog(destructiveAction == "delete" ? "Tour mitsamt Anmeldungen, Stopps und Bestellungen endgültig löschen?" : "Tour absagen und Teilnehmer benachrichtigen?", isPresented: Binding(get: { destructiveAction != nil }, set: { if !$0 { destructiveAction = nil } }), titleVisibility: .visible) {
             Button("Bestätigen", role: .destructive) {
