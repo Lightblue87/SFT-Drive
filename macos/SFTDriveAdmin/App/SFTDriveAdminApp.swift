@@ -45,18 +45,19 @@ struct LoginView: View {
     @State private var showConnection = false
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "gauge.with.dots.needle.67percent").font(.system(size: 70)).foregroundStyle(Color.sftRed).accessibilityHidden(true)
-            Text("SFT Drive").font(.system(size: 36, weight: .bold, design: .rounded))
-            Text("ADMINISTRATION · SPORTFAHRER TREFF").font(.system(.caption, design: .monospaced)).tracking(2).foregroundStyle(.secondary)
+            Image(systemName: "gauge.with.dots.needle.67percent").font(.system(size: 70)).foregroundStyle(SFT.red).accessibilityHidden(true)
+            Text("SFT Drive").font(SFT.ui(36, .bold))
+            Text("ADMINISTRATION · SPORTFAHRER TREFF").font(SFT.mono(11)).tracking(2).foregroundStyle(SFT.inkTertiary)
             TextField("E-Mail", text: $email).textContentType(.username)
             SecureField("Passwort", text: $password).textContentType(.password).onSubmit { login() }
             ErrorBanner(message: auth.error)
-            Button("Anmelden", action: login).buttonStyle(.borderedProminent).controlSize(.large)
+            Button("Anmelden", action: login).buttonStyle(SFTPrimaryButtonStyle()).controlSize(.large)
                 .disabled(email.isEmpty || password.isEmpty || auth.services == nil || auth.busy)
-            Button("Verbindung einrichten") { showConnection = true }
-            Text("Zugang ausschließlich mit einem bestehenden Administratorkonto.").font(.caption).foregroundStyle(.secondary)
+            Button("Verbindung einrichten") { showConnection = true }.buttonStyle(SFTSecondaryButtonStyle())
+            Text("Zugang ausschließlich mit einem bestehenden Administratorkonto.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
         }.textFieldStyle(.roundedBorder).frame(width: 410).padding(40)
-        .sheet(isPresented: $showConnection) { VStack { ConnectionView(); Button("Schließen") { showConnection = false }.padding() } }
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
+        .sheet(isPresented: $showConnection) { VStack { ConnectionView(); Button("Schließen") { showConnection = false }.buttonStyle(SFTSecondaryButtonStyle()).padding() } }
     }
     private func login() { let secret = password; password = ""; Task { await auth.login(email: email, password: secret) } }
 }

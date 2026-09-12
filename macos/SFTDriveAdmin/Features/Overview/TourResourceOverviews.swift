@@ -13,7 +13,10 @@ struct GlobalPlanningView: View {
             GlobalParticipantMatrixView(services: services).tabItem { Label("Teilnehmermatrix", systemImage: "tablecells") }
             HotelsOverviewView(services: services).tabItem { Label("Übernachtungen", systemImage: "bed.double") }
             RestaurantsOverviewView(services: services).tabItem { Label("Restaurants", systemImage: "fork.knife") }
-        }.navigationTitle("Planung")
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Planung")
     }
 }
 
@@ -28,20 +31,29 @@ struct GlobalParticipantMatrixView: View {
     @StateObject private var model = GlobalMatrixModel()
     var body: some View {
         VStack(alignment: .leading) {
-            HStack { TextField("Teilnehmer, Fahrzeug oder Tour", text: $model.query).textFieldStyle(.roundedBorder); Button("Aktualisieren") { Task { await model.load(services) } } }
+            HStack {
+                TextField("Teilnehmer, Fahrzeug oder Tour", text: $model.query).textFieldStyle(.roundedBorder)
+                Button("Aktualisieren") { Task { await model.load(services) } }.buttonStyle(SFTSecondaryButtonStyle())
+            }
             ErrorBanner(message: model.error)
             Table(model.rows.filter { row in model.query.isEmpty || "\(row.values.text("username")) \(row.values.text("vehicle")) \(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? "")".localizedCaseInsensitiveContains(model.query) }) {
                 TableColumn("Tour") { row in Text(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? row.values.text("tour_id")) }
                 TableColumn("Teilnehmer") { Text($0.values.text("username")) }
                 TableColumn("Fahrzeug") { Text($0.values.text("vehicle")) }
-                TableColumn("Status") { Text(Labels.status($0.values.text("status"))) }
+                TableColumn("Status") { row in SFTStatusPill(text: Labels.status(row.values.text("status")), tone: .forStatus(row.values.text("status"))) }
                 TableColumn("Personen") { Text("\($0.values.integer("persons"))") }.width(65)
                 TableColumn("Hotel") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "accommodation", state: "confirmed") == 0 ? "Vollständig" : "\(openCount(row, key: "accommodation", state: "confirmed")) offen") : "–") }
                 TableColumn("Essen") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "restaurants", state: "ordered") == 0 ? "Vollständig" : "\(openCount(row, key: "restaurants", state: "ordered")) offen") : "–") }
                 TableColumn("Check-in") { Text($0.values.text("status") == "confirmed" ? ($0.values.text("checked_in_at").isEmpty ? "Offen" : "Ja") : "–") }
             }
+            .scrollContentBackground(.hidden)
+            .background(SFT.canvas)
             RefreshFooter(time: model.refreshedAt, busy: model.busy)
-        }.padding().task { await model.load(services) }
+        }
+        .padding()
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .task { await model.load(services) }
     }
     private func openCount(_ row: DataRow, key: String, state: String) -> Int { guard case .array(let values) = row.values[key] else { return 0 }; return values.filter { value in guard case .object(let item) = value else { return false }; return !item.boolean(state) }.count }
 }
@@ -94,7 +106,12 @@ struct HotelsOverviewView: View {
             ErrorBanner(message: model.error)
             HSplitView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack { Text("Hotels").font(.title3.bold()); Spacer(); Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy) }.padding()
+                    HStack {
+                        Text("Hotels").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                        Spacer()
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
+                    }.padding()
                     if multiDay.isEmpty && !model.busy {
                         ContentUnavailableView("Keine Mehrtagestouren", systemImage: "bed.double", description: Text("Übernachtungen gelten nur für Touren mit mehreren Tagen."))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -102,18 +119,23 @@ struct HotelsOverviewView: View {
                         List(multiDay, selection: $model.selection) { tour in
                             let summary = model.summaries[tour.id]
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(tour.title).bold()
-                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(.caption).foregroundStyle(.secondary)
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
                                 if let summary {
                                     if let complete = summary.all_nights_confirmed {
-                                        Text("\(complete) / \(summary.confirmed_vehicles) Fahrzeuge: alle Nächte bestätigt").font(.caption)
+                                        SFTStatusPill(
+                                            text: "\(complete) / \(summary.confirmed_vehicles) Nächte vollständig",
+                                            tone: complete == summary.confirmed_vehicles && summary.confirmed_vehicles > 0 ? .confirmed : .open
+                                        )
                                     }
                                     ForEach(summary.nights) { night in
-                                        Text("\(night.night_date): \(night.confirmed) / \(summary.confirmed_vehicles) bestätigt").font(.caption).foregroundStyle(.secondary)
+                                        Text("\(night.night_date): \(night.confirmed) / \(summary.confirmed_vehicles) bestätigt").font(SFT.ui(11)).foregroundStyle(SFT.inkTertiary)
                                     }
                                 }
-                            }.tag(tour.id).padding(.vertical, 4)
+                            }.tag(tour.id).padding(.vertical, 6)
                         }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
                     }
                 }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 if let selected {
@@ -121,7 +143,11 @@ struct HotelsOverviewView: View {
                         .id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else { ContentUnavailableView("Tour auswählen", systemImage: "bed.double").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
             }
-        }.navigationTitle("Hotels").task { await model.load() }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Hotels")
+        .task { await model.load() }
     }
 }
 
@@ -143,17 +169,24 @@ struct ImportOverviewView: View {
             ErrorBanner(message: model.error)
             HSplitView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack { Text("Import").font(.title3.bold()); Spacer(); Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy) }.padding()
+                    HStack {
+                        Text("Import").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                        Spacer()
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
+                    }.padding()
                     if model.tours.isEmpty && !model.busy {
                         ContentUnavailableView("Keine Touren", systemImage: "tray.and.arrow.down", description: Text("Es gibt aktuell keine anstehende Tour, für die Angebote importiert werden könnten."))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         List(model.tours, selection: $model.selection) { tour in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(tour.title).bold()
-                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(.caption).foregroundStyle(.secondary)
-                            }.tag(tour.id).padding(.vertical, 4)
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                            }.tag(tour.id).padding(.vertical, 6)
                         }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
                     }
                 }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 if let selected {
@@ -161,7 +194,11 @@ struct ImportOverviewView: View {
                         .id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else { ContentUnavailableView("Tour auswählen", systemImage: "tray.and.arrow.down").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
             }
-        }.navigationTitle("Import").task { await model.load() }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Import")
+        .task { await model.load() }
     }
 }
 
@@ -183,9 +220,12 @@ struct RestaurantsOverviewView: View {
             HSplitView {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text("Restaurant").font(.title3.bold()); Spacer()
-                        Button("Neuer Restaurant-Stopp", systemImage: "plus") { creating = true }.disabled(model.busy || model.tours.isEmpty)
-                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy)
+                        Text("Restaurant").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                        Spacer()
+                        Button("Neuer Restaurant-Stopp", systemImage: "plus") { creating = true }
+                            .buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy || model.tours.isEmpty)
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
                     }.padding()
                     if withRestaurants.isEmpty && !model.busy {
                         ContentUnavailableView("Keine Restaurant-Stopps", systemImage: "fork.knife", description: Text("Über „Neuer Restaurant-Stopp“ oben oder je Tour unter Tourenverwaltung → Stopps anlegen."))
@@ -194,36 +234,47 @@ struct RestaurantsOverviewView: View {
                         List(withRestaurants, selection: $model.selection) { tour in
                             let restaurants = model.summaries[tour.id]?.restaurants ?? []
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(tour.title).bold()
-                                Text("\(tour.start_date) · \(tour.region)").font(.caption).foregroundStyle(.secondary)
-                                Text("\(restaurants.reduce(0) { $0 + $1.orders }) Bestellungen · \(restaurants.reduce(0) { $0 + $1.dishes }) Gerichte").font(.caption)
-                            }.tag(tour.id).padding(.vertical, 4)
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text("\(tour.start_date) · \(tour.region)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                                Text("\(restaurants.reduce(0) { $0 + $1.orders }) Bestellungen · \(restaurants.reduce(0) { $0 + $1.dishes }) Gerichte").font(SFT.ui(11)).foregroundStyle(SFT.inkSecondary)
+                            }.tag(tour.id).padding(.vertical, 6)
                         }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
                     }
                 }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 if let selected {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(selected.title).font(.title2.bold())
-                        Text("Restaurant-Stopps dieser Tour").foregroundStyle(.secondary)
+                        Text(selected.title).font(SFT.ui(18, .bold)).foregroundStyle(SFT.ink)
+                        Text("Restaurant-Stopps dieser Tour").font(SFT.ui(12)).foregroundStyle(SFT.inkTertiary)
                         List(model.restaurantStops[selected.id] ?? []) { stop in
                             let counts = model.summaries[selected.id]?.restaurants.first { $0.id == stop.id }
                             HStack {
                                 VStack(alignment: .leading) {
-                                    Text(stop.values.text("title")).bold()
-                                    if let counts { Text("\(counts.orders) Bestellungen · \(counts.dishes) Gerichte").font(.caption).foregroundStyle(.secondary) }
-                                    else { Text("Bestellung noch nicht aktiviert").font(.caption).foregroundStyle(.secondary) }
+                                    Text(stop.values.text("title")).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                    if let counts {
+                                        SFTStatusPill(text: "\(counts.orders) Bestellungen · \(counts.dishes) Gerichte", tone: counts.orders > 0 ? .confirmed : .neutral)
+                                    } else {
+                                        SFTStatusPill(text: "Bestellung noch nicht aktiviert", tone: .inactive)
+                                    }
                                 }
                                 Spacer()
-                                Button("Öffnen") { openStop = stop }
-                                Button("Löschen", role: .destructive) { deleting = stop }
+                                Button("Öffnen") { openStop = stop }.buttonStyle(SFTSecondaryButtonStyle())
+                                Button("Löschen", role: .destructive) { deleting = stop }.buttonStyle(SFTDestructiveOutlineButtonStyle())
                             }
                         }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
                         Text("Neue Restaurant-Stopps: Tourenverwaltung → Tour → Stopps → Hinzufügen (Typ „Restaurant“), danach hier oder dort „Speisekarte & Bestellungen“ öffnen.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(SFT.ui(11)).foregroundStyle(SFT.inkTertiary)
                     }.padding().id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else { ContentUnavailableView("Tour auswählen", systemImage: "fork.knife").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
             }
-        }.navigationTitle("Restaurant").task { await model.load() }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Restaurant")
+        .task { await model.load() }
         .sheet(item: $openStop) { stop in
             if let tour = selected { RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await model.load() } } }
         }
@@ -258,7 +309,7 @@ struct NewRestaurantStopSheet: View {
     @StateObject private var model = NewRestaurantStopModel()
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Neuer Restaurant-Stopp").font(.headline)
+            Text("Neuer Restaurant-Stopp").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
             ErrorBanner(message: model.error)
             Form {
                 Picker("Tour", selection: $model.tourID) {
@@ -268,7 +319,7 @@ struct NewRestaurantStopSheet: View {
                 TextField("Bezeichnung", text: $model.title)
             }.formStyle(.grouped)
             HStack {
-                Button("Abbrechen") { close(nil) }
+                Button("Abbrechen") { close(nil) }.buttonStyle(SFTSecondaryButtonStyle())
                 Spacer()
                 Button("Anlegen") {
                     Task { await model.perform {
@@ -279,8 +330,12 @@ struct NewRestaurantStopSheet: View {
                         try await services.content.save(.stops, id: id, parentID: model.tourID, expected: nil, values: payload)
                         close(model.tourID)
                     } }
-                }.buttonStyle(.borderedProminent).disabled(model.busy)
+                }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy)
             }
-        }.padding().frame(width: 420, height: 240)
+        }
+        .padding()
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .frame(width: 420, height: 240)
     }
 }

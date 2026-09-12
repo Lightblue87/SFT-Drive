@@ -111,6 +111,22 @@ enum SFTStatusTone {
     }
 }
 
+extension SFTStatusTone {
+    /// Ordnet die im Projekt verwendeten Status-Strings (Touren, Registrierungen,
+    /// Bestellungen, Sperrstatus, …) einer SFT-Statusfarbe zu, damit Tabellen/
+    /// Matrizen app-weit dieselbe Semantik verwenden statt einer neutralen
+    /// Standardkapsel wie zuvor `StatusBadge`.
+    static func forStatus(_ value: String) -> SFTStatusTone {
+        switch value {
+        case "confirmed", "published", "active", "submitted", "accepted", "true": return .confirmed
+        case "pending", "waitlisted", "draft", "registration_closed": return .open
+        case "rejected", "cancelled", "archived", "blocked", "banned", "false": return .blocked
+        case "completed": return .inactive
+        default: return .neutral
+        }
+    }
+}
+
 // MARK: - Bausteine
 
 struct SFTSectionLabel: View {

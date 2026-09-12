@@ -18,44 +18,53 @@ struct UsersView: View {
     private var selected: AdminUser? { model.users.first { $0.id == model.selection } }
     var body: some View {
         VStack(spacing: 0) {
+            SFTPageHeader(title: "Nutzerverwaltung") {
+                EmptyView()
+            } trailing: {
+                Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.keyboardShortcut("r").buttonStyle(SFTSecondaryButtonStyle())
+            }
             ErrorBanner(message: model.error)
-            TextField("Nutzer nach Name, Username oder E-Mail suchen", text: $model.query).textFieldStyle(.roundedBorder).padding()
+            TextField("Nutzer nach Name, Username oder E-Mail suchen", text: $model.query).textFieldStyle(.roundedBorder).padding(.horizontal).padding(.bottom, 10)
             HSplitView {
                 Table(model.filtered.sorted(using: sortOrder), selection: $model.selection, sortOrder: $sortOrder) {
                     TableColumn("Username", value: \.username)
                     TableColumn("Vorname", value: \.first_name)
                     TableColumn("Nachname", value: \.last_name)
-                    TableColumn("Rolle") { Text($0.is_admin ? "Admin" : "Mitglied") }
-                    TableColumn("Zugang") { Text($0.is_banned ? "Gesperrt" : "Aktiv") }
-                    TableColumn("Registriert") { Text(TourDates.displayDate($0.created_at)) }
-                }.frame(minWidth: 550)
+                    TableColumn("Rolle") { SFTStatusPill(text: $0.is_admin ? "Admin" : "Mitglied", tone: $0.is_admin ? .confirmed : .neutral) }
+                    TableColumn("Zugang") { SFTStatusPill(text: $0.is_banned ? "Gesperrt" : "Aktiv", tone: $0.is_banned ? .blocked : .confirmed) }
+                    TableColumn("Registriert") { Text(TourDates.displayDate($0.created_at)).font(SFT.mono(11)) }
+                }
+                .scrollContentBackground(.hidden)
+                .background(SFT.canvas)
+                .frame(minWidth: 550)
                 if let selected {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(selected.username).font(.title2.bold())
-                            Text("\(selected.first_name) \(selected.last_name)"); Text(selected.email).textSelection(.enabled)
-                            Text("Registriert: \(TourDates.displayDate(selected.created_at))").font(.caption)
-                            Button(selected.is_admin ? "Adminrolle entziehen" : "Adminrolle vergeben") { operation = "role" }
-                            Button(selected.is_banned ? "Entsperren" : "Sperren") { operation = selected.is_banned ? "unban" : "ban" }
-                            Button("Konto löschen", role: .destructive) { operation = "delete" }
-                            Divider(); Text("Fahrzeuggarage").font(.headline)
-                            if model.vehicles.isEmpty { Text("Keine Fahrzeuge gespeichert.").foregroundStyle(.secondary) }
+                            Text(selected.username).font(SFT.ui(20, .bold))
+                            Text("\(selected.first_name) \(selected.last_name)").font(SFT.ui(13)); Text(selected.email).font(SFT.mono(12)).foregroundStyle(SFT.inkSecondary).textSelection(.enabled)
+                            Text("Registriert: \(TourDates.displayDate(selected.created_at))").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                            Button(selected.is_admin ? "Adminrolle entziehen" : "Adminrolle vergeben") { operation = "role" }.buttonStyle(SFTSecondaryButtonStyle())
+                            Button(selected.is_banned ? "Entsperren" : "Sperren") { operation = selected.is_banned ? "unban" : "ban" }.buttonStyle(SFTSecondaryButtonStyle())
+                            Button("Konto löschen", role: .destructive) { operation = "delete" }.buttonStyle(SFTDestructiveOutlineButtonStyle())
+                            Divider().overlay(SFT.border); Text("Fahrzeuggarage").font(SFT.ui(15, .bold))
+                            if model.vehicles.isEmpty { Text("Keine Fahrzeuge gespeichert.").foregroundStyle(SFT.inkTertiary) }
                             ForEach(model.vehicles) { v in
-                                GroupBox {
+                                SFTCard {
                                     VStack(alignment: .leading) {
-                                        Text("\(v.manufacturer) \(v.model)").bold()
-                                        Text("\(v.power_ps) PS · \(v.license_plate ?? "Kein Kennzeichen")")
-                                        if v.is_default { Label("Standardfahrzeug", systemImage: "star.fill").font(.caption) }
+                                        Text("\(v.manufacturer) \(v.model)").font(SFT.ui(13, .semibold))
+                                        Text("\(v.power_ps) PS · \(v.license_plate ?? "Kein Kennzeichen")").font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary)
+                                        if v.is_default { SFTStatusPill(text: "Standardfahrzeug", tone: .confirmed) }
                                     }.frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                         }.padding()
-                    }.frame(minWidth: 300).disabled(model.busy)
+                    }.frame(minWidth: 300).disabled(model.busy).background(SFT.canvas)
                 }
             }
             RefreshFooter(time: model.refreshedAt, busy: model.busy)
-        }.navigationTitle("Nutzerverwaltung")
-        .toolbar { Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.keyboardShortcut("r") }
+        }
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
+        .navigationTitle("Nutzerverwaltung")
         .task { await model.load() }
         .task(id: model.selection) {
             model.vehicles = []

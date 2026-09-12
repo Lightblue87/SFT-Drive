@@ -32,10 +32,24 @@ struct ToursView: View {
     var body: some View {
         VStack(spacing: 0) {
             ErrorBanner(message: model.error)
+            SFTPageHeader(title: "Tourenverwaltung") { EmptyView() } trailing: {
+                Button("Neue Tour", systemImage: "plus") { editor = .init() }
+                    .buttonStyle(SFTPrimaryButtonStyle()).keyboardShortcut("n")
+                Button("Duplizieren", systemImage: "doc.on.doc") { if let selected { editor = .init(sourceID: selected.id, duplicate: true) } }
+                    .buttonStyle(SFTSecondaryButtonStyle()).disabled(selected == nil)
+                Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                    .buttonStyle(SFTSecondaryButtonStyle()).keyboardShortcut("r").disabled(model.busy)
+            }
+            .padding(20)
+            .background(SFT.chrome)
             HSplitView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack { TextField("Touren suchen", text: $model.query).textFieldStyle(.roundedBorder)
-                        Toggle("Archiv", isOn: $model.archived).toggleStyle(.checkbox) }.padding()
+                    HStack {
+                        TextField("Touren suchen", text: $model.query).textFieldStyle(.roundedBorder)
+                        Toggle("Archiv", isOn: $model.archived).toggleStyle(.checkbox)
+                    }
+                    .padding()
+                    .background(SFT.chrome)
                     if model.tours.isEmpty && !model.busy {
                         ContentUnavailableView("Keine Touren", systemImage: "map", description: Text("Suche ändern oder eine Ausfahrt anlegen."))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -44,9 +58,14 @@ struct ToursView: View {
                             TableColumn("Ausfahrt", value: \.title).width(min: 150, ideal: 230)
                             TableColumn("Beginn", value: \.start_date).width(100)
                             TableColumn("Region", value: \.region)
-                            TableColumn("Status") { StatusBadge(value: $0.status) }
+                            TableColumn("Status") { SFTStatusPill(text: Labels.status($0.status), tone: SFTStatusTone.forStatus($0.status)) }
                         }
-                        if model.more { Button("Weitere Touren laden") { Task { await model.load(append: true) } }.disabled(model.busy).padding(8) }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
+                        if model.more {
+                            Button("Weitere Touren laden") { Task { await model.load(append: true) } }
+                                .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy).padding(8)
+                        }
                     }
                 }.frame(minWidth: 450, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 if let selected {
@@ -56,12 +75,9 @@ struct ToursView: View {
             }
             RefreshFooter(time: model.refreshedAt, busy: model.busy)
         }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
         .navigationTitle("Tourenverwaltung")
-        .toolbar {
-            Button("Neue Tour", systemImage: "plus") { editor = .init() }.keyboardShortcut("n")
-            Button("Duplizieren", systemImage: "doc.on.doc") { if let selected { editor = .init(sourceID: selected.id, duplicate: true) } }.disabled(selected == nil)
-            Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.keyboardShortcut("r").disabled(model.busy)
-        }
         .task(id: "\(model.query)|\(model.archived)") {
             do { try await Task.sleep(for: .milliseconds(250)); await model.load() } catch { }
         }
@@ -85,9 +101,17 @@ struct TourWorkspace: View {
     private let sections = ["Übersicht", "Tourdaten", "Tagesplanung", "Teilnehmer", "Restaurants", "Übernachtungen", "Kommunikation", "Medien", "KI-Assistenz"]
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack { VStack(alignment: .leading) { Text(tour.title).font(.title2.bold()); Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").foregroundStyle(.secondary) }
-                Spacer(); Button("Bearbeiten", action: edit) }
-            Picker("Bereich", selection: $section) { ForEach(sections, id: \.self) { Text($0).tag($0) } }.pickerStyle(.menu)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tour.title).font(SFT.ui(20, .bold)).foregroundStyle(SFT.ink)
+                    Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                }
+                Spacer()
+                Button("Bearbeiten", action: edit).buttonStyle(SFTSecondaryButtonStyle())
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                SFTSegmented(selection: $section, options: sections.map { ($0, $0) })
+            }
             switch section {
             case "Tourdaten": TourDataTab(tour: tour, edit: edit)
             case "Tagesplanung": TagesplanungTab(services: services, tour: tour, multiDay: multiDay)
@@ -108,24 +132,33 @@ struct TourDataTab: View {
     let tour: Tour
     let edit: () -> Void
     var body: some View {
-        Form {
-            Section("Grunddaten") {
-                LabeledContent("Titel", value: tour.title)
-                LabeledContent("Region", value: tour.region)
-                LabeledContent("Zeitraum", value: "\(tour.start_date) – \(tour.end_date)")
-                LabeledContent("Status", value: Labels.status(tour.status))
-                LabeledContent("Fahrzeuglimit", value: "\(tour.max_vehicles)")
-                LabeledContent("Bestätigungsmodus", value: Labels.status(tour.confirmation_mode))
-                if let km = tour.route_length_km { LabeledContent("Streckenlänge", value: "\(km) km") }
-            }
-            Section("Anforderungen") {
-                LabeledContent("Kennzeichen", value: tour.license_plate_required ? "Pflicht" : "Optional")
-                if let min = tour.min_power_ps { LabeledContent("Mindestleistung", value: "\(min) PS") }
-                if let max = tour.max_power_ps { LabeledContent("Maximalleistung", value: "\(max) PS") }
-                if let age = tour.min_driver_age { LabeledContent("Mindestalter", value: "\(age)") }
-            }
-            Section { Button("Tourdaten bearbeiten", action: edit) }
-        }.formStyle(.grouped)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SFTCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SFTSectionLabel(text: "Grunddaten")
+                        LabeledContent("Titel", value: tour.title)
+                        LabeledContent("Region", value: tour.region)
+                        LabeledContent("Zeitraum", value: "\(tour.start_date) – \(tour.end_date)")
+                        LabeledContent("Status") { SFTStatusPill(text: Labels.status(tour.status), tone: .forStatus(tour.status)) }
+                        LabeledContent("Fahrzeuglimit", value: "\(tour.max_vehicles)")
+                        LabeledContent("Bestätigungsmodus", value: Labels.status(tour.confirmation_mode))
+                        if let km = tour.route_length_km { LabeledContent("Streckenlänge", value: "\(km) km") }
+                    }
+                }
+                SFTCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SFTSectionLabel(text: "Anforderungen")
+                        LabeledContent("Kennzeichen", value: tour.license_plate_required ? "Pflicht" : "Optional")
+                        if let min = tour.min_power_ps { LabeledContent("Mindestleistung", value: "\(min) PS") }
+                        if let max = tour.max_power_ps { LabeledContent("Maximalleistung", value: "\(max) PS") }
+                        if let age = tour.min_driver_age { LabeledContent("Mindestalter", value: "\(age)") }
+                    }
+                }
+                Button("Tourdaten bearbeiten", action: edit).buttonStyle(SFTPrimaryButtonStyle())
+            }.padding(.vertical, 8)
+        }
+        .foregroundStyle(SFT.ink)
     }
 }
 struct TagesplanungTab: View {
@@ -180,9 +213,11 @@ struct RestaurantsTab: View {
     @State private var adding = false
     var body: some View {
         VStack(alignment: .leading) {
-            HStack { Text("Restaurant-Stopps").font(.headline); Spacer()
-                Button("Neu anlegen", systemImage: "plus") { adding = true }
-                Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly)
+            HStack {
+                Text("Restaurant-Stopps").font(SFT.ui(15, .bold)).foregroundStyle(SFT.ink)
+                Spacer()
+                Button("Neu anlegen", systemImage: "plus") { adding = true }.buttonStyle(SFTSecondaryButtonStyle())
+                Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.buttonStyle(SFTSecondaryButtonStyle()).labelStyle(.iconOnly)
             }
             ErrorBanner(message: model.error)
             if model.stops.isEmpty && !model.busy {
@@ -190,14 +225,18 @@ struct RestaurantsTab: View {
             } else {
                 List(model.stops) { stop in
                     HStack {
-                        Text(stop.values.text("title")).bold()
+                        Text(stop.values.text("title")).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
                         Spacer()
-                        Button("Speisekarte & Bestellungen") { openStop = stop }
+                        Button("Speisekarte & Bestellungen") { openStop = stop }.buttonStyle(SFTSecondaryButtonStyle())
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(SFT.canvas)
             }
             RefreshFooter(time: model.refreshedAt, busy: model.busy)
-        }.task { await load() }
+        }
+        .foregroundStyle(SFT.ink)
+        .task { await load() }
         .sheet(item: $openStop) { stop in RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await load() } } }
         .sheet(isPresented: $adding) {
             ResourceEditorView(repository: services.content, kind: .stops, parentID: tour.id, tour: tour, request: .init()) { adding = false; Task { await load() } }
@@ -223,14 +262,21 @@ struct CommunicationTab: View {
     let edit: () -> Void
     @StateObject private var model = CommunicationModel()
     var body: some View {
-        Form {
-            Section("Links für bestätigte Teilnehmer") {
-                linkRow("Kurviger", model.kurviger)
-                linkRow("Zello", model.zello)
-                linkRow("WhatsApp-Gruppe", model.whatsapp)
-            }
-            Section { Button("Links bearbeiten", action: edit) }
-        }.formStyle(.grouped).task { await model.load(services.tours, tourID: tour.id) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SFTCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SFTSectionLabel(text: "Links für bestätigte Teilnehmer")
+                        linkRow("Kurviger", model.kurviger)
+                        linkRow("Zello", model.zello)
+                        linkRow("WhatsApp-Gruppe", model.whatsapp)
+                    }
+                }
+                Button("Links bearbeiten", action: edit).buttonStyle(SFTPrimaryButtonStyle())
+            }.padding(.vertical, 8)
+        }
+        .foregroundStyle(SFT.ink)
+        .task { await model.load(services.tours, tourID: tour.id) }
     }
     @ViewBuilder private func linkRow(_ title: String, _ value: String) -> some View {
         if let url = URL(string: value), !value.isEmpty { LabeledContent(title) { Link("Öffnen", destination: url) } }
@@ -241,21 +287,30 @@ struct MediaTab: View {
     let tour: Tour
     let edit: () -> Void
     var body: some View {
-        Form {
-            Section("Titelbild") {
-                if let url = tour.cover_image_url, let imageURL = URL(string: url) {
-                    AsyncImage(url: imageURL) { $0.resizable().aspectRatio(contentMode: .fit) } placeholder: { ProgressView() }
-                        .frame(maxHeight: 220)
-                } else { Text("Kein Titelbild hinterlegt.").foregroundStyle(.secondary) }
-            }
-            Section("YouTube") {
-                if let url = tour.youtube_url, let videoURL = URL(string: url), !url.isEmpty {
-                    LabeledContent("Video") { Link("Öffnen", destination: videoURL) }
-                    LabeledContent("Eingebettet anzeigen", value: tour.youtube_embed ? "Ja" : "Nein")
-                } else { Text("Kein Video hinterlegt.").foregroundStyle(.secondary) }
-            }
-            Section { Button("Medien bearbeiten", action: edit) }
-        }.formStyle(.grouped)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SFTCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SFTSectionLabel(text: "Titelbild")
+                        if let url = tour.cover_image_url, let imageURL = URL(string: url) {
+                            AsyncImage(url: imageURL) { $0.resizable().aspectRatio(contentMode: .fit) } placeholder: { ProgressView() }
+                                .frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: SFT.Radius.control))
+                        } else { Text("Kein Titelbild hinterlegt.").font(SFT.ui(12)).foregroundStyle(SFT.inkTertiary) }
+                    }
+                }
+                SFTCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SFTSectionLabel(text: "YouTube")
+                        if let url = tour.youtube_url, let videoURL = URL(string: url), !url.isEmpty {
+                            LabeledContent("Video") { Link("Öffnen", destination: videoURL) }
+                            LabeledContent("Eingebettet anzeigen", value: tour.youtube_embed ? "Ja" : "Nein")
+                        } else { Text("Kein Video hinterlegt.").font(SFT.ui(12)).foregroundStyle(SFT.inkTertiary) }
+                    }
+                }
+                Button("Medien bearbeiten", action: edit).buttonStyle(SFTPrimaryButtonStyle())
+            }.padding(.vertical, 8)
+        }
+        .foregroundStyle(SFT.ink)
     }
 }
 
@@ -357,16 +412,33 @@ struct TourEditorView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack { Text(model.request.duplicate ? "Tour duplizieren" : model.request.sourceID == nil ? "Neue Tour" : "Tour bearbeiten").font(.title2.bold()); Spacer()
-                Button("Abbrechen") { if model.dirty { confirmDiscard = true } else { close() } }.keyboardShortcut(.cancelAction)
-                Button(step == steps.count - 1 ? "Speichern & schließen" : "Zwischenspeichern") { Task { if await model.save(), step == steps.count - 1 { close() } } }.buttonStyle(.borderedProminent).keyboardShortcut("s").disabled(model.busy || !model.loaded)
-            }.padding()
             HStack {
-                Button("Zurück") { step = max(0, step - 1) }.disabled(step == 0)
-                Picker("Schritt", selection: $step) { ForEach(Array(steps.enumerated()), id: \.offset) { index, title in Text("\(index + 1). \(title)").tag(index) } }.frame(maxWidth: 360)
-                Button("Weiter") { step = min(steps.count - 1, step + 1) }.disabled(step == steps.count - 1)
-                Spacer(); Text("Schritt \(step + 1) von \(steps.count)").foregroundStyle(.secondary)
-            }.padding(.horizontal)
+                Text(model.request.duplicate ? "Tour duplizieren" : model.request.sourceID == nil ? "Neue Tour" : "Tour bearbeiten")
+                    .font(SFT.ui(18, .bold)).foregroundStyle(SFT.ink)
+                Spacer()
+                Button("Abbrechen") { if model.dirty { confirmDiscard = true } else { close() } }
+                    .buttonStyle(SFTSecondaryButtonStyle()).keyboardShortcut(.cancelAction)
+                Button(step == steps.count - 1 ? "Speichern & schließen" : "Zwischenspeichern") { Task { if await model.save(), step == steps.count - 1 { close() } } }
+                    .buttonStyle(SFTPrimaryButtonStyle()).keyboardShortcut("s").disabled(model.busy || !model.loaded)
+            }
+            .padding()
+            .background(SFT.chrome)
+            VStack(alignment: .leading, spacing: 8) {
+                SFTProgressBar(fraction: Double(step + 1) / Double(steps.count))
+                HStack {
+                    Button("Zurück", systemImage: "chevron.left") { step = max(0, step - 1) }
+                        .buttonStyle(SFTSecondaryButtonStyle()).disabled(step == 0)
+                    Picker("Schritt", selection: $step) { ForEach(Array(steps.enumerated()), id: \.offset) { index, title in Text("\(index + 1). \(title)").tag(index) } }
+                        .frame(maxWidth: 360)
+                    Button("Weiter", systemImage: "chevron.right") { step = min(steps.count - 1, step + 1) }
+                        .buttonStyle(SFTSecondaryButtonStyle()).disabled(step == steps.count - 1)
+                    Spacer()
+                    Text("Schritt \(step + 1) von \(steps.count)").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 10)
+            .background(SFT.chrome)
             ErrorBanner(message: model.error)
             if let notice = model.notice { Text(notice).foregroundStyle(.orange).padding() }
             if model.conflict != nil {
@@ -426,7 +498,10 @@ struct TourEditorView: View {
                     }
                 }
             }.formStyle(.grouped).disabled(model.busy || !model.loaded)
-        }.frame(width: 760, height: 760).interactiveDismissDisabled(model.dirty || model.busy).protectDraft(model.dirty)
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .frame(width: 760, height: 760).interactiveDismissDisabled(model.dirty || model.busy).protectDraft(model.dirty)
         .task { await model.load(); step = min(steps.count - 1, max(0, UserDefaults.standard.integer(forKey: model.draftKey + "-step"))) }
         .onChange(of: model.combined) { _, _ in if model.loaded { model.persistDraft() } }
         .onChange(of: step) { _, value in UserDefaults.standard.set(value, forKey: model.draftKey + "-step") }

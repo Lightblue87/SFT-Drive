@@ -30,13 +30,13 @@ struct AISettingsView: View {
             Text("Gemeinsames Zeitlimit: \(Int(configuration.timeout)) Sekunden")
             Button("Einstellungen speichern") {
                 do { try saveCredential(); try configuration.save(); state.notice = "Gespeichert." } catch { state.error = error.localizedDescription }
-            }
+            }.buttonStyle(SFTPrimaryButtonStyle())
             Button("Gespeicherten Zugangsschlüssel entfernen", role: .destructive) {
                 do { try KeychainStore(service: "de.sportfahrertreff.sft-drive-admin.ai").remove(key: configuration.credentialKey); token = ""; state.notice = "Zugangsschlüssel entfernt." } catch { state.error = error.localizedDescription }
-            }
+            }.buttonStyle(SFTDestructiveOutlineButtonStyle())
             ErrorBanner(message: state.error)
-            if let notice = state.notice { Text(notice) }
-        }.formStyle(.grouped)
+            if let notice = state.notice { Text(notice).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
+        }.formStyle(.grouped).background(SFT.canvas).foregroundStyle(SFT.ink)
     }
     private func saveCredential() throws {
         _ = try configuration.validatedEndpoint()
@@ -69,56 +69,60 @@ struct ExtractionReviewView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Planung aus einer E-Mail").font(.title3.bold())
-                Text("Signaturen, Buchungsnummern und unnötige personenbezogene Angaben vorher entfernen. Der Text bleibt bis zur bewussten Analyse im Arbeitsspeicher.").font(.caption).foregroundStyle(.secondary)
+                Text("Planung aus einer E-Mail").font(SFT.ui(18, .bold))
+                Text("Signaturen, Buchungsnummern und unnötige personenbezogene Angaben vorher entfernen. Der Text bleibt bis zur bewussten Analyse im Arbeitsspeicher.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                 Picker("Inhalt", selection: $model.kind) { Text("Hotelangebot").tag(ExtractionKind.hotel_offer); Text("Restaurant").tag(ExtractionKind.restaurant) }.disabled(model.busy)
                 TextEditor(text: $model.text).frame(height: 180).font(.body).accessibilityLabel("Ausgewählter E-Mail-Text").disabled(model.busy)
                 HStack {
-                    Button("Analysevorschau") { consent = true }.buttonStyle(.borderedProminent).disabled(model.busy || model.text.isEmpty)
-                    if model.busy { ProgressView().controlSize(.small); Button("Abbrechen") { model.task?.cancel() } }
-                    Button("Verwerfen") { model.clear() }
+                    Button("Analysevorschau") { consent = true }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy || model.text.isEmpty)
+                    if model.busy { ProgressView().controlSize(.small); Button("Abbrechen") { model.task?.cancel() }.buttonStyle(SFTSecondaryButtonStyle()) }
+                    Button("Verwerfen") { model.clear() }.buttonStyle(SFTSecondaryButtonStyle())
                 }
                 ErrorBanner(message: model.error)
                 if let result = model.result {
-                    Text("Erkannt mit \(result.model) · \(result.inputTokens ?? 0) Eingabe- / \(result.outputTokens ?? 0) Ausgabetokens").font(.caption)
+                    Text("Erkannt mit \(result.model) · \(result.inputTokens ?? 0) Eingabe- / \(result.outputTokens ?? 0) Ausgabetokens").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                     ForEach(ExtractionSchema.keys(model.kind), id: \.self) { key in
-                        VStack(alignment: .leading) {
-                            if key == "menu_items", case .array(let items) = result.values[key] {
-                                Text("Speisekarte: \(items.count) Gerichte")
-                                ForEach(Array(items.enumerated()), id: \.offset) { entry in
-                                    if case .object(let item) = entry.element {
-                                        Text("\(item.text("name")) · \(item.text("price")) €")
-                                        Text("Quelle: \(item.text("evidence"))").font(.caption).foregroundStyle(.secondary)
+                        SFTCard {
+                            VStack(alignment: .leading) {
+                                if key == "menu_items", case .array(let items) = result.values[key] {
+                                    Text("Speisekarte: \(items.count) Gerichte").font(SFT.ui(13, .semibold))
+                                    ForEach(Array(items.enumerated()), id: \.offset) { entry in
+                                        if case .object(let item) = entry.element {
+                                            Text("\(item.text("name")) · \(item.text("price")) €").font(SFT.ui(12))
+                                            Text("Quelle: \(item.text("evidence"))").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                                        }
                                     }
-                                }
-                            } else { LabeledContent(label(key), value: result.values.text(key).nilIfEmpty ?? "Ungeklärt") }
-                            if let evidence = result.evidence[key] { Text("Quelle: \(evidence)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                        }.padding(8).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                                } else { LabeledContent(label(key), value: result.values.text(key).nilIfEmpty ?? "Ungeklärt") }
+                                if let evidence = result.evidence[key] { Text("Quelle: \(evidence)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary).textSelection(.enabled) }
+                            }
+                        }
                     }
                     if model.kind == .hotel_offer {
                         Picker("Zielnacht in \(tour.title)", selection: $night) { ForEach(TourDates.days(start: tour.start_date, end: tour.end_date, nights: true), id: \.self) { Text($0).tag($0) } }
                     }
-                    Text("Die nächste Ansicht ist ein korrigierbarer Entwurf. Erst „Speichern“ legt den Hotelvorschlag bzw. Restaurant-Stopp an. Keine Buchungsbestätigung wird erzeugt.").font(.caption)
-                    Button("Entwurf prüfen und übernehmen …") { openDraft(result) }.disabled(model.kind == .hotel_offer && night.isEmpty)
+                    Text("Die nächste Ansicht ist ein korrigierbarer Entwurf. Erst „Speichern“ legt den Hotelvorschlag bzw. Restaurant-Stopp an. Keine Buchungsbestätigung wird erzeugt.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                    Button("Entwurf prüfen und übernehmen …") { openDraft(result) }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.kind == .hotel_offer && night.isEmpty)
                 }
             }
-        }.onAppear { night = tour.end_date > tour.start_date ? tour.start_date : "" }
+            .padding()
+        }
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
+        .onAppear { night = tour.end_date > tour.start_date ? tour.start_date : "" }
         .onDisappear { model.clear() }
         .onChange(of: model.kind) { _, _ in model.result = nil }
         .onChange(of: model.text) { _, _ in if !model.busy { model.result = nil } }
         .sheet(isPresented: $consent) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Diese Analyse senden?").font(.headline)
-                Text("Empfänger: \(AIConfiguration.load().endpoint)\nModell: \(AIConfiguration.load().model)")
+                Text("Diese Analyse senden?").font(SFT.ui(16, .bold))
+                Text("Empfänger: \(AIConfiguration.load().endpoint)\nModell: \(AIConfiguration.load().model)").font(SFT.mono(12)).foregroundStyle(SFT.inkSecondary)
                 if AIConfiguration.load().cloudConfirmed {
-                    Text("Cloud-Modell: der unten stehende Text verlässt diesen Mac und wird an den genannten Empfänger übertragen.")
-                        .font(.caption).foregroundStyle(.orange)
+                    SFTNotice(text: "Cloud-Modell: der unten stehende Text verlässt diesen Mac und wird an den genannten Empfänger übertragen.", tone: .open)
                 }
-                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene Modelle: \(AIConfiguration.load().fallbackModels)").font(.caption) }
+                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene Modelle: \(AIConfiguration.load().fallbackModels)").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary) }
                 ScrollView { Text(model.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 260)
-                Text("Systemauftrag: ausschließlich belegte Hotel-/Restaurantfelder extrahieren; unklare Angaben leer lassen. Keine Datenbankdaten oder Zugangsschlüssel werden an das Modell geschickt.").font(.caption)
-                HStack { Button("Abbrechen") { consent = false }; Spacer(); Button("Jetzt analysieren") { consent = false; model.analyze() }.buttonStyle(.borderedProminent) }
-            }.padding().frame(width: 600)
+                Text("Systemauftrag: ausschließlich belegte Hotel-/Restaurantfelder extrahieren; unklare Angaben leer lassen. Keine Datenbankdaten oder Zugangsschlüssel werden an das Modell geschickt.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                HStack { Button("Abbrechen") { consent = false }.buttonStyle(SFTSecondaryButtonStyle()); Spacer(); Button("Jetzt analysieren") { consent = false; model.analyze() }.buttonStyle(SFTPrimaryButtonStyle()) }
+            }.padding().frame(width: 600).background(SFT.canvas).foregroundStyle(SFT.ink)
         }
         .sheet(item: $editor) { request in ResourceEditorView(repository: services.content, kind: model.kind == .hotel_offer ? .hotels : .stops, parentID: tour.id, tour: tour, request: request) { editor = nil; model.clear() } }
         .sheet(isPresented: $restaurantDraft) {
@@ -157,8 +161,8 @@ struct RestaurantImportReviewView: View {
     @State private var discard = false
     var body: some View {
         VStack {
-            Text("Restaurant-Entwurf · \(tour.title)").font(.headline)
-            Text("Neuer Stopp, Bestellfenster und ausgewählte Gerichte werden gemeinsam gespeichert.").font(.caption)
+            Text("Restaurant-Entwurf · \(tour.title)").font(SFT.ui(16, .bold))
+            Text("Neuer Stopp, Bestellfenster und ausgewählte Gerichte werden gemeinsam gespeichert.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
             ErrorBanner(message: state.error)
             Form {
                 Section("Neuer Restaurant-Stopp") { FormFields(fields: ResourceKind.stops.fields.filter { $0.id != "type" }, values: $stop) }
@@ -166,12 +170,12 @@ struct RestaurantImportReviewView: View {
                 Section("Gerichte prüfen") {
                     ForEach($menu) { $item in
                         FormFields(fields: ResourceKind.menu.fields, values: $item.values)
-                        Button("Gericht aus Entwurf entfernen", role: .destructive) { menu.removeAll { $0.id == item.id } }
-                        Divider()
+                        Button("Gericht aus Entwurf entfernen", role: .destructive) { menu.removeAll { $0.id == item.id } }.buttonStyle(SFTDestructiveOutlineButtonStyle())
+                        Divider().overlay(SFT.border)
                     }
                 }
             }.formStyle(.grouped).disabled(state.busy)
-            HStack { Button("Abbrechen") { discard = true }; Spacer(); Button("Geprüften Entwurf speichern") {
+            HStack { Button("Abbrechen") { discard = true }.buttonStyle(SFTSecondaryButtonStyle()); Spacer(); Button("Geprüften Entwurf speichern") {
                 Task { await state.perform {
                     let stopPayload = try FormValidation.payload(stop, fields: ResourceKind.stops.fields)
                     let settingsPayload = try FormValidation.payload(settings, fields: ResourceKind.restaurantSettings.fields)
@@ -180,8 +184,9 @@ struct RestaurantImportReviewView: View {
                     try await repository.createRestaurant(id: stopID, tourID: tour.id, stop: stopPayload, settings: settingsPayload, menu: items)
                     close()
                 } }
-            }.buttonStyle(.borderedProminent).disabled(state.busy) }
+            }.buttonStyle(SFTPrimaryButtonStyle()).disabled(state.busy) }
         }.padding().frame(width: 690, height: 750).interactiveDismissDisabled().protectDraft(true)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
         .onAppear {
             stop = Dictionary(uniqueKeysWithValues: ResourceKind.stops.fields.map { ($0.id, $0.initial) })
             stop["title"] = result.values["name"] ?? .null
