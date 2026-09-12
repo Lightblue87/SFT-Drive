@@ -25,8 +25,8 @@ struct RootView: View {
     @State private var initialized = false
     var body: some View {
         Group {
-            if auth.authorized, let services = auth.services {
-                AdminShell(services: services).opacity(auth.busy ? 0 : 1).disabled(auth.busy)
+            if auth.authorized, auth.services != nil {
+                RedesignShellView().opacity(auth.busy ? 0 : 1).disabled(auth.busy)
                     .overlay { if auth.busy { ProgressView("Zugriffsberechtigung prüfen …") } }
             }
             else if auth.busy { ProgressView("Zugriffsberechtigung prüfen …") }
