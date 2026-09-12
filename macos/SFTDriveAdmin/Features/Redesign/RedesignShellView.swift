@@ -247,14 +247,11 @@ struct RedesignShellView: View {
         case .meals:
             RestaurantsOverviewView(services: services)
         case .offerImport:
-            // Einziger Bereich ohne echten Speicherpfad (siehe Kommentare in
-            // OfferImportRedesignView.swift) -- vorher gab es dafür noch gar
-            // keine Ansicht, also kein Funktionsverlust gegenüber vorher.
-            OfferImportRedesignView(
-                tours: tours,
-                selectedTourID: $selectedTourID,
-                finish: { section = .meals }
-            )
+            // Echte, bereits bestehende KI-Import-Funktion (ExtractionReviewView,
+            // bisher nur über Tourenverwaltung → Tour → "KI-Assistenz" erreichbar),
+            // hier tourübergreifend über einen Tour-Wähler zugänglich gemacht
+            // (ImportOverviewView, Features/Overview/TourResourceOverviews.swift).
+            ImportOverviewView(services: services)
         case .users:
             UsersView(repository: services.people)
         case .notifications:

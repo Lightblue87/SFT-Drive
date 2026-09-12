@@ -120,6 +120,46 @@ struct HotelsOverviewView: View {
     }
 }
 
+/// Tourübergreifender Einstieg in die bereits bestehende, echte KI-Import-Funktion
+/// (ExtractionReviewView, bisher nur über Tourenverwaltung → Tour → "KI-Assistenz"
+/// erreichbar) -- gleiches Tour-Wähler-Muster wie Hotels/Restaurant, damit "Import"
+/// auch als eigener Sidebar-Bereich eine konkrete Tour braucht, bevor ein
+/// Hotelvorschlag bzw. Restaurant-Stopp daraus abgeleitet werden kann.
+struct ImportOverviewView: View {
+    let services: AppServices
+    @StateObject private var model: TourResourceOverviewModel
+    init(services: AppServices) {
+        self.services = services
+        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
+    }
+    private var selected: Tour? { model.tours.first { $0.id == model.selection } }
+    var body: some View {
+        VStack(spacing: 0) {
+            ErrorBanner(message: model.error)
+            HSplitView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack { Text("Import").font(.title3.bold()); Spacer(); Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy) }.padding()
+                    if model.tours.isEmpty && !model.busy {
+                        ContentUnavailableView("Keine Touren", systemImage: "tray.and.arrow.down", description: Text("Es gibt aktuell keine anstehende Tour, für die Angebote importiert werden könnten."))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(model.tours, selection: $model.selection) { tour in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(tour.title).bold()
+                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(.caption).foregroundStyle(.secondary)
+                            }.tag(tour.id).padding(.vertical, 4)
+                        }
+                    }
+                }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                if let selected {
+                    ScrollView { ExtractionReviewView(services: services, tour: selected).padding() }
+                        .id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else { ContentUnavailableView("Tour auswählen", systemImage: "tray.and.arrow.down").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
+            }
+        }.navigationTitle("Import").task { await model.load() }
+    }
+}
+
 struct RestaurantsOverviewView: View {
     let services: AppServices
     @StateObject private var model: TourResourceOverviewModel

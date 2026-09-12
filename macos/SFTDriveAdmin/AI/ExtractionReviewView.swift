@@ -10,15 +10,20 @@ struct AISettingsView: View {
             Toggle("KI-Unterstützung", isOn: $configuration.enabled)
             Text("Ollama · optionale Analyse, keine automatischen Datenbankänderungen").font(.caption)
             TextField("Ollama-Endpunkt", text: $configuration.endpoint)
-            SecureField("Zugangsschlüssel für eigenen Server (optional lokal)", text: $token)
+            Button("Ollama Cloud (https://ollama.com) verwenden") { configuration.endpoint = "https://ollama.com" }.buttonStyle(.link)
+            SecureField("Zugangsschlüssel (API-Key für Cloud, optional für eigenen Server)", text: $token)
+            Toggle("Cloud-Modell (Text verlässt diesen Mac an Ollama)", isOn: $configuration.cloudConfirmed)
+            Text("Bei Ollama Cloud wird der eingefügte Text an ollama.com übertragen. Modellname gemäß https://ollama.com/models manuell eintragen (z. B. \"…-cloud\"); die lokale Modellliste gilt dafür nicht.").font(.caption).foregroundStyle(.secondary)
             Toggle("Lokale Modelle; Cloud-Funktionen in Ollama deaktiviert", isOn: $configuration.localInferenceConfirmed)
+                .disabled(configuration.cloudConfirmed)
             Text("Ollama mit OLLAMA_NO_CLOUD=1 neu starten. Ein localhost-Endpunkt allein verhindert keine Cloud-Weiterleitung. Es werden keine Modelle installiert.").font(.caption).foregroundStyle(.secondary)
             TextField("Modell", text: $configuration.model)
             if !models.isEmpty { Picker("Installierte Modelle", selection: $configuration.model) { Text("Auswählen").tag(""); ForEach(models, id: \.self) { Text($0).tag($0) } } }
             Button("Modelle laden") { Task { await state.perform {
                 try saveCredential()
                 models = try await OllamaProvider(configuration: configuration, model: configuration.model).models()
-            } } }
+            } } }.disabled(configuration.cloudConfirmed)
+            if configuration.cloudConfirmed { Text("Bei Cloud-Nutzung nicht verfügbar -- die lokale Modellliste (api/tags) gehört zum lokalen Ollama-Daemon.").font(.caption).foregroundStyle(.secondary) }
             Toggle("Fallback bei vorübergehender Nichtverfügbarkeit", isOn: $configuration.fallbackEnabled)
             TextField("Weitere lokale Modelle (je eine Zeile)", text: $configuration.fallbackModels, axis: .vertical).lineLimit(3...4)
             Slider(value: $configuration.timeout, in: 10...180, step: 10) { Text("Zeitlimit") }
@@ -105,7 +110,11 @@ struct ExtractionReviewView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Diese Analyse senden?").font(.headline)
                 Text("Empfänger: \(AIConfiguration.load().endpoint)\nModell: \(AIConfiguration.load().model)")
-                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene lokale Modelle: \(AIConfiguration.load().fallbackModels)").font(.caption) }
+                if AIConfiguration.load().cloudConfirmed {
+                    Text("Cloud-Modell: der unten stehende Text verlässt diesen Mac und wird an den genannten Empfänger übertragen.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene Modelle: \(AIConfiguration.load().fallbackModels)").font(.caption) }
                 ScrollView { Text(model.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 260)
                 Text("Systemauftrag: ausschließlich belegte Hotel-/Restaurantfelder extrahieren; unklare Angaben leer lassen. Keine Datenbankdaten oder Zugangsschlüssel werden an das Modell geschickt.").font(.caption)
                 HStack { Button("Abbrechen") { consent = false }; Spacer(); Button("Jetzt analysieren") { consent = false; model.analyze() }.buttonStyle(.borderedProminent) }
