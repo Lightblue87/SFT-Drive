@@ -1,4 +1,63 @@
 import SwiftUI
+import PDFKit
+import Vision
+import ImageIO
+import UniformTypeIdentifiers
+
+/// Rein lokale Textextraktion für den KI-Import (§39.2/§40.7-Ergänzung):
+/// PDFKit für PDFs, Vision/VNRecognizeTextRequest für Fotos. Das Original
+/// (PDF/Bilddatei) verlässt diesen Mac nie und wird nirgendwo hochgeladen --
+/// nur der lokal erkannte Text landet, wie eingefügter Mailtext auch, im
+/// editierbaren Textfeld, das der Admin vor jeder Analyse sieht und
+/// korrigieren kann (§39.8).
+enum ImportedFileError: LocalizedError {
+    case unsupported, empty
+    var errorDescription: String? {
+        switch self {
+        case .unsupported: return "Dateityp wird nicht unterstützt. Bitte PDF, PNG, JPG oder HEIC verwenden."
+        case .empty: return "Es konnte kein Text erkannt werden. Bitte Text manuell einfügen oder ergänzen."
+        }
+    }
+}
+enum LocalTextExtraction {
+    static let supportedTypes: [UTType] = [.pdf, .png, .jpeg, .heic, .heif]
+    static func extractText(from url: URL) async throws -> String {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let data = try Data(contentsOf: url)
+        let ext = url.pathExtension.lowercased()
+        if ext == "pdf" { return try extractFromPDF(data) }
+        if ["png", "jpg", "jpeg", "heic", "heif"].contains(ext) { return try await recognizeText(in: data) }
+        throw ImportedFileError.unsupported
+    }
+    static func extractFromPDF(_ data: Data) throws -> String {
+        guard let document = PDFDocument(data: data) else { throw ImportedFileError.unsupported }
+        var text = ""
+        for index in 0..<document.pageCount {
+            if let page = document.page(at: index), let pageText = page.string { text += pageText + "\n" }
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw ImportedFileError.empty }
+        return trimmed
+    }
+    static func recognizeText(in data: Data) async throws -> String {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ImportedFileError.unsupported }
+        return try await withCheckedThrowingContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, error in
+                if let error { continuation.resume(throwing: error); return }
+                let lines = (request.results as? [VNRecognizedTextObservation])?.compactMap { $0.topCandidates(1).first?.string } ?? []
+                let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                if text.isEmpty { continuation.resume(throwing: ImportedFileError.empty) } else { continuation.resume(returning: text) }
+            }
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["de-DE", "en-US"]
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do { try handler.perform([request]) } catch { continuation.resume(throwing: error) }
+        }
+    }
+}
 
 struct AISettingsView: View {
     @State private var configuration = AIConfiguration.load()
@@ -66,13 +125,33 @@ struct ExtractionReviewView: View {
     @State private var editor: ResourceEditorRequest?
     @State private var night = ""
     @State private var restaurantDraft = false
+    @State private var filePicker = false
+    @State private var importing = false
+    @State private var dropTargeted = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Planung aus einer E-Mail").font(SFT.ui(18, .bold))
-                Text("Signaturen, Buchungsnummern und unnötige personenbezogene Angaben vorher entfernen. Der Text bleibt bis zur bewussten Analyse im Arbeitsspeicher.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                Text("Planung aus einer E-Mail, PDF oder einem Foto").font(SFT.ui(18, .bold))
+                Text("Signaturen, Buchungsnummern und unnötige personenbezogene Angaben vorher entfernen. Text bleibt bis zur bewussten Analyse im Arbeitsspeicher; PDF/Foto werden nur lokal gelesen und nie hochgeladen.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                 Picker("Inhalt", selection: $model.kind) { Text("Hotelangebot").tag(ExtractionKind.hotel_offer); Text("Restaurant").tag(ExtractionKind.restaurant) }.disabled(model.busy)
-                TextEditor(text: $model.text).frame(height: 180).font(.body).accessibilityLabel("Ausgewählter E-Mail-Text").disabled(model.busy)
+                TextEditor(text: $model.text).frame(height: 180).font(.body).accessibilityLabel("Ausgewählter E-Mail-Text, oder aus PDF/Foto erkannter Text").disabled(model.busy || importing)
+                    .overlay {
+                        if dropTargeted {
+                            RoundedRectangle(cornerRadius: SFT.Radius.control).strokeBorder(SFT.red, lineWidth: 2)
+                        }
+                    }
+                    .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                        guard let provider = providers.first else { return false }
+                        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                            guard let url else { return }
+                            Task { @MainActor in importFile(url) }
+                        }
+                        return true
+                    }
+                HStack {
+                    Button("PDF oder Foto importieren", systemImage: "doc.badge.plus") { filePicker = true }.buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy || importing)
+                    if importing { ProgressView().controlSize(.small); Text("Text wird lokal erkannt …").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary) }
+                }
                 HStack {
                     Button("Analysevorschau") { consent = true }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy || model.text.isEmpty)
                     if model.busy { ProgressView().controlSize(.small); Button("Abbrechen") { model.task?.cancel() }.buttonStyle(SFTSecondaryButtonStyle()) }
@@ -127,6 +206,22 @@ struct ExtractionReviewView: View {
         .sheet(item: $editor) { request in ResourceEditorView(repository: services.content, kind: model.kind == .hotel_offer ? .hotels : .stops, parentID: tour.id, tour: tour, request: request) { editor = nil; model.clear() } }
         .sheet(isPresented: $restaurantDraft) {
             if let result = model.result { RestaurantImportReviewView(repository: services.content, tour: tour, result: result) { restaurantDraft = false; model.clear() } }
+        }
+        .fileImporter(isPresented: $filePicker, allowedContentTypes: LocalTextExtraction.supportedTypes) { result in
+            do { importFile(try result.get()) } catch { model.error = error.localizedDescription }
+        }
+    }
+    /// Liest PDF/Foto ausschließlich lokal (§39.2/§40.7-Ergänzung) und füllt
+    /// nur den erkannten Text in das ohnehin editierbare Textfeld ein -- nie
+    /// wird das Original hochgeladen, nie automatisch analysiert.
+    private func importFile(_ url: URL) {
+        importing = true; model.error = nil
+        Task {
+            defer { importing = false }
+            do {
+                let text = try await LocalTextExtraction.extractText(from: url)
+                model.text = model.text.isEmpty ? text : model.text + "\n\n" + text
+            } catch { model.error = error.localizedDescription }
         }
     }
     private func openDraft(_ result: StructuredResult) {

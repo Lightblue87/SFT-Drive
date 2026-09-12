@@ -42,8 +42,17 @@ enum SFT {
         static let sheet: CGFloat = 14
     }
 
-    // Typografie. Archivo / JetBrains Mono müssen dem Target beiliegen,
-    // sonst greift automatisch die System-Schrift.
+    // Typografie. Archivo (SIL OFL 1.1, Omnibus-Type) und JetBrains Mono
+    // (SIL OFL 1.1, JetBrains) liegen als echte TTF-Ressourcen unter
+    // SFTDriveAdmin/Fonts/ bei (Regular/Medium/SemiBold bzw.
+    // Regular/Medium/Bold je Familie; Lizenztexte liegen daneben als
+    // LICENSE-*-OFL.txt). macOS registriert sie beim Start automatisch über
+    // Info.plist ATSApplicationFontsPath = "Fonts" -- kein zusätzlicher Code
+    // nötig. Font.custom(_:size:) matcht anhand des Familiennamens (nameID 1
+    // bzw. preferred family nameID 16, bei beiden Familien einheitlich
+    // "Archivo"/"JetBrains Mono"); .weight(...) wählt daraus die passende
+    // Schnittdatei. Fehlt eine Ressource dennoch (z. B. gelöscht), fällt
+    // SwiftUI automatisch auf die System-Schrift zurück -- kein Absturz.
     static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .custom("Archivo", size: size).weight(weight)
     }

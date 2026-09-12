@@ -16,6 +16,7 @@
 		52660D1B9D544EDC73785676 /* SFTDriveAdmin/Shared/DraftProtection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667B0E07C92765300E668221 /* SFTDriveAdmin/Shared/DraftProtection.swift */; };
 		6FA3927C2C9A1940658621EF /* SFTDriveAdmin/Auth/AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BE42C99E7AF7CA9303DF22 /* SFTDriveAdmin/Auth/AuthManager.swift */; };
 		7D1944B811FF37517AEEBDCC /* SFTDriveAdmin/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */; };
+		A65447C05B014DD8A9BDF348 /* SFTDriveAdmin/Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 37342225F42C40E7947E9FB3 /* SFTDriveAdmin/Fonts */; };
 		7DC605DBDA52ACFA2F16FBEA /* SFTDriveAdmin/Features/Tours/ToursView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795763FFE4F5D876F4FEF805 /* SFTDriveAdmin/Features/Tours/ToursView.swift */; };
 		897895561656CC63137A4172 /* SFTDriveAdmin/Data/Repositories/Repositories.swift in Sources */ = {isa = PBXBuildFile; fileRef = B926ED4F83526CB77B8B8BF7 /* SFTDriveAdmin/Data/Repositories/Repositories.swift */; };
 		97ACA0BD4D49932C51A9921D /* SFTDriveAdmin/Data/Models/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0870EABADF652F3DFC81EF05 /* SFTDriveAdmin/Data/Models/Models.swift */; };
@@ -53,6 +54,7 @@
 		B926ED4F83526CB77B8B8BF7 /* SFTDriveAdmin/Data/Repositories/Repositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Data/Repositories/Repositories.swift; sourceTree = SOURCE_ROOT; };
 		CACA6DBF5D755B28E79E2FC4 /* SFTDriveAdmin/Features/Users/UsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Users/UsersView.swift; sourceTree = SOURCE_ROOT; };
 		D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SFTDriveAdmin/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		37342225F42C40E7947E9FB3 /* SFTDriveAdmin/Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = SFTDriveAdmin/Fonts; sourceTree = SOURCE_ROOT; };
 		DB22FB42C299EC4904B417DB /* SFTDriveAdmin/Shared/FormSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/FormSchema.swift; sourceTree = SOURCE_ROOT; };
 		DF1D21E0F7D53157222CAB62 /* SFTDriveAdmin/Features/Registrations/RegistrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Registrations/RegistrationsView.swift; sourceTree = SOURCE_ROOT; };
 		E8CCDB8D55BFB49298CA1427 /* SFTDriveAdmin/Features/Settings/SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Settings/SettingsViews.swift; sourceTree = SOURCE_ROOT; };
@@ -99,6 +101,7 @@
 				F53259171738D9FFDE03C275 /* SFTDriveAdmin/Shared/JSONValue.swift */,
 				6FB75F20F5C21D55E2BF8208 /* SFTDriveAdmin/Shared/Views.swift */,
 				D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */,
+				37342225F42C40E7947E9FB3 /* SFTDriveAdmin/Fonts */,
 				87BC1D39DD7C2742EBA50869 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift */,
 				3D502D3CA9A804EBAAC17340 /* SFTDriveAdmin/Features/Overview/TourResourceOverviews.swift */,
 				764C0A8D010FAAB62914867B /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift */,
@@ -176,6 +179,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7D1944B811FF37517AEEBDCC /* SFTDriveAdmin/Assets.xcassets in Resources */,
+				A65447C05B014DD8A9BDF348 /* SFTDriveAdmin/Fonts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
