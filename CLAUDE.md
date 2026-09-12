@@ -7099,20 +7099,28 @@ Verbindlich:
 Architekturentscheidung (bewusst, nach Praxis-Review): statt für jeden
 Bereich eine zweite, rein optische Kopie einer bereits funktionierenden
 Ansicht zu bauen (das wäre exakt die in §2/§18 verbotene "zweite parallele
-Admin-Welt" und dupliziert Fachlogik), wird die neue Sidebar/Optik direkt vor
-die **bestehenden, produktiven** Bildschirme (`DashboardView`, `ToursView`,
-`GlobalPlanningView`, `HotelsOverviewView`, `RestaurantsOverviewView`,
-`ImportOverviewView`/`ExtractionReviewView`, `UsersView`, `NotificationsView`,
-`LegalSettingsView`) gesetzt. Deren ViewModels/Repository-Aufrufe bleiben
-unverändert; nur die Sidebar-Hülle (`RedesignShellView`) und -- schrittweise,
-Bildschirm für Bildschirm -- die visuelle Schicht selbst werden auf die
-`SFTRedesignTheme`-Design-Tokens umgestellt (Karten, Status-Pillen, Kennzahl-
-Kacheln, Buttonstile). Vollständig auf `SFT*`-Komponenten umgestellt ist
-bisher `DashboardView`; die übrigen Bildschirme laufen mit echten Daten unter
-der neuen Sidebar, ihre innere Optik ist noch nicht Feld für Feld auf das
-Kartendesign umgestellt -- das ist eine rein kosmetische Restarbeit ohne
-Funktionslücke und wird schrittweise fortgesetzt, nicht in einem Rutsch mit
-unverifizierten Rewrites von Speicherlogik erkauft.
+Admin-Welt" und dupliziert Fachlogik), wurde die neue Sidebar/Optik direkt vor
+die **bestehenden, produktiven** Bildschirme (`DashboardView`, `ToursView`
+samt `TourWorkspace`/`TourEditorView`, `GlobalPlanningView`,
+`HotelsOverviewView`/`AccommodationView`, `RestaurantsOverviewView`/
+`RestaurantView`, `ImportOverviewView`/`ExtractionReviewView`, `UsersView`,
+`NotificationsView`, `LegalSettingsView`, `LoginView`, `ConnectionView`,
+`AISettingsView`) gesetzt. Deren ViewModels/Repository-Aufrufe blieben dabei
+unverändert; nur die visuelle Schicht wurde screen-für-screen auf die
+`SFTRedesignTheme`-Design-Tokens umgestellt (`SFTCard`, `SFTStatusPill`,
+`SFTMetricTile`, `SFTPrimaryButtonStyle`/`SFTSecondaryButtonStyle`/
+`SFTDestructiveOutlineButtonStyle`, `SFT.ui`/`SFT.mono`). Dabei bewusst
+**nicht** angetastet: native, bereits funktionierende Steuerelemente wie
+`Table` (Sortierung, Spalten), `Form`/`Section` (gruppierte Formulare) und
+`DisclosureGroup` (Konfliktvergleich) -- deren Zeilen/Zellen/Buttons sind
+SFT-gestylt, das Kontrollelement selbst blieb nativ, um ohne lokalen Compiler
+kein funktionierendes Verhalten durch einen Nachbau zu riskieren. Einzige
+gezielte Ausnahme: der Bereichswähler im Tour-Workspace war ein
+Standard-`Picker` und wurde durch `SFTSegmented` in einer horizontal
+scrollbaren Leiste ersetzt (explizite Vorgabe: kein Standard-Picker als
+Hauptnavigation). `SFTStatusTone.forStatus(_:)` bündelt seither die
+Status-Farblogik (Touren-, Registrierungs-, Bestellungs-, Sperrstatus) an
+einer Stelle statt als Ad-hoc-Zuordnung je Bildschirm.
 
 Die früheren, rein kosmetischen Mockup-Dateien mit `SFTRedesignSample`-
 Platzhalterdaten (`DashboardRedesignView`, `ToursRedesignView`,
@@ -7156,26 +7164,57 @@ KI-Import: `ImportOverviewView` macht die bereits bestehende
 Quellenbelegen → prüfbarer Entwurf → gezieltes Speichern über
 `ContentRepository`/`admin_save_tour_resource`/`createRestaurant`)
 tourübergreifend erreichbar, zusätzlich zum bestehenden Zugang über
-Tourenverwaltung → Tour → "KI-Assistenz". `AIConfiguration` unterstützt jetzt
+Tourenverwaltung → Tour → "KI-Assistenz". `AIConfiguration` unterstützt
 zusätzlich zu lokalem Ollama ein Ollama-Cloud-Modell mit eigenem, separatem
 Zustimmungsschalter (`cloudConfirmed`, getrennt von
 `localInferenceConfirmed`) und Zugangsschlüssel im Keychain -- kein stiller
 Wechsel lokal → Cloud, Empfänger/Modell/kompletter Sendetext werden vor jeder
-einzelnen Analyse angezeigt (§39.8). PDFKit- und Vision-Texterkennung für
-Datei-/Foto-Import sind **noch nicht** umgesetzt; der produktive Weg ist
-weiterhin Text einfügen.
+einzelnen Analyse angezeigt (§39.8).
 
-Noch offen (kosmetische bzw. noch nicht produktiv nötige Restarbeit, keine
-Funktionslücke im Sinne von §30-Regressionen):
+`LocalTextExtraction` (`AI/ExtractionReviewView.swift`) ergänzt den bisherigen
+"Text einfügen"-Weg um PDF- und Foto-Import: PDFKit liest den Text aus jeder
+Seite eines PDFs, Vision/`VNRecognizeTextRequest` erkennt Text aus Fotos
+(PNG/JPG/HEIC), beides ausschließlich lokal auf dem Mac -- das Original
+verlässt den Rechner nie und wird nirgendwo hochgeladen (§39.8). Auswahl über
+nativen `fileImporter` oder Drag & Drop auf das Textfeld; der erkannte Text
+landet nur im ohnehin editierbaren Textfeld, das der Admin vor jeder Analyse
+sieht und vor einer fehlgeschlagenen/unvollständigen Erkennung manuell
+korrigieren kann (keine automatische Analyse direkt nach dem Import).
 
-- Feld-für-Feld-Umstellung von `ToursView`/`HotelsOverviewView`/
-  `RestaurantsOverviewView`/`GlobalPlanningView`/`UsersView`/
-  `NotificationsView`/`LegalSettingsView`/`TourEditorView` auf
-  `SFTCard`/`SFTStatusPill`/`SFTMetricTile` statt Systemstandard-Optik.
-- PDFKit-Textextraktion und Vision-Texterkennung für den KI-Import.
-- Archivo/JetBrains Mono als eingebettete App-Ressourcen (aktuell
-  System-Font-Fallback über `SFT.ui`/`SFT.mono`).
+Typografie: Archivo (Omnibus-Type) und JetBrains Mono (JetBrains) liegen als
+echte TTF-Ressourcen unter `macos/SFTDriveAdmin/Fonts/` bei (beide SIL OFL 1.1,
+Lizenztexte als `LICENSE-*-OFL.txt` daneben -- die OFL erlaubt das Einbetten
+in Software ausdrücklich, solange die Schrift nicht separat verkauft wird und
+der Lizenztext beiliegt). `Info.plist` registriert sie über
+`ATSApplicationFontsPath = "Fonts"` beim Start automatisch, ohne
+zusätzlichen Code; `SFT.ui`/`SFT.mono` matchen weiterhin per Familienname und
+fallen automatisch auf die System-Schrift zurück, sollte eine Ressource
+fehlen.
 
-Dieser Abschnitt gilt erst dann als vollständig "umgesetzt", wenn auch diese
-Punkte abgeschlossen sind -- bis dahin beschreibt er den tatsächlichen,
-ehrlichen Zwischenstand nach der PR-#20-Überarbeitung vom 12.09.2026.
+Damit ist die screen-für-screen-Migration auf `SFTRedesignTheme` über alle in
+der Sidebar erreichbaren Bereiche (inklusive Login und Einstellungsfenster)
+sowie die zuvor offenen KI-Import- und Typografie-Punkte umgesetzt. Ehrlich
+offen bleiben:
+
+- **Manuelles Gegenprüfen auf einem echten Mac** (Login, Offline-Start,
+  Fenstergrößen 1380×880/1100×720, Drag & Drop, Tastaturzugriff,
+  VoiceOver) -- in dieser Umgebung ohne physisches/simuliertes macOS-Gerät
+  nicht möglich; verifiziert ist ausschließlich der CI-Build
+  (`swift test` + `xcodebuild build` + Release-Build) sowie die 96
+  Backend-Vertrags-/RLS-Tests.
+- Native Kontrollelemente (`Table`, `Form`, `Picker` außerhalb des
+  Tour-Workspace-Bereichswählers, `DisclosureGroup`) wurden bewusst nicht
+  durch vollständig selbstgebaute SFT-Äquivalente ersetzt (siehe
+  Architekturentscheidung oben) -- ihre Zeilen/Zellen/Buttons sind
+  SFT-gestylt, das Element selbst bleibt nativ.
+- Die globale Zähler-Invalidierung (`RedesignShellView.onChange(of: section)`)
+  lädt `DashboardModel` beim Wechsel auf Dashboard/Hotelplanung/
+  Essensplanung neu -- deckt den häufigsten Fall (Bereichswechsel nach einer
+  Aktion) ab, ist aber keine sofortige Invalidierung nach jeder einzelnen
+  mutierenden Aktion auf jedem Bildschirm (das hätte `DashboardModel` durch
+  praktisch jeden Editor durchreichen müssen).
+
+Dieser Abschnitt gilt als **umgesetzt** für den in dieser Umgebung
+verifizierbaren Umfang (Build, Tests, Code-Review); die manuelle Geräteprüfung
+oben bleibt ein gesondert auszuweisender, noch offener Schritt vor einem
+produktiven Rollout an Administratoren.
