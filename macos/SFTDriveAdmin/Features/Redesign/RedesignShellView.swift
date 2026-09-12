@@ -80,6 +80,19 @@ struct RedesignShellView: View {
         .background(SFT.canvas)
         .foregroundStyle(SFT.ink)
         .tint(SFT.red)
+        // Ein Admin bestätigt/lehnt Registrierungen, checkt ein, erinnert an
+        // Übernachtungen usw. auf anderen Bildschirmen als dem Dashboard --
+        // ohne aktive Invalidierung blieben dessen Kennzahlen und die
+        // Sidebar-Badges (Hotels/Essen) danach veraltet stehen. Statt jede
+        // mutierende Aktion app-weit an DashboardModel zu koppeln (hohe
+        // Kopplung, hohes Risiko ohne lokalen Compiler), wird beim Wechsel
+        // auf einen zähler-relevanten Bereich neu geladen -- deckt den
+        // häufigsten Fall (zwischen Bereichen wechseln) ab, ohne
+        // DashboardModel durch alle Editoren durchzureichen.
+        .onChange(of: section) { _, new in
+            guard new == .dashboard || new == .hotels || new == .meals else { return }
+            Task { await dashboard.load() }
+        }
     }
 
     // MARK: Sidebar
