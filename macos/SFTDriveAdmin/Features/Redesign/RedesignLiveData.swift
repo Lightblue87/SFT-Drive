@@ -113,12 +113,15 @@ extension TourRow {
 /// Lädt beim Erscheinen echte Touren/Planungszahlen und speist sie in RedesignShellView --
 /// die einzige Stelle, an der RootView zwischen Platzhalter- und Live-Daten wählt.
 struct LiveRedesignShellView: View {
+    let services: AppServices
     @StateObject private var loader: RedesignLiveDataLoader
     init(services: AppServices) {
+        self.services = services
         _loader = StateObject(wrappedValue: RedesignLiveDataLoader(services: services))
     }
     var body: some View {
         RedesignShellView(
+            services: services,
             tours: loader.tours,
             openAccommodations: loader.openAccommodations,
             openMeals: loader.openMeals,

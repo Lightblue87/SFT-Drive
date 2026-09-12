@@ -1,10 +1,18 @@
 import SwiftUI
 
-// Navigations-Shell des Redesigns. Parallel zu AdminShell in App/SFTDriveAdminApp.swift,
-// damit der bestehende Aufbau unberührt bleibt. Umschalten:
+// Navigations-Shell des Redesigns, jetzt aktiv in RootView (App/SFTDriveAdminApp.swift)
+// über LiveRedesignShellView (RedesignLiveData.swift). AdminShell bleibt im Code, wird
+// aber nicht mehr verwendet.
 //
-//   AdminShell(services: services)          // bisher
-//   RedesignShellView(services: services)   // neu
+// Nur "Import" ist noch ein reines Mockup (kein Speicherpfad, siehe eigene
+// Kommentare in OfferImportRedesignView.swift) -- alle anderen Bereiche zeigen
+// die bereits produktiv genutzten, vollständig funktionsfähigen bestehenden
+// Views (ToursView, HotelsOverviewView, RestaurantsOverviewView, DashboardView,
+// UsersView, NotificationsView, LegalSettingsView), nur unter der neuen
+// Sidebar/Optik. Die kosmetischen ToursRedesignView/HotelMatrixRedesignView/
+// MealPlanningRedesignView/TourWizardRedesignView/TourEditorRedesignView
+// bleiben als Entwürfe im Repository (weiterhin einzeln per Preview
+// betrachtbar), sind aber aktuell nicht mehr in die Navigation eingehängt.
 
 enum RedesignSection: String, CaseIterable, Identifiable {
     case dashboard = "Dashboard"
@@ -16,6 +24,7 @@ enum RedesignSection: String, CaseIterable, Identifiable {
     case offerImport = "Import"
     case users = "Nutzer"
     case notifications = "Mitteilungen"
+    case legal = "Impressum & Datenschutz"
 
     var id: String { rawValue }
 
@@ -30,41 +39,47 @@ enum RedesignSection: String, CaseIterable, Identifiable {
         case .offerImport: return "tray.and.arrow.down"
         case .users: return "person.2"
         case .notifications: return "bell"
+        case .legal: return "doc.text"
         }
     }
 
-    /// ⌘⌥1 … ⌘⌥6
+    /// ⌘⌥1 … ⌘⌥5 -- nur für die tatsächlich in der Sidebar sichtbaren Einträge
+    /// (.newTour/.editor werden nur noch intern als Navigationsziel verwendet,
+    /// siehe detail-Switch weiter unten).
     var shortcut: Character? {
         switch self {
         case .dashboard: return "1"
         case .tours: return "2"
-        case .newTour: return "3"
-        case .editor: return "4"
-        case .hotels: return "5"
-        case .meals: return "6"
+        case .hotels: return "3"
+        case .meals: return "4"
+        case .offerImport: return "5"
         default: return nil
         }
     }
 }
 
 struct RedesignShellView: View {
+    let services: AppServices
     @State private var section: RedesignSection = .dashboard
     @State private var selectedTourID: String
     @AppStorage("redesign.showShortcutBar") private var showShortcutBar = true
 
-    /// In der App: `let services: AppServices` und die View-Models daraus speisen
-    /// (siehe RedesignLiveData.swift / LiveRedesignShellView).
+    /// Nur noch für die Sidebar-Deko (Zähler-Badges, "zuletzt aktualisiert")
+    /// und den Tour-Picker im noch-kosmetischen Import-Mockup -- die echten
+    /// Bildschirme laden ihre Daten selbst über `services`.
     var tours: [TourRow]
     var openAccommodations: Int
     var openMeals: Int
     var lastRefresh: String
 
     init(
+        services: AppServices,
         tours: [TourRow] = SFTRedesignSample.tours,
         openAccommodations: Int = 9,
         openMeals: Int = 14,
         lastRefresh: String = "14:32"
     ) {
+        self.services = services
         self.tours = tours
         self.openAccommodations = openAccommodations
         self.openMeals = openMeals
@@ -151,10 +166,10 @@ struct RedesignShellView: View {
     }
 
     private var navigationGroup: [RedesignSection] {
-        [.dashboard, .tours, .newTour, .editor, .hotels, .meals, .offerImport]
+        [.dashboard, .tours, .hotels, .meals, .offerImport]
     }
 
-    private var secondaryGroup: [RedesignSection] { [.users, .notifications] }
+    private var secondaryGroup: [RedesignSection] { [.users, .notifications, .legal] }
 
     private func navigationRow(_ item: RedesignSection) -> some View {
         let isActive = section == item
@@ -218,54 +233,34 @@ struct RedesignShellView: View {
     @ViewBuilder private var detail: some View {
         switch section {
         case .dashboard:
-            DashboardRedesignView(
-                tours: tours,
-                openTour: { id in selectedTourID = id; section = .editor },
-                openHotels: { id in selectedTourID = id; section = .hotels },
-                openMeals: { id in selectedTourID = id; section = .meals },
-                createTour: { section = .newTour }
-            )
-        case .tours:
-            ToursRedesignView(
-                tours: tours,
-                openEditor: { id in selectedTourID = id; section = .editor },
-                createTour: { section = .newTour }
-            )
-        case .newTour:
-            TourWizardRedesignView(
-                finish: { section = .editor },
-                cancel: { section = .tours }
-            )
-        case .editor:
-            TourEditorRedesignView(
-                tourID: selectedTourID,
-                openHotels: { section = .hotels },
-                openMeals: { section = .meals },
-                openImport: { section = .offerImport }
-            )
+            DashboardView(services: services)
+        case .tours, .newTour, .editor:
+            // Anlegen/Bearbeiten/Duplizieren regelt ToursView bereits selbst
+            // (eigener "Neue Tour"-Button, eigenes Bearbeiten-Sheet) -- ein
+            // gezielter Sprung von außen direkt in den Editor einer bestimmten
+            // Tour (wie es das Mockup mit .editor vorsah) ist damit (noch)
+            // nicht möglich; der Admin öffnet die Tour stattdessen hier aus
+            // der Liste.
+            ToursView(services: services)
         case .hotels:
-            HotelMatrixRedesignView(tours: tours, selectedTourID: $selectedTourID)
+            HotelsOverviewView(services: services)
         case .meals:
-            MealPlanningRedesignView(
-                tours: tours,
-                selectedTourID: $selectedTourID,
-                openImport: { section = .offerImport }
-            )
+            RestaurantsOverviewView(services: services)
         case .offerImport:
+            // Einziger Bereich ohne echten Speicherpfad (siehe Kommentare in
+            // OfferImportRedesignView.swift) -- vorher gab es dafür noch gar
+            // keine Ansicht, also kein Funktionsverlust gegenüber vorher.
             OfferImportRedesignView(
                 tours: tours,
                 selectedTourID: $selectedTourID,
                 finish: { section = .meals }
             )
-        case .users, .notifications:
-            // Bestehende Views bleiben unverändert eingebunden.
-            VStack(spacing: 8) {
-                Text(section.rawValue).font(SFT.ui(20, .bold))
-                Text("unverändert – bestehende View einsetzen")
-                    .font(SFT.ui(12))
-                    .foregroundStyle(SFT.inkTertiary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .users:
+            UsersView(repository: services.people)
+        case .notifications:
+            NotificationsView(services: services)
+        case .legal:
+            LegalSettingsView(repository: services.content)
         }
     }
 
@@ -301,8 +296,7 @@ private struct OptionalShortcut: ViewModifier {
     }
 }
 
-#Preview {
-    RedesignShellView()
-        .frame(width: 1380, height: 880)
-        .preferredColorScheme(.dark)
-}
+// Kein #Preview mehr hier: RedesignShellView braucht jetzt echte AppServices
+// (siehe init oben) statt reiner Anzeigemodelle. Die einzelnen kosmetischen
+// Redesign-Views (DashboardRedesignView, ToursRedesignView, ...) behalten
+// ihre eigenen #Preview-Blöcke mit SFTRedesignSample-Platzhalterdaten.
