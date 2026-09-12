@@ -12,7 +12,7 @@ Mindestversion: **macOS 15**. Entwicklung: **Xcode 16.4 oder neuer** (Swift 6.1)
 4. „Verbindung einrichten“: Supabase-Projekt-URL und **öffentlichen** Publishable-/Anon-Key der PWA eingeben. Mit bestehendem Admin-Konto anmelden.
 
 Tests und Debug-Build: `bash scripts/check.sh` im Ordner `macos/`.
-Manuelles Release: `bash scripts/release.sh`. Das Universal-ZIP für Apple Silicon und Intel, Versionshinweis und SHA-256-Prüfsumme liegen in `macos/build/distribution/`.
+Manuelles Release: `bash scripts/release.sh`. Universal-ZIP und -DMG für Apple Silicon und Intel, Versionshinweis und SHA-256-Prüfsummen (beide Dateien) liegen in `macos/build/distribution/`.
 
 ## Backend bereitstellen
 
@@ -36,10 +36,10 @@ Vor jeder Analyse werden Empfänger und Text gezeigt. Fehlende Daten bleiben ung
 
 ## Manuelle Weitergabe
 
-Nur die ZIP-Datei über einen vertrauenswürdigen privaten Übergabeweg verteilen. Die App ist ad hoc signiert, **nicht** mit Developer-ID signiert und nicht notarisiert. macOS kann die bekannte App beim ersten Öffnen blockieren; falls zulässig gezielt unter Systemeinstellungen → Datenschutz & Sicherheit freigeben. Gatekeeper oder SIP nicht global abschalten.
+Nur die ZIP- oder DMG-Datei (beide enthalten dieselbe .app, DMG mit gewohntem In-Applications-Installationsablauf) über einen vertrauenswürdigen privaten Übergabeweg verteilen. Die App ist ad hoc signiert, **nicht** mit Developer-ID signiert und nicht notarisiert. macOS kann die bekannte App beim ersten Öffnen blockieren; falls zulässig gezielt unter Systemeinstellungen → Datenschutz & Sicherheit freigeben. Gatekeeper oder SIP nicht global abschalten.
 
 Bei Updates die bisherige App schließen und ersetzen. Keychain-Zugriff nach Ad-hoc-Build-Wechsel kann erneute Freigabe bzw. erneuten Login erfordern. Vor Verteilung auf einem zweiten Mac ohne Entwicklungsumgebung testen.
 
 ## Prüfstatus
 
-Der GitHub-Workflow `macOS Admin` baut und testet auf einem Mac-Runner und erstellt ein herunterladbares ZIP-Artefakt. Ein erfolgreicher Build ersetzt nicht den Oberflächen- und Integrationstest mit einer freigegebenen Supabase-Testumgebung: Admin/normaler Nutzer, Rollenentzug, Token-Refresh, Offline-Start, konkurrierende Änderungen und Erstinstallation auf einem zweiten Mac prüfen. Produktionsmigration und tatsächliche manuelle Verteilung erfolgen separat.
+Der GitHub-Workflow `macOS Admin` baut und testet auf einem Mac-Runner und erstellt ein herunterladbares Artefakt mit ZIP und DMG. Ein erfolgreicher Build ersetzt nicht den Oberflächen- und Integrationstest mit einer freigegebenen Supabase-Testumgebung: Admin/normaler Nutzer, Rollenentzug, Token-Refresh, Offline-Start, konkurrierende Änderungen und Erstinstallation auf einem zweiten Mac prüfen. Produktionsmigration und tatsächliche manuelle Verteilung erfolgen separat.
