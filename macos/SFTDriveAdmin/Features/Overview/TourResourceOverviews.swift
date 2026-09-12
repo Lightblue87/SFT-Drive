@@ -1,10 +1,15 @@
 import SwiftUI
 
+/// Tourübergreifende Kontrollansicht (§3 Redesign-Zielzustand): Teilnehmer-,
+/// Hotel- und Restaurantstatus über alle Touren hinweg. "Teilnahme & To-dos"
+/// ist bewusst kein eigener Tab mehr hier -- das ist exakt der bereits
+/// existierende, jetzt eigenständige "Dashboard"-Bereich; ihn hier zusätzlich
+/// einzubetten würde eine zweite DashboardModel-Instanz und damit doppelten
+/// Traffic erzeugen (§6/§24).
 struct GlobalPlanningView: View {
     let services: AppServices
     var body: some View {
         TabView {
-            DashboardView(services: services).tabItem { Label("Teilnahme & To-dos", systemImage: "checklist") }
             GlobalParticipantMatrixView(services: services).tabItem { Label("Teilnehmermatrix", systemImage: "tablecells") }
             HotelsOverviewView(services: services).tabItem { Label("Übernachtungen", systemImage: "bed.double") }
             RestaurantsOverviewView(services: services).tabItem { Label("Restaurants", systemImage: "fork.knife") }

@@ -1,24 +1,21 @@
 import SwiftUI
 
-// Navigations-Shell des Redesigns, jetzt aktiv in RootView (App/SFTDriveAdminApp.swift)
-// über LiveRedesignShellView (RedesignLiveData.swift). AdminShell bleibt im Code, wird
-// aber nicht mehr verwendet.
+// Navigations-Shell des Redesigns -- die einzige produktive Admin-Oberfläche
+// (RootView → LiveRedesignShellView, App/SFTDriveAdminApp.swift). Siehe
+// CLAUDE.md §40.12 für den verbindlichen Zielzustand.
 //
-// Nur "Import" ist noch ein reines Mockup (kein Speicherpfad, siehe eigene
-// Kommentare in OfferImportRedesignView.swift) -- alle anderen Bereiche zeigen
-// die bereits produktiv genutzten, vollständig funktionsfähigen bestehenden
-// Views (ToursView, HotelsOverviewView, RestaurantsOverviewView, DashboardView,
-// UsersView, NotificationsView, LegalSettingsView), nur unter der neuen
-// Sidebar/Optik. Die kosmetischen ToursRedesignView/HotelMatrixRedesignView/
-// MealPlanningRedesignView/TourWizardRedesignView/TourEditorRedesignView
-// bleiben als Entwürfe im Repository (weiterhin einzeln per Preview
-// betrachtbar), sind aber aktuell nicht mehr in die Navigation eingehängt.
+// Jeder Bereich rendert eine bereits produktiv genutzte, echte Ansicht mit
+// echten Repositories -- keine der früheren kosmetischen
+// DashboardRedesignView/ToursRedesignView/HotelMatrixRedesignView/
+// MealPlanningRedesignView/TourWizardRedesignView/TourEditorRedesignView/
+// OfferImportRedesignView-Mockups (samt SFTRedesignSample-Platzhalterdaten)
+// sind noch Teil der Navigation; sie wurden entfernt statt als tote,
+// parallele Fach-"Welt" im Repository zu verbleiben (§2/§17/§18).
 
 enum RedesignSection: String, CaseIterable, Identifiable {
     case dashboard = "Dashboard"
     case tours = "Touren"
-    case newTour = "Neue Tour"
-    case editor = "Tour-Editor"
+    case planning = "Planung"
     case hotels = "Hotelplanung"
     case meals = "Essensplanung"
     case offerImport = "Import"
@@ -32,8 +29,7 @@ enum RedesignSection: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "square.grid.2x2"
         case .tours: return "steeringwheel"
-        case .newTour: return "plus.rectangle.on.rectangle"
-        case .editor: return "slider.horizontal.3"
+        case .planning: return "checklist"
         case .hotels: return "bed.double"
         case .meals: return "fork.knife"
         case .offerImport: return "tray.and.arrow.down"
@@ -43,16 +39,16 @@ enum RedesignSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// ⌘⌥1 … ⌘⌥5 -- nur für die tatsächlich in der Sidebar sichtbaren Einträge
-    /// (.newTour/.editor werden nur noch intern als Navigationsziel verwendet,
-    /// siehe detail-Switch weiter unten).
+    /// ⌘⌥1 … ⌘⌥6 -- exakt die sechs Hauptbereiche der Sidebar (navigationGroup),
+    /// keine weiteren Ziffern versprochen als tatsächlich belegt sind.
     var shortcut: Character? {
         switch self {
         case .dashboard: return "1"
         case .tours: return "2"
-        case .hotels: return "3"
-        case .meals: return "4"
-        case .offerImport: return "5"
+        case .planning: return "3"
+        case .hotels: return "4"
+        case .meals: return "5"
+        case .offerImport: return "6"
         default: return nil
         }
     }
@@ -60,31 +56,14 @@ enum RedesignSection: String, CaseIterable, Identifiable {
 
 struct RedesignShellView: View {
     let services: AppServices
+    @ObservedObject var dashboard: DashboardModel
+    @EnvironmentObject private var auth: AuthManager
     @State private var section: RedesignSection = .dashboard
-    @State private var selectedTourID: String
     @AppStorage("redesign.showShortcutBar") private var showShortcutBar = true
 
-    /// Nur noch für die Sidebar-Deko (Zähler-Badges, "zuletzt aktualisiert")
-    /// und den Tour-Picker im noch-kosmetischen Import-Mockup -- die echten
-    /// Bildschirme laden ihre Daten selbst über `services`.
-    var tours: [TourRow]
-    var openAccommodations: Int
-    var openMeals: Int
-    var lastRefresh: String
-
-    init(
-        services: AppServices,
-        tours: [TourRow] = SFTRedesignSample.tours,
-        openAccommodations: Int = 9,
-        openMeals: Int = 14,
-        lastRefresh: String = "14:32"
-    ) {
-        self.services = services
-        self.tours = tours
-        self.openAccommodations = openAccommodations
-        self.openMeals = openMeals
-        self.lastRefresh = lastRefresh
-        _selectedTourID = State(initialValue: tours.first?.id ?? "")
+    private var lastRefreshText: String {
+        guard let date = dashboard.refreshedAt else { return "noch nicht" }
+        return date.formatted(date: .omitted, time: .shortened)
     }
 
     var body: some View {
@@ -100,13 +79,7 @@ struct RedesignShellView: View {
         .frame(minWidth: 1100, minHeight: 720)
         .background(SFT.canvas)
         .foregroundStyle(SFT.ink)
-        // Live-Daten laden asynchron nach: springt auf die erste echte Tour,
-        // sobald sie eintrifft, statt dauerhaft auf der Platzhalter-ID stehen
-        // zu bleiben (die Ansicht selbst bleibt über section/selectedTourID
-        // bestehen, @State wird beim erneuten Rendern nicht neu initialisiert).
-        .onChange(of: tours.map(\.id)) { _, ids in
-            if !ids.contains(selectedTourID) { selectedTourID = ids.first ?? "" }
-        }
+        .tint(SFT.red)
     }
 
     // MARK: Sidebar
@@ -145,7 +118,7 @@ struct RedesignShellView: View {
             Spacer(minLength: 12)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("zuletzt \(lastRefresh) aktualisiert")
+                Text("zuletzt \(lastRefreshText) aktualisiert")
                     .font(SFT.mono(11))
                     .foregroundStyle(SFT.inkTertiary)
                 SettingsLink {
@@ -157,6 +130,13 @@ struct RedesignShellView: View {
                     .foregroundStyle(SFT.inkTertiary)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
+                Button {
+                    if DraftRegistry.shared.confirmDiscard() { Task { await auth.logout() } }
+                } label: {
+                    Text("Abmelden").font(SFT.ui(12, .medium)).foregroundStyle(SFT.redInk)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("l", modifiers: [.command, .shift])
             }
             .padding(18)
             .overlay(alignment: .top) { Divider().overlay(SFT.border) }
@@ -166,7 +146,7 @@ struct RedesignShellView: View {
     }
 
     private var navigationGroup: [RedesignSection] {
-        [.dashboard, .tours, .hotels, .meals, .offerImport]
+        [.dashboard, .tours, .planning, .hotels, .meals, .offerImport]
     }
 
     private var secondaryGroup: [RedesignSection] { [.users, .notifications, .legal] }
@@ -219,11 +199,19 @@ struct RedesignShellView: View {
         .modifier(OptionalShortcut(key: item.shortcut))
     }
 
+    // Badges = Anzahl offener Aufgaben, dieselbe Semantik und Formel wie im
+    // Dashboard selbst (DashboardMetric.count in DashboardView.swift) -- eine
+    // gemeinsame DashboardModel-Instanz statt einer zweiten, eigenen Berechnung
+    // (§6/§7 Redesign-Zielzustand).
     private func counter(for item: RedesignSection) -> (text: String, needsAction: Bool)? {
         switch item {
-        case .tours: return ("\(tours.count)", false)
-        case .hotels: return openAccommodations > 0 ? ("\(openAccommodations)", true) : nil
-        case .meals: return openMeals > 0 ? ("\(openMeals)", true) : nil
+        case .tours: return ("\(dashboard.tours.count)", false)
+        case .hotels:
+            let open = dashboard.total(.accommodation)
+            return open > 0 ? ("\(open)", true) : nil
+        case .meals:
+            let open = dashboard.total(.meals)
+            return open > 0 ? ("\(open)", true) : nil
         default: return nil
         }
     }
@@ -233,22 +221,24 @@ struct RedesignShellView: View {
     @ViewBuilder private var detail: some View {
         switch section {
         case .dashboard:
-            DashboardView(services: services)
-        case .tours, .newTour, .editor:
-            // Anlegen/Bearbeiten/Duplizieren regelt ToursView bereits selbst
-            // (eigener "Neue Tour"-Button, eigenes Bearbeiten-Sheet) -- ein
-            // gezielter Sprung von außen direkt in den Editor einer bestimmten
-            // Tour (wie es das Mockup mit .editor vorsah) ist damit (noch)
-            // nicht möglich; der Admin öffnet die Tour stattdessen hier aus
-            // der Liste.
+            DashboardView(services: services, model: dashboard)
+        case .tours:
+            // ToursView regelt Anlegen/Bearbeiten/Duplizieren bereits selbst
+            // (eigener "Neue Tour"-Button, eigenes Bearbeiten-Sheet mit dem
+            // vollständigen, bestehenden achtstufigen Tour-Workspace).
             ToursView(services: services)
+        case .planning:
+            // Tourübergreifende Kontrollansicht: Teilnehmermatrix, Hotels,
+            // Restaurants. "Teilnahme & To-dos" ist bewusst kein Tab hier --
+            // das ist der eigenständige Dashboard-Bereich (kein doppeltes
+            // DashboardModel).
+            GlobalPlanningView(services: services)
         case .hotels:
             HotelsOverviewView(services: services)
         case .meals:
             RestaurantsOverviewView(services: services)
         case .offerImport:
-            // Echte, bereits bestehende KI-Import-Funktion (ExtractionReviewView,
-            // bisher nur über Tourenverwaltung → Tour → "KI-Assistenz" erreichbar),
+            // Echte, bereits bestehende KI-Import-Funktion (ExtractionReviewView),
             // hier tourübergreifend über einen Tour-Wähler zugänglich gemacht
             // (ImportOverviewView, Features/Overview/TourResourceOverviews.swift).
             ImportOverviewView(services: services)
@@ -264,12 +254,8 @@ struct RedesignShellView: View {
     private var shortcutBar: some View {
         HStack(spacing: 18) {
             Group {
-                Text("⌘N neue Tour")
-                Text("⌘D duplizieren")
-                Text("⌘F suchen")
-                Text("⌘S sichern")
-                Text("⇧⌘E erinnern")
                 Text("⌘⌥1…6 Bereiche")
+                Text("⇧⌘L abmelden")
             }
             Spacer()
         }
@@ -292,8 +278,3 @@ private struct OptionalShortcut: ViewModifier {
         }
     }
 }
-
-// Kein #Preview mehr hier: RedesignShellView braucht jetzt echte AppServices
-// (siehe init oben) statt reiner Anzeigemodelle. Die einzelnen kosmetischen
-// Redesign-Views (DashboardRedesignView, ToursRedesignView, ...) behalten
-// ihre eigenen #Preview-Blöcke mit SFTRedesignSample-Platzhalterdaten.

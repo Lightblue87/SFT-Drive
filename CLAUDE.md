@@ -7076,3 +7076,106 @@ einzuspielen und die reale macOS-/PWA-Oberfläche mit Ein- und Mehrtagestour,
 ungültigem Zeitraum, geänderten Tourdaten und Legacy-Datensätzen manuell zu
 prüfen. Diese Betriebs- und Geräteprüfung kann nicht durch den PR allein als
 erledigt gelten.
+
+### 40.12 Verbindlicher Zielzustand macOS Admin UI (PR #20)
+
+Das Redesign ist **kein Preview-Projekt mehr**. Das neue SFT-Drive-Admin-Design
+(`macos/SFTDriveAdmin/Features/Redesign/`) ist die **produktive** Oberfläche der
+Mac-App -- `RootView` zeigt ausschließlich `LiveRedesignShellView`. Die frühere
+`AdminShell`/`NavigationSplitView`-Hauptoberfläche wurde entfernt, nicht nur
+stillgelegt.
+
+Verbindlich:
+
+- Alle produktiv benötigten Admin-Funktionen sind innerhalb des neuen Designs
+  erreichbar und vollständig funktionsfähig.
+- Die vorhandenen Backend-/Repository-/RPC-/ViewModel-Implementierungen aus
+  PR #18/#19 werden weiterverwendet, nicht zweimal gebaut.
+- Keine zweite parallele Fach-Logik, kein Mockup mit Sample-Daten in einem
+  produktiven Navigationspfad.
+- Ein Bildschirm zeigt entweder eine echte, mit Repositories verbundene
+  Ansicht, oder er existiert (noch) nicht in der Navigation.
+
+Architekturentscheidung (bewusst, nach Praxis-Review): statt für jeden
+Bereich eine zweite, rein optische Kopie einer bereits funktionierenden
+Ansicht zu bauen (das wäre exakt die in §2/§18 verbotene "zweite parallele
+Admin-Welt" und dupliziert Fachlogik), wird die neue Sidebar/Optik direkt vor
+die **bestehenden, produktiven** Bildschirme (`DashboardView`, `ToursView`,
+`GlobalPlanningView`, `HotelsOverviewView`, `RestaurantsOverviewView`,
+`ImportOverviewView`/`ExtractionReviewView`, `UsersView`, `NotificationsView`,
+`LegalSettingsView`) gesetzt. Deren ViewModels/Repository-Aufrufe bleiben
+unverändert; nur die Sidebar-Hülle (`RedesignShellView`) und -- schrittweise,
+Bildschirm für Bildschirm -- die visuelle Schicht selbst werden auf die
+`SFTRedesignTheme`-Design-Tokens umgestellt (Karten, Status-Pillen, Kennzahl-
+Kacheln, Buttonstile). Vollständig auf `SFT*`-Komponenten umgestellt ist
+bisher `DashboardView`; die übrigen Bildschirme laufen mit echten Daten unter
+der neuen Sidebar, ihre innere Optik ist noch nicht Feld für Feld auf das
+Kartendesign umgestellt -- das ist eine rein kosmetische Restarbeit ohne
+Funktionslücke und wird schrittweise fortgesetzt, nicht in einem Rutsch mit
+unverifizierten Rewrites von Speicherlogik erkauft.
+
+Die früheren, rein kosmetischen Mockup-Dateien mit `SFTRedesignSample`-
+Platzhalterdaten (`DashboardRedesignView`, `ToursRedesignView`,
+`TourWizardRedesignView`, `TourEditorRedesignView`, `HotelMatrixRedesignView`,
+`MealPlanningRedesignView`, `OfferImportRedesignView`, `RedesignModels`,
+`RedesignSampleData`) wurden entfernt, nicht nur aus der Navigation
+genommen -- sie hätten sonst dauerhaft als zweite, ungenutzte Fach-Welt im
+Repository gelegen.
+
+Sidebar (produktiv, `RedesignSection`):
+
+```text
+Dashboard
+Touren
+Planung
+Hotelplanung
+Essensplanung
+Import
+
+Nutzer
+Mitteilungen
+Impressum & Datenschutz
+```
+
+`Planung` ist die tourübergreifende Kontrollansicht (Teilnehmermatrix, Hotels,
+Restaurants; `GlobalPlanningView`) -- eigenständig neben `Dashboard`, ohne
+dessen `DashboardModel` ein zweites Mal zu instanziieren.
+
+Gemeinsamer Datenstore statt doppeltem Traffic: `LiveRedesignShellView` hält
+die einzige `DashboardModel`-Instanz der Sitzung und lädt sie einmal beim
+Start; `RedesignShellView` liest daraus sowohl den Dashboard-Bildschirm als
+auch die Sidebar-Zähler ("Touren"/"Hotelplanung"/"Essensplanung" -- dieselbe
+Formel wie `DashboardMetric.count()`, keine zweite, abweichende Berechnung
+mehr). Ein früherer separater `RedesignLiveDataLoader` (eigener, zusätzlicher
+`upcoming()`/`summaries()`-Request nur für die Sidebar-Badges, mit einer
+fehlerhaften Essen-Kennzahl `confirmedVehicles - max(orders)` statt der
+Summe offener Bestellungen je Restaurant-Stopp) wurde deshalb entfernt.
+
+KI-Import: `ImportOverviewView` macht die bereits bestehende
+`ExtractionReviewView`-Funktion (Text einfügen → Ollama-Analyse mit
+Quellenbelegen → prüfbarer Entwurf → gezieltes Speichern über
+`ContentRepository`/`admin_save_tour_resource`/`createRestaurant`)
+tourübergreifend erreichbar, zusätzlich zum bestehenden Zugang über
+Tourenverwaltung → Tour → "KI-Assistenz". `AIConfiguration` unterstützt jetzt
+zusätzlich zu lokalem Ollama ein Ollama-Cloud-Modell mit eigenem, separatem
+Zustimmungsschalter (`cloudConfirmed`, getrennt von
+`localInferenceConfirmed`) und Zugangsschlüssel im Keychain -- kein stiller
+Wechsel lokal → Cloud, Empfänger/Modell/kompletter Sendetext werden vor jeder
+einzelnen Analyse angezeigt (§39.8). PDFKit- und Vision-Texterkennung für
+Datei-/Foto-Import sind **noch nicht** umgesetzt; der produktive Weg ist
+weiterhin Text einfügen.
+
+Noch offen (kosmetische bzw. noch nicht produktiv nötige Restarbeit, keine
+Funktionslücke im Sinne von §30-Regressionen):
+
+- Feld-für-Feld-Umstellung von `ToursView`/`HotelsOverviewView`/
+  `RestaurantsOverviewView`/`GlobalPlanningView`/`UsersView`/
+  `NotificationsView`/`LegalSettingsView`/`TourEditorView` auf
+  `SFTCard`/`SFTStatusPill`/`SFTMetricTile` statt Systemstandard-Optik.
+- PDFKit-Textextraktion und Vision-Texterkennung für den KI-Import.
+- Archivo/JetBrains Mono als eingebettete App-Ressourcen (aktuell
+  System-Font-Fallback über `SFT.ui`/`SFT.mono`).
+
+Dieser Abschnitt gilt erst dann als vollständig "umgesetzt", wenn auch diese
+Punkte abgeschlossen sind -- bis dahin beschreibt er den tatsächlichen,
+ehrlichen Zwischenstand nach der PR-#20-Überarbeitung vom 12.09.2026.

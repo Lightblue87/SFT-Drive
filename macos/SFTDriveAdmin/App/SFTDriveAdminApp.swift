@@ -60,36 +60,10 @@ struct LoginView: View {
     }
     private func login() { let secret = password; password = ""; Task { await auth.login(email: email, password: secret) } }
 }
-enum AppSection: String, CaseIterable, Identifiable {
-    case dashboard = "Dashboard", tours = "Touren", planning = "Planung", users = "Nutzer", notifications = "Mitteilungen", legal = "Impressum & Datenschutz"
-    var id: String { rawValue }
-    var icon: String {
-        switch self {
-        case .dashboard: return "square.grid.2x2"; case .tours: return "steeringwheel"
-        case .planning: return "checklist"
-        case .users: return "person.2"; case .notifications: return "bell"; case .legal: return "doc.text"
-        }
-    }
-}
-struct AdminShell: View {
-    let services: AppServices
-    @State private var selection: AppSection? = .dashboard
-    @EnvironmentObject private var auth: AuthManager
-    var body: some View {
-        NavigationSplitView {
-            List(AppSection.allCases, selection: Binding(get: { selection }, set: { value in if value == selection || DraftRegistry.shared.confirmDiscard() { selection = value } })) { section in Label(section.rawValue, systemImage: section.icon).tag(section) }
-                .safeAreaInset(edge: .top) { HStack { Image(systemName: "gauge.with.dots.needle.67percent").foregroundStyle(Color.sftRed); Text("SFT DRIVE").font(.headline) }.padding(20) }
-                .safeAreaInset(edge: .bottom) { VStack(alignment: .leading) { SettingsLink { Label("Einstellungen", systemImage: "gearshape") }; Button("Abmelden") { if DraftRegistry.shared.confirmDiscard() { Task { await auth.logout() } } } }.buttonStyle(.plain).padding(20) }
-                .navigationSplitViewColumnWidth(min: 210, ideal: 225, max: 270)
-        } detail: {
-            switch selection ?? .dashboard {
-            case .dashboard: DashboardView(services: services)
-            case .tours: ToursView(services: services)
-            case .planning: GlobalPlanningView(services: services)
-            case .users: UsersView(repository: services.people)
-            case .notifications: NotificationsView(services: services)
-            case .legal: LegalSettingsView(repository: services.content)
-            }
-        }
-    }
-}
+// AdminShell/AppSection (die alte NavigationSplitView-Hauptoberfläche) wurden
+// entfernt: RedesignShellView (Features/Redesign/) ist jetzt die einzige
+// produktive Admin-Oberfläche, siehe CLAUDE.md §40.12. Ihre fachlichen
+// Bildschirme sind dieselben wiederverwendeten Views wie zuvor hier
+// (DashboardView, ToursView, GlobalPlanningView, UsersView,
+// NotificationsView, LegalSettingsView) -- keine doppelte Fachlogik, nur eine
+// einzige aktive Navigationshülle.
