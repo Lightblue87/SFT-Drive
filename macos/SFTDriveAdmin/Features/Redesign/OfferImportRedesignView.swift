@@ -416,7 +416,7 @@ struct OfferImportRedesignView: View {
                         }
                     }
                     Spacer(minLength: 8)
-                    Text(dish.price.map { "\($0)" } ?? "—")
+                    Text(verbatim: dish.price.map { "\($0)" } ?? "—")
                         .font(SFT.mono(12, .medium))
                         .frame(width: 70, alignment: .trailing)
                     Group {
