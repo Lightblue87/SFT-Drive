@@ -11,20 +11,32 @@ import UniformTypeIdentifiers
 /// editierbaren Textfeld, das der Admin vor jeder Analyse sieht und
 /// korrigieren kann (§39.8).
 enum ImportedFileError: LocalizedError {
-    case unsupported, empty
+    case unsupported, empty, tooLarge
     var errorDescription: String? {
         switch self {
         case .unsupported: return "Dateityp wird nicht unterstützt. Bitte PDF, PNG, JPG oder HEIC verwenden."
         case .empty: return "Es konnte kein Text erkannt werden. Bitte Text manuell einfügen oder ergänzen."
+        case .tooLarge: return "Datei ist größer als \(LocalTextExtraction.maxFileSizeMB) MB. Bitte eine kleinere Datei wählen oder den Text manuell einfügen."
         }
     }
 }
 enum LocalTextExtraction {
     static let supportedTypes: [UTType] = [.pdf, .png, .jpeg, .heic, .heif]
+    // Owner-Review auf PR #20 (P2): ohne Obergrenze konnten sehr große PDFs/
+    // HEICs unnötig viel RAM belegen und PDFKit/Vision lange blockieren.
+    static let maxFileSizeMB = 20
+    static var maxFileSizeBytes: Int { maxFileSizeMB * 1_000_000 }
+    // Läuft absichtlich nicht auf dem Main Actor -- der Aufrufer (importFile()
+    // in ExtractionReviewView) startet dies über Task.detached, damit große
+    // Dateien die UI nicht blockieren (Owner-Review auf PR #20, P2).
     static func extractText(from url: URL) async throws -> String {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int, size > maxFileSizeBytes {
+            throw ImportedFileError.tooLarge
+        }
         let data = try Data(contentsOf: url)
+        guard data.count <= maxFileSizeBytes else { throw ImportedFileError.tooLarge }
         let ext = url.pathExtension.lowercased()
         if ext == "pdf" { return try extractFromPDF(data) }
         if ["png", "jpg", "jpeg", "heic", "heif"].contains(ext) { return try await recognizeText(in: data) }
@@ -216,12 +228,19 @@ struct ExtractionReviewView: View {
     /// wird das Original hochgeladen, nie automatisch analysiert.
     private func importFile(_ url: URL) {
         importing = true; model.error = nil
-        Task {
-            defer { importing = false }
+        // Task.detached statt Task {} -- die Extraktion (PDFKit/Vision) soll
+        // nicht auf dem Main Actor laufen, sonst blockiert eine große Datei
+        // kurzzeitig die UI (Owner-Review auf PR #20, P2). Rückweg auf den
+        // Main Actor erfolgt explizit über model (bereits @MainActor) bzw.
+        // MainActor.run für den View-lokalen @State.
+        Task.detached(priority: .userInitiated) { [self] in
             do {
                 let text = try await LocalTextExtraction.extractText(from: url)
-                model.text = model.text.isEmpty ? text : model.text + "\n\n" + text
-            } catch { model.error = error.localizedDescription }
+                await MainActor.run { model.text = model.text.isEmpty ? text : model.text + "\n\n" + text }
+            } catch {
+                await MainActor.run { model.error = error.localizedDescription }
+            }
+            await MainActor.run { importing = false }
         }
     }
     private func openDraft(_ result: StructuredResult) {

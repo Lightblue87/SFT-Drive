@@ -98,13 +98,16 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
         let full = "\(user.first_name) \(user.last_name)".trimmingCharacters(in: .whitespaces)
         return full.isEmpty ? user.username : "\(full) · \(user.username)"
     }
-    func load() async {
+    // Nur Touren + Zusammenfassungen -- alles, was die Sidebar-Badges
+    // (Touren/Hotelplanung/Essensplanung) tatsächlich brauchen. Bewusst
+    // KEINE Nutzerliste und KEINE Fristen: die waren zuvor Teil jedes
+    // Bereichswechsel-Refreshs, obwohl nur beim Dashboard selbst sichtbar
+    // (Owner-Review auf PR #20, P2 "unnötiger Traffic beim Bereichswechsel").
+    func refreshOverview() async {
         await perform {
             tours = try await toursRepository.upcoming()
-            users = try await people.users()
             let rows = try await planning.summaries(tours.map(\.id))
             summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
-            deadlines = Dictionary(grouping: try await planning.deadlines(tours.map(\.id)), by: \.tour_id)
             // A failed summary must not silently read as an empty/zero planning
             // state (PR #18 review) -- surface which tours it affects.
             let failed = rows.filter { $0.summary == nil }
@@ -112,6 +115,17 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
                 let titles = failed.compactMap { row in tours.first { $0.id == row.tour_id }?.title ?? row.tour_id }.joined(separator: ", ")
                 error = "Planungsdaten konnten nicht geladen werden für: \(titles)."
             }
+        }
+    }
+    // Vollständiger Dashboard-Load: refreshOverview() plus Nutzerliste (für
+    // Klarnamen in Registrierungslisten) und Fristen (Fristen-Kachel) --
+    // nur nötig, wenn der Dashboard-Bildschirm selbst tatsächlich sichtbar
+    // ist bzw. beim expliziten "Aktualisieren".
+    func load() async {
+        await refreshOverview()
+        await perform {
+            users = try await people.users()
+            deadlines = Dictionary(grouping: try await planning.deadlines(tours.map(\.id)), by: \.tour_id)
         }
         // Bereits sichtbare Drilldowns sollen nach "Aktualisieren" ebenfalls
         // frische Registrierungsdaten zeigen statt beliebig alten Cache-Stand

@@ -89,9 +89,21 @@ struct RedesignShellView: View {
         // auf einen zähler-relevanten Bereich neu geladen -- deckt den
         // häufigsten Fall (zwischen Bereichen wechseln) ab, ohne
         // DashboardModel durch alle Editoren durchzureichen.
+        //
+        // Hotels/Meals zeigen dabei nur ihr eigenes, lokal geladenes
+        // TourResourceOverviewModel -- sie lesen aus DashboardModel
+        // ausschließlich die Sidebar-Zähler, nicht Nutzerliste/Fristen.
+        // refreshOverview() lädt deshalb bewusst nur Touren + Summaries statt
+        // des vollen load() (Owner-Review auf PR #20, P2: unnötiger Traffic
+        // beim Bereichswechsel). Nur beim tatsächlichen Öffnen des
+        // Dashboard-Bildschirms selbst (der auch Klarnamen/Fristen zeigt)
+        // lohnt sich der vollständige load().
         .onChange(of: section) { _, new in
-            guard new == .dashboard || new == .hotels || new == .meals else { return }
-            Task { await dashboard.load() }
+            switch new {
+            case .dashboard: Task { await dashboard.load() }
+            case .hotels, .meals: Task { await dashboard.refreshOverview() }
+            default: break
+            }
         }
     }
 
