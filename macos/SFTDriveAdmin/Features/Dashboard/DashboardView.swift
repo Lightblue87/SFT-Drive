@@ -98,13 +98,16 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
         let full = "\(user.first_name) \(user.last_name)".trimmingCharacters(in: .whitespaces)
         return full.isEmpty ? user.username : "\(full) · \(user.username)"
     }
-    func load() async {
+    // Nur Touren + Zusammenfassungen -- alles, was die Sidebar-Badges
+    // (Touren/Hotelplanung/Essensplanung) tatsächlich brauchen. Bewusst
+    // KEINE Nutzerliste und KEINE Fristen: die waren zuvor Teil jedes
+    // Bereichswechsel-Refreshs, obwohl nur beim Dashboard selbst sichtbar
+    // (Owner-Review auf PR #20, P2 "unnötiger Traffic beim Bereichswechsel").
+    func refreshOverview() async {
         await perform {
             tours = try await toursRepository.upcoming()
-            users = try await people.users()
             let rows = try await planning.summaries(tours.map(\.id))
             summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
-            deadlines = Dictionary(grouping: try await planning.deadlines(tours.map(\.id)), by: \.tour_id)
             // A failed summary must not silently read as an empty/zero planning
             // state (PR #18 review) -- surface which tours it affects.
             let failed = rows.filter { $0.summary == nil }
@@ -112,6 +115,17 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
                 let titles = failed.compactMap { row in tours.first { $0.id == row.tour_id }?.title ?? row.tour_id }.joined(separator: ", ")
                 error = "Planungsdaten konnten nicht geladen werden für: \(titles)."
             }
+        }
+    }
+    // Vollständiger Dashboard-Load: refreshOverview() plus Nutzerliste (für
+    // Klarnamen in Registrierungslisten) und Fristen (Fristen-Kachel) --
+    // nur nötig, wenn der Dashboard-Bildschirm selbst tatsächlich sichtbar
+    // ist bzw. beim expliziten "Aktualisieren".
+    func load() async {
+        await refreshOverview()
+        await perform {
+            users = try await people.users()
+            deadlines = Dictionary(grouping: try await planning.deadlines(tours.map(\.id)), by: \.tour_id)
         }
         // Bereits sichtbare Drilldowns sollen nach "Aktualisieren" ebenfalls
         // frische Registrierungsdaten zeigen statt beliebig alten Cache-Stand
@@ -196,24 +210,27 @@ enum DashboardInfo: String, Identifiable, CaseIterable {
 
 struct DashboardView: View {
     let services: AppServices
-    @StateObject private var model: DashboardModel
-    init(services: AppServices) {
+    /// Extern besessen statt selbst erzeugt, damit Sidebar-Zähler (RedesignShellView)
+    /// und dieser Bildschirm dieselbe Instanz und denselben Request teilen, statt
+    /// beim Wechsel auf "Dashboard" ein zweites Mal alles neu zu laden (§4/§24
+    /// Free-Tier-Regel: kein doppelter Traffic für dieselben Daten).
+    @ObservedObject var model: DashboardModel
+    init(services: AppServices, model: DashboardModel) {
         self.services = services
-        _model = StateObject(wrappedValue: DashboardModel(toursRepository: services.tours, people: services.people, planning: services.planning))
+        self.model = model
     }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("Ausfahrten im Blick").font(.largeTitle.bold())
-                        Text("Planung, Anfragen und Organisation über alle kommenden Touren.").foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }.disabled(model.busy)
+                SFTPageHeader(title: "Ausfahrten im Blick") {
+                    Text("Planung, Anfragen und Organisation über alle kommenden Touren.")
+                        .font(SFT.ui(12)).foregroundStyle(SFT.inkTertiary)
+                } trailing: {
+                    Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                        .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
                 }
                 ErrorBanner(message: model.error)
-                if let notice = model.notice { Text(notice).foregroundStyle(.secondary) }
+                if let notice = model.notice { SFTNotice(text: notice) }
                 if model.tours.isEmpty && !model.busy {
                     ContentUnavailableView("Keine anstehenden Touren", systemImage: "map", description: Text("Veröffentlichte Touren erscheinen hier."))
                 } else {
@@ -231,53 +248,52 @@ struct DashboardView: View {
                 }
                 RefreshFooter(time: model.refreshedAt, busy: model.busy)
             }.padding(28)
-        }.navigationTitle("Dashboard").task { await model.load() }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Dashboard")
+        // Kein eigener .task hier -- die gemeinsame Instanz wird von ihrem Besitzer
+        // (LiveRedesignShellView) genau einmal beim App-/Sitzungsstart geladen;
+        // "Aktualisieren" oben bleibt der bewusste, benutzerausgelöste Refresh-Weg.
     }
     private func infoTile(_ info: DashboardInfo, _ value: String) -> some View {
-        Button { model.toggleInfo(info) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                Label(info.title, systemImage: info.symbol).font(.caption).foregroundStyle(.secondary)
-                Text(value).font(.system(size: 22, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
-                .background(model.expandedInfo == info ? Color.sftRed.opacity(0.18) : Color.gray.opacity(0.15), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(model.expandedInfo == info ? Color.sftRed : .clear, lineWidth: 1.5))
-        }.buttonStyle(.plain)
+        SFTMetricTile(title: info.title, value: value, isActive: model.expandedInfo == info) { model.toggleInfo(info) }
     }
     private func metricTile(_ metric: DashboardMetric) -> some View {
-        Button { model.toggle(metric) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                Label(metric.title, systemImage: metric.symbol).font(.caption).foregroundStyle(.secondary)
-                Text("\(model.total(metric))").font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
-                .background(model.expandedMetric == metric ? Color.sftRed.opacity(0.18) : Color.gray.opacity(0.15), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(model.expandedMetric == metric ? Color.sftRed : .clear, lineWidth: 1.5))
-        }.buttonStyle(.plain)
+        let total = model.total(metric)
+        return SFTMetricTile(
+            title: metric.title, value: "\(total)",
+            needsAction: total > 0, isZero: total == 0,
+            isActive: model.expandedMetric == metric
+        ) { model.toggle(metric) }
     }
     private func drillDown(_ metric: DashboardMetric) -> some View {
         let relevant = model.tours.filter { model.count(metric, tour: $0) > 0 }
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(metric.title).font(.title3.bold())
-            if relevant.isEmpty {
-                Text("Aktuell keine Einträge.").foregroundStyle(.secondary).padding(.vertical, 8)
-            } else {
-                ForEach(relevant) { tour in
-                    DisclosureGroup(isExpanded: Binding(
-                        get: { model.expandedTours.contains(tour.id) },
-                        set: { model.setExpanded(tour.id, $0) }
-                    )) {
-                        tourRows(tour, metric: metric)
-                    } label: {
-                        HStack {
-                            Text(tour.title).bold()
-                            Text(tour.start_date).foregroundStyle(.secondary).font(.caption)
-                            Spacer()
-                            Text("\(model.count(metric, tour: tour))").foregroundStyle(.secondary)
-                        }
-                    }.padding(.vertical, 6)
-                    Divider()
+        return SFTCard {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(metric.title).font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                if relevant.isEmpty {
+                    Text("Aktuell keine Einträge.").font(SFT.ui(12)).foregroundStyle(SFT.inkTertiary).padding(.vertical, 8)
+                } else {
+                    ForEach(relevant) { tour in
+                        DisclosureGroup(isExpanded: Binding(
+                            get: { model.expandedTours.contains(tour.id) },
+                            set: { model.setExpanded(tour.id, $0) }
+                        )) {
+                            tourRows(tour, metric: metric)
+                        } label: {
+                            HStack {
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text(tour.start_date).font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                                Spacer()
+                                Text("\(model.count(metric, tour: tour))").font(SFT.mono(12)).foregroundStyle(SFT.amber)
+                            }
+                        }.padding(.vertical, 6)
+                        Divider().overlay(SFT.hairline)
+                    }
                 }
             }
-        }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+        }
     }
     @ViewBuilder private func infoDrillDown(_ info: DashboardInfo) -> some View {
         switch info {
@@ -288,10 +304,12 @@ struct DashboardView: View {
         }
     }
     private func sectionBox<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.title3.bold())
-            content()
-        }.padding(18).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
+        SFTCard {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                content()
+            }
+        }
     }
     @ViewBuilder private func toursList() -> some View {
         sectionBox(DashboardInfo.tours.title) {

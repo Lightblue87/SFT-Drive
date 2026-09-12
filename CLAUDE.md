@@ -7076,3 +7076,145 @@ einzuspielen und die reale macOS-/PWA-Oberfläche mit Ein- und Mehrtagestour,
 ungültigem Zeitraum, geänderten Tourdaten und Legacy-Datensätzen manuell zu
 prüfen. Diese Betriebs- und Geräteprüfung kann nicht durch den PR allein als
 erledigt gelten.
+
+### 40.12 Verbindlicher Zielzustand macOS Admin UI (PR #20)
+
+Das Redesign ist **kein Preview-Projekt mehr**. Das neue SFT-Drive-Admin-Design
+(`macos/SFTDriveAdmin/Features/Redesign/`) ist die **produktive** Oberfläche der
+Mac-App -- `RootView` zeigt ausschließlich `LiveRedesignShellView`. Die frühere
+`AdminShell`/`NavigationSplitView`-Hauptoberfläche wurde entfernt, nicht nur
+stillgelegt.
+
+Verbindlich:
+
+- Alle produktiv benötigten Admin-Funktionen sind innerhalb des neuen Designs
+  erreichbar und vollständig funktionsfähig.
+- Die vorhandenen Backend-/Repository-/RPC-/ViewModel-Implementierungen aus
+  PR #18/#19 werden weiterverwendet, nicht zweimal gebaut.
+- Keine zweite parallele Fach-Logik, kein Mockup mit Sample-Daten in einem
+  produktiven Navigationspfad.
+- Ein Bildschirm zeigt entweder eine echte, mit Repositories verbundene
+  Ansicht, oder er existiert (noch) nicht in der Navigation.
+
+Architekturentscheidung (bewusst, nach Praxis-Review): statt für jeden
+Bereich eine zweite, rein optische Kopie einer bereits funktionierenden
+Ansicht zu bauen (das wäre exakt die in §2/§18 verbotene "zweite parallele
+Admin-Welt" und dupliziert Fachlogik), wurde die neue Sidebar/Optik direkt vor
+die **bestehenden, produktiven** Bildschirme (`DashboardView`, `ToursView`
+samt `TourWorkspace`/`TourEditorView`, `GlobalPlanningView`,
+`HotelsOverviewView`/`AccommodationView`, `RestaurantsOverviewView`/
+`RestaurantView`, `ImportOverviewView`/`ExtractionReviewView`, `UsersView`,
+`NotificationsView`, `LegalSettingsView`, `LoginView`, `ConnectionView`,
+`AISettingsView`) gesetzt. Deren ViewModels/Repository-Aufrufe blieben dabei
+unverändert; nur die visuelle Schicht wurde screen-für-screen auf die
+`SFTRedesignTheme`-Design-Tokens umgestellt (`SFTCard`, `SFTStatusPill`,
+`SFTMetricTile`, `SFTPrimaryButtonStyle`/`SFTSecondaryButtonStyle`/
+`SFTDestructiveOutlineButtonStyle`, `SFT.ui`/`SFT.mono`). Dabei bewusst
+**nicht** angetastet: native, bereits funktionierende Steuerelemente wie
+`Table` (Sortierung, Spalten), `Form`/`Section` (gruppierte Formulare) und
+`DisclosureGroup` (Konfliktvergleich) -- deren Zeilen/Zellen/Buttons sind
+SFT-gestylt, das Kontrollelement selbst blieb nativ, um ohne lokalen Compiler
+kein funktionierendes Verhalten durch einen Nachbau zu riskieren. Einzige
+gezielte Ausnahme: der Bereichswähler im Tour-Workspace war ein
+Standard-`Picker` und wurde durch `SFTSegmented` in einer horizontal
+scrollbaren Leiste ersetzt (explizite Vorgabe: kein Standard-Picker als
+Hauptnavigation). `SFTStatusTone.forStatus(_:)` bündelt seither die
+Status-Farblogik (Touren-, Registrierungs-, Bestellungs-, Sperrstatus) an
+einer Stelle statt als Ad-hoc-Zuordnung je Bildschirm.
+
+Die früheren, rein kosmetischen Mockup-Dateien mit `SFTRedesignSample`-
+Platzhalterdaten (`DashboardRedesignView`, `ToursRedesignView`,
+`TourWizardRedesignView`, `TourEditorRedesignView`, `HotelMatrixRedesignView`,
+`MealPlanningRedesignView`, `OfferImportRedesignView`, `RedesignModels`,
+`RedesignSampleData`) wurden entfernt, nicht nur aus der Navigation
+genommen -- sie hätten sonst dauerhaft als zweite, ungenutzte Fach-Welt im
+Repository gelegen.
+
+Sidebar (produktiv, `RedesignSection`):
+
+```text
+Dashboard
+Touren
+Planung
+Hotelplanung
+Essensplanung
+Import
+
+Nutzer
+Mitteilungen
+Impressum & Datenschutz
+```
+
+`Planung` ist die tourübergreifende Kontrollansicht (Teilnehmermatrix, Hotels,
+Restaurants; `GlobalPlanningView`) -- eigenständig neben `Dashboard`, ohne
+dessen `DashboardModel` ein zweites Mal zu instanziieren.
+
+Gemeinsamer Datenstore statt doppeltem Traffic: `LiveRedesignShellView` hält
+die einzige `DashboardModel`-Instanz der Sitzung und lädt sie einmal beim
+Start; `RedesignShellView` liest daraus sowohl den Dashboard-Bildschirm als
+auch die Sidebar-Zähler ("Touren"/"Hotelplanung"/"Essensplanung" -- dieselbe
+Formel wie `DashboardMetric.count()`, keine zweite, abweichende Berechnung
+mehr). Ein früherer separater `RedesignLiveDataLoader` (eigener, zusätzlicher
+`upcoming()`/`summaries()`-Request nur für die Sidebar-Badges, mit einer
+fehlerhaften Essen-Kennzahl `confirmedVehicles - max(orders)` statt der
+Summe offener Bestellungen je Restaurant-Stopp) wurde deshalb entfernt.
+
+KI-Import: `ImportOverviewView` macht die bereits bestehende
+`ExtractionReviewView`-Funktion (Text einfügen → Ollama-Analyse mit
+Quellenbelegen → prüfbarer Entwurf → gezieltes Speichern über
+`ContentRepository`/`admin_save_tour_resource`/`createRestaurant`)
+tourübergreifend erreichbar, zusätzlich zum bestehenden Zugang über
+Tourenverwaltung → Tour → "KI-Assistenz". `AIConfiguration` unterstützt
+zusätzlich zu lokalem Ollama ein Ollama-Cloud-Modell mit eigenem, separatem
+Zustimmungsschalter (`cloudConfirmed`, getrennt von
+`localInferenceConfirmed`) und Zugangsschlüssel im Keychain -- kein stiller
+Wechsel lokal → Cloud, Empfänger/Modell/kompletter Sendetext werden vor jeder
+einzelnen Analyse angezeigt (§39.8).
+
+`LocalTextExtraction` (`AI/ExtractionReviewView.swift`) ergänzt den bisherigen
+"Text einfügen"-Weg um PDF- und Foto-Import: PDFKit liest den Text aus jeder
+Seite eines PDFs, Vision/`VNRecognizeTextRequest` erkennt Text aus Fotos
+(PNG/JPG/HEIC), beides ausschließlich lokal auf dem Mac -- das Original
+verlässt den Rechner nie und wird nirgendwo hochgeladen (§39.8). Auswahl über
+nativen `fileImporter` oder Drag & Drop auf das Textfeld; der erkannte Text
+landet nur im ohnehin editierbaren Textfeld, das der Admin vor jeder Analyse
+sieht und vor einer fehlgeschlagenen/unvollständigen Erkennung manuell
+korrigieren kann (keine automatische Analyse direkt nach dem Import).
+
+Typografie: Archivo (Omnibus-Type) und JetBrains Mono (JetBrains) liegen als
+echte TTF-Ressourcen unter `macos/SFTDriveAdmin/Fonts/` bei (beide SIL OFL 1.1,
+Lizenztexte als `LICENSE-*-OFL.txt` daneben -- die OFL erlaubt das Einbetten
+in Software ausdrücklich, solange die Schrift nicht separat verkauft wird und
+der Lizenztext beiliegt). `Info.plist` registriert sie über
+`ATSApplicationFontsPath = "Fonts"` beim Start automatisch, ohne
+zusätzlichen Code; `SFT.ui`/`SFT.mono` matchen weiterhin per Familienname und
+fallen automatisch auf die System-Schrift zurück, sollte eine Ressource
+fehlen.
+
+Damit ist die screen-für-screen-Migration auf `SFTRedesignTheme` über alle in
+der Sidebar erreichbaren Bereiche (inklusive Login und Einstellungsfenster)
+sowie die zuvor offenen KI-Import- und Typografie-Punkte umgesetzt. Ehrlich
+offen bleiben:
+
+- **Manuelles Gegenprüfen auf einem echten Mac** (Login, Offline-Start,
+  Fenstergrößen 1380×880/1100×720, Drag & Drop, Tastaturzugriff,
+  VoiceOver) -- in dieser Umgebung ohne physisches/simuliertes macOS-Gerät
+  nicht möglich; verifiziert ist ausschließlich der CI-Build
+  (`swift test` + `xcodebuild build` + Release-Build) sowie die 96
+  Backend-Vertrags-/RLS-Tests.
+- Native Kontrollelemente (`Table`, `Form`, `Picker` außerhalb des
+  Tour-Workspace-Bereichswählers, `DisclosureGroup`) wurden bewusst nicht
+  durch vollständig selbstgebaute SFT-Äquivalente ersetzt (siehe
+  Architekturentscheidung oben) -- ihre Zeilen/Zellen/Buttons sind
+  SFT-gestylt, das Element selbst bleibt nativ.
+- Die globale Zähler-Invalidierung (`RedesignShellView.onChange(of: section)`)
+  lädt `DashboardModel` beim Wechsel auf Dashboard/Hotelplanung/
+  Essensplanung neu -- deckt den häufigsten Fall (Bereichswechsel nach einer
+  Aktion) ab, ist aber keine sofortige Invalidierung nach jeder einzelnen
+  mutierenden Aktion auf jedem Bildschirm (das hätte `DashboardModel` durch
+  praktisch jeden Editor durchreichen müssen).
+
+Dieser Abschnitt gilt als **umgesetzt** für den in dieser Umgebung
+verifizierbaren Umfang (Build, Tests, Code-Review); die manuelle Geräteprüfung
+oben bleibt ein gesondert auszuweisender, noch offener Schritt vor einem
+produktiven Rollout an Administratoren.

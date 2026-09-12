@@ -22,9 +22,9 @@ struct ResourceListView: View {
     @State private var restaurant: DataRow?
     var body: some View {
         VStack(alignment: .leading) {
-            HStack { Text(kind.title).font(.headline); Spacer()
-                Button("Hinzufügen", systemImage: "plus") { editor = .init(initial: defaults) }
-                Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly)
+            HStack { Text(kind.title).font(SFT.ui(15, .bold)); Spacer()
+                Button("Hinzufügen", systemImage: "plus") { editor = .init(initial: defaults) }.buttonStyle(SFTSecondaryButtonStyle())
+                Button("Laden", systemImage: "arrow.clockwise") { Task { await load() } }.labelStyle(.iconOnly).buttonStyle(SFTSecondaryButtonStyle())
             }.disabled(model.busy)
             ErrorBanner(message: model.error)
             // ContentUnavailableView blendet sein Icon aus, wenn der verfügbare Platz
@@ -34,28 +34,38 @@ struct ResourceListView: View {
             // (Nutzerfeedback). Eigener, nicht-adaptiver Leerzustand zeigt Icon und
             // Text immer gemeinsam, unabhängig von der verfügbaren Höhe.
             if model.rows.isEmpty && !model.busy {
-                Label("Noch keine Einträge", systemImage: kind.symbol).foregroundStyle(.secondary).padding(.vertical, 10)
+                Label("Noch keine Einträge", systemImage: kind.symbol).foregroundStyle(SFT.inkTertiary).padding(.vertical, 10)
             }
             List(model.rows) { row in
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(row.values.text(kind.nameKey).isEmpty ? kind.title : row.values.text(kind.nameKey)).font(.headline)
-                    if kind == .hotels { Text(hotelCaption(row)).font(.caption) }
-                    if kind == .menu { Text("\(row.values.text("price")) € · \(row.values.boolean("is_available") ? "Verfügbar" : "Deaktiviert")").font(.caption) }
+                    Text(row.values.text(kind.nameKey).isEmpty ? kind.title : row.values.text(kind.nameKey)).font(SFT.ui(13, .semibold))
+                    if kind == .hotels { Text(hotelCaption(row)).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
+                    if kind == .menu {
+                        HStack(spacing: 6) {
+                            Text("\(row.values.text("price")) €").font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary)
+                            SFTStatusPill(text: row.values.boolean("is_available") ? "Verfügbar" : "Deaktiviert", tone: row.values.boolean("is_available") ? .confirmed : .blocked)
+                        }
+                    }
                     HStack {
-                        Button("Bearbeiten") { editor = .init(existing: row) }
+                        Button("Bearbeiten") { editor = .init(existing: row) }.buttonStyle(SFTSecondaryButtonStyle())
                         if kind == .menu { Button("Duplizieren") {
                             var copy = row.values; copy.removeValue(forKey: "id"); copy.removeValue(forKey: "created_at"); copy.removeValue(forKey: "updated_at")
                             copy["name"] = .string(row.values.text("name") + " (Kopie)")
                             copy["sort_order"] = .number(Double(row.values.integer("sort_order") + 1))
                             editor = .init(initial: copy)
-                        } }
-                        if kind == .stops && row.values.text("type") == "restaurant" { Button("Speisekarte & Bestellungen") { restaurant = row } }
-                        Button("Löschen", role: .destructive) { deleting = row }
-                    }.buttonStyle(.bordered)
+                        }.buttonStyle(SFTSecondaryButtonStyle()) }
+                        if kind == .stops && row.values.text("type") == "restaurant" { Button("Speisekarte & Bestellungen") { restaurant = row } .buttonStyle(SFTSecondaryButtonStyle())}
+                        Button("Löschen", role: .destructive) { deleting = row }.buttonStyle(SFTDestructiveOutlineButtonStyle())
+                    }
                 }.padding(.vertical, 5)
+                .listRowBackground(SFT.canvas)
             }
+            .scrollContentBackground(.hidden)
+            .background(SFT.canvas)
             RefreshFooter(time: model.refreshedAt, busy: model.busy)
-        }.task { await load() }
+        }
+        .foregroundStyle(SFT.ink)
+        .task { await load() }
         .sheet(item: $editor) { request in
             ResourceEditorView(repository: services.content, kind: kind, parentID: parentID, tour: tour, request: request) { editor = nil; Task { await load() } }
         }
@@ -95,7 +105,7 @@ struct ResourceEditorView: View {
     @State private var discard = false
     var body: some View {
         VStack {
-            Text("\(kind.title) · \(tour.title)").font(.headline)
+            Text("\(kind.title) · \(tour.title)").font(SFT.ui(16, .bold))
             ErrorBanner(message: model.error)
             if let latest = model.latest {
                 DisclosureGroup("Aktueller Serverstand zum Vergleichen") {
@@ -104,12 +114,13 @@ struct ResourceEditorView: View {
                             LabeledContent(field.title, value: "Server: \(latest.values.text(field.id)) · Entwurf: \(model.values.text(field.id))")
                         }
                     }
-                    Text("Entwurf bei Bedarf notieren, abbrechen und den Eintrag neu öffnen.").font(.caption)
+                    Text("Entwurf bei Bedarf notieren, abbrechen und den Eintrag neu öffnen.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                 }
+                .tint(SFT.red)
             }
             Form { FormFields(fields: kind.fields, values: $model.values) }.formStyle(.grouped)
             HStack {
-                Button("Abbrechen") { if model.initial != model.values { discard = true } else { close() } }
+                Button("Abbrechen") { if model.initial != model.values { discard = true } else { close() } }.buttonStyle(SFTSecondaryButtonStyle())
                 Spacer()
                 Button("Speichern") {
                     Task { await model.perform {
@@ -128,9 +139,10 @@ struct ResourceEditorView: View {
                         }
                         close()
                     } }
-                }.buttonStyle(.borderedProminent).keyboardShortcut("s").disabled(model.busy)
+                }.buttonStyle(SFTPrimaryButtonStyle()).keyboardShortcut("s").disabled(model.busy)
             }
         }.padding().frame(width: 610, height: 650).interactiveDismissDisabled().protectDraft(model.values != model.initial)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
         .onAppear {
             model.values = Dictionary(uniqueKeysWithValues: kind.fields.map { ($0.id, $0.initial) })
             model.values.merge(request.existing?.values ?? request.initial) { _, new in new }
@@ -157,17 +169,22 @@ struct StagesView: View {
             List(Array(TourDates.days(start: tour.start_date, end: tour.end_date).enumerated()), id: \.element) { day in
                 let existing = model.rows.first { $0.values.text("stage_date") == day.element }
                 HStack {
-                    VStack(alignment: .leading) { Text("Tag \(day.offset + 1) · \(day.element)").bold()
-                        Text(existing?.values.text("route_url").nilIfEmpty ?? existing?.values.text("kurviger_url").nilIfEmpty ?? "Kein Routen-Link").font(.caption).lineLimit(2) }
+                    VStack(alignment: .leading) { Text("Tag \(day.offset + 1) · \(day.element)").font(SFT.ui(13, .semibold))
+                        Text(existing?.values.text("route_url").nilIfEmpty ?? existing?.values.text("kurviger_url").nilIfEmpty ?? "Kein Routen-Link").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary).lineLimit(2) }
                     Spacer()
                     Button("Bearbeiten") {
                         var initial: Payload = ["stage_date": .string(day.element), "stage_number": .number(Double(day.offset + 1)), "title": .string("Tag \(day.offset + 1)")]
                         if let existing { initial = existing.values; if initial.text("route_url").isEmpty { initial["route_url"] = initial["kurviger_url"] } }
                         editor = .init(existing: existing.map { DataRow($0.values) }, initial: initial)
-                    }
+                    }.buttonStyle(SFTSecondaryButtonStyle())
                 }
+                .listRowBackground(SFT.canvas)
             }
-        }.task { await model.load(services.content, kind: .stages, parentID: tour.id) }
+            .scrollContentBackground(.hidden)
+            .background(SFT.canvas)
+        }
+        .foregroundStyle(SFT.ink)
+        .task { await model.load(services.content, kind: .stages, parentID: tour.id) }
         .sheet(item: $editor) { request in ResourceEditorView(repository: services.content, kind: .stages, parentID: tour.id, tour: tour, request: request) { editor = nil; Task { await model.load(services.content, kind: .stages, parentID: tour.id) } } }
     }
 }
@@ -198,45 +215,53 @@ struct AccommodationView: View {
             // Durchklicken jeder Nacht erkennt. Nutzt dieselben bereits gebündelt
             // geladenen Teilnehmermatrix-Daten wie die Teilnehmer- und die
             // tourübergreifende Planungsansicht (kein zusätzlicher Request je Nacht).
-            Text("Hotelmatrix").font(.headline)
+            Text("Hotelmatrix").font(SFT.ui(15, .bold))
             if model.matrix.isEmpty {
-                Text("Keine bestätigten Teilnehmer.").foregroundStyle(.secondary).padding(.vertical, 6)
+                Text("Keine bestätigten Teilnehmer.").foregroundStyle(SFT.inkTertiary).padding(.vertical, 6)
             } else {
-                ScrollView(.horizontal) {
-                    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-                        GridRow {
-                            Text("Teilnehmer").bold()
-                            ForEach(nights, id: \.self) { night in Text(shortNight(night)).bold().font(.caption) }
-                        }
-                        Divider()
-                        ForEach(model.matrix.filter { $0.values.text("status") == "confirmed" }) { row in
+                SFTCard {
+                    ScrollView(.horizontal) {
+                        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                             GridRow {
-                                Text("\(row.values.text("username")) · \(row.values.text("vehicle"))")
-                                ForEach(nights, id: \.self) { night in
-                                    let cell = accommodationCell(row, night: night)
-                                    Text(cell.label).font(.caption).foregroundStyle(cell.confirmed ? .green : .orange)
+                                Text("Teilnehmer").font(SFT.ui(11, .bold)).foregroundStyle(SFT.inkTertiary)
+                                ForEach(nights, id: \.self) { night in Text(shortNight(night)).font(SFT.mono(10, .bold)).foregroundStyle(SFT.inkTertiary) }
+                            }
+                            Divider().overlay(SFT.border)
+                            ForEach(model.matrix.filter { $0.values.text("status") == "confirmed" }) { row in
+                                GridRow {
+                                    Text("\(row.values.text("username")) · \(row.values.text("vehicle"))").font(SFT.ui(12, .medium))
+                                    ForEach(nights, id: \.self) { night in
+                                        let cell = accommodationCell(row, night: night)
+                                        SFTStatusPill(text: cell.label, tone: cell.confirmed ? .confirmed : .open)
+                                    }
                                 }
                             }
                         }
-                    }
-                }.frame(maxHeight: 220)
+                    }.frame(maxHeight: 220)
+                }
             }
-            Divider(); Text("Gezielte Erinnerung je Nacht").font(.headline)
+            Divider().overlay(SFT.border); Text("Gezielte Erinnerung je Nacht").font(SFT.ui(15, .bold))
             ErrorBanner(message: model.error)
-            if let notice = model.notice { Text(notice).font(.caption) }
+            if let notice = model.notice { Text(notice).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
             Picker("Nacht", selection: $model.night) { ForEach(nights, id: \.self) { Text($0).tag($0) } }
-            Text("\(model.registrations.count - missing.count) / \(model.registrations.count) bestätigt")
+            Text("\(model.registrations.count - missing.count) / \(model.registrations.count) bestätigt").font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary)
             List(model.registrations, selection: $model.selection) { row in
                 let confirmation = model.confirmations.first { $0.user_id == row.user_id && $0.night_date == model.night }
                 HStack {
-                    Text(model.users.first(where: { $0.id == row.user_id })?.username ?? row.user_id)
+                    Text(model.users.first(where: { $0.id == row.user_id })?.username ?? row.user_id).font(SFT.ui(12, .medium))
                     Spacer()
-                    if let confirmation { Text(confirmation.accommodation_choice == "other_accommodation" ? "Andere Unterkunft" : confirmation.hotel_suggestion_id == nil ? "Bestätigt" : "Hotelvorschlag gewählt").foregroundStyle(.green) }
-                    else { Text("Übernachtung noch nicht bestätigt").foregroundStyle(.orange) }
+                    if let confirmation { SFTStatusPill(text: confirmation.accommodation_choice == "other_accommodation" ? "Andere Unterkunft" : confirmation.hotel_suggestion_id == nil ? "Bestätigt" : "Hotelvorschlag gewählt", tone: .confirmed) }
+                    else { SFTStatusPill(text: "Übernachtung noch nicht bestätigt", tone: .open) }
                 }.tag(row.user_id)
-            }.frame(minHeight: 100)
-            Button("Auswahl erinnern (\(model.selection.count))") { confirmReminder = true }.disabled(model.selection.isEmpty || model.busy)
-        }.task {
+                .listRowBackground(SFT.canvas)
+            }
+            .scrollContentBackground(.hidden)
+            .background(SFT.canvas)
+            .frame(minHeight: 100)
+            Button("Auswahl erinnern (\(model.selection.count))") { confirmReminder = true }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.selection.isEmpty || model.busy)
+        }
+        .foregroundStyle(SFT.ink)
+        .task {
             model.night = tour.start_date
             await model.perform {
                 model.confirmations = try await services.planning.accommodation(tour.id)
@@ -279,23 +304,29 @@ struct RestaurantView: View {
     @State private var settingsEditor: ResourceEditorRequest?
     var body: some View {
         VStack(alignment: .leading) {
-            HStack { Text(stop.values.text("title")).font(.title2.bold()); Spacer(); Button("Schließen", action: close) }
+            HStack { Text(stop.values.text("title")).font(SFT.ui(20, .bold)); Spacer(); Button("Schließen", action: close).buttonStyle(SFTSecondaryButtonStyle()) }
             ErrorBanner(message: model.error)
-            Button("Bestellfenster bearbeiten") { settingsEditor = .init(existing: model.settings) }
+            Button("Bestellfenster bearbeiten") { settingsEditor = .init(existing: model.settings) }.buttonStyle(SFTSecondaryButtonStyle())
             HSplitView {
                 ResourceListView(services: services, kind: .menu, parentID: stop.id, tour: tour)
                 VStack(alignment: .leading) {
-                    HStack { Text("Eingereichte Bestellungen").font(.headline); Spacer(); Button("CSV") { export() }; Button("Laden") { Task { await load() } } }
+                    HStack { Text("Eingereichte Bestellungen").font(SFT.ui(15, .bold)); Spacer(); Button("CSV") { export() }.buttonStyle(SFTSecondaryButtonStyle()); Button("Laden") { Task { await load() } }.buttonStyle(SFTSecondaryButtonStyle()) }
                     List(validOrders) { row in
                         VStack(alignment: .leading) {
-                            Text(vehicle(row)).bold()
-                            ForEach(Array(items(row).enumerated()), id: \.offset) { Text("\($0.element.integer("quantity")) × \(dishName($0.element)) · \($0.element.text("note"))") }
-                            Button("Bestellung korrigieren") { model.editOrder = row }
+                            Text(vehicle(row)).font(SFT.ui(13, .semibold))
+                            ForEach(Array(items(row).enumerated()), id: \.offset) { Text("\($0.element.integer("quantity")) × \(dishName($0.element)) · \($0.element.text("note"))").font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
+                            Button("Bestellung korrigieren") { model.editOrder = row }.buttonStyle(SFTSecondaryButtonStyle())
                         }
+                        .listRowBackground(SFT.canvas)
                     }
+                    .scrollContentBackground(.hidden)
+                    .background(SFT.canvas)
                 }.frame(minWidth: 380)
             }
-        }.padding().frame(width: 1050, height: 730).task { await load() }
+        }
+        .padding().frame(width: 1050, height: 730)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
+        .task { await load() }
         .sheet(item: $settingsEditor) { request in ResourceEditorView(repository: services.content, kind: .restaurantSettings, parentID: stop.id, tour: tour, request: request) { settingsEditor = nil; Task { await load() } } }
         .sheet(item: $model.editOrder) { order in MealOrderEditor(repository: services.content, stopID: stop.id, order: order, menu: model.menu) { model.editOrder = nil; Task { await load() } } }
     }
@@ -324,18 +355,19 @@ struct MealOrderEditor: View {
     @State private var notes: [String: String] = [:]
     var body: some View {
         VStack {
-            Text("Bestellung korrigieren").font(.headline); ErrorBanner(message: model.error)
+            Text("Bestellung korrigieren").font(SFT.ui(16, .bold)); ErrorBanner(message: model.error)
             Form { ForEach(menu) { item in
                 Stepper("\(item.values.text("name")): \(quantities[item.id] ?? 0)", value: Binding(get: { quantities[item.id] ?? 0 }, set: { quantities[item.id] = $0 }), in: 0...99)
                 TextField("Hinweis", text: Binding(get: { notes[item.id] ?? "" }, set: { notes[item.id] = $0 }))
             } }.formStyle(.grouped)
-            HStack { Button("Abbrechen", action: close); Spacer(); Button("Bestellung ersetzen") {
+            HStack { Button("Abbrechen", action: close).buttonStyle(SFTSecondaryButtonStyle()); Spacer(); Button("Bestellung ersetzen") {
                 Task { await model.perform {
                     let payload: [Payload] = quantities.filter { $0.value > 0 }.map { ["menu_item_id": .string($0.key), "quantity": .number(Double($0.value)), "note": notes[$0.key].flatMap { $0.nilIfEmpty }.map(JSONValue.string) ?? .null] }
                     try await repository.order(stopID: stopID, registrationID: order.values.text("registration_id"), expected: order.values, items: payload); close()
                 } }
-            }.disabled(model.busy) }
+            }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy) }
         }.padding().frame(width: 540, height: 570).interactiveDismissDisabled().protectDraft(true)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
         .onAppear { if case .array(let items) = order.values["meal_order_items"] { for case .object(let item) in items { quantities[item.text("menu_item_id")] = item.integer("quantity"); notes[item.text("menu_item_id")] = item.text("note") } } }
     }
 }

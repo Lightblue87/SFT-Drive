@@ -9,14 +9,14 @@ struct ConnectionView: View {
             Section("Supabase-Verbindung") {
                 TextField("Projekt-URL (HTTPS)", text: $configuration.url)
                 TextField("Öffentlicher Publishable-/Anon-Key", text: $configuration.publishableKey)
-                Text("Denselben öffentlichen Key wie in der PWA verwenden. Keine Admin- oder Service-Role-Schlüssel. Änderungen verbinden die App neu.").font(.caption).foregroundStyle(.secondary)
+                Text("Denselben öffentlichen Key wie in der PWA verwenden. Keine Admin- oder Service-Role-Schlüssel. Änderungen verbinden die App neu.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                 Button("Verbindung speichern") {
                     do { try configuration.save(); Task { await auth.logout(); await auth.configure(configuration) }; message = "Verbindung gespeichert." }
                     catch { message = error.localizedDescription }
-                }
-                if let message { Text(message) }
+                }.buttonStyle(SFTPrimaryButtonStyle())
+                if let message { Text(message).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
             }
-        }.formStyle(.grouped).frame(minWidth: 540, minHeight: 260)
+        }.formStyle(.grouped).frame(minWidth: 540, minHeight: 260).background(SFT.canvas).foregroundStyle(SFT.ink)
     }
 }
 @MainActor final class NotificationsModel: ScreenModel {
@@ -40,12 +40,13 @@ struct NotificationsView: View {
             Section("Mitteilung") {
                 TextField("Titel", text: $model.title)
                 TextEditor(text: $model.body).frame(minHeight: 150).accessibilityLabel("Mitteilungstext")
-                Button("Vorschau und Senden") { confirm = true }.buttonStyle(.borderedProminent)
+                Button("Vorschau und Senden") { confirm = true }.buttonStyle(SFTPrimaryButtonStyle())
                     .disabled(model.busy || model.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 ErrorBanner(message: model.error)
-                if let notice = model.notice { Text(notice) }
+                if let notice = model.notice { Text(notice).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
             }
         }.formStyle(.grouped).navigationTitle("Mitteilungen").protectDraft(!model.title.isEmpty || !model.body.isEmpty)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
         .task { await model.perform {
             var offset = 0
             while true { let page = try await services.tours.list(query: "", offset: offset, archived: false); model.tours += page; if page.count < 100 { break }; offset += 100; try Task.checkCancellation() }
@@ -68,9 +69,10 @@ struct LegalSettingsView: View {
         Form {
             Section("Impressum & Datenschutz") { FormFields(fields: fields, values: $values) }
             ErrorBanner(message: model.error)
-            if let notice = model.notice { Text(notice) }
-            Button("Speichern") { Task { await model.perform { try await repository.saveSiteSettings(FormValidation.payload(values, fields: fields)); initial = values; model.notice = "Gespeichert." } } }.disabled(model.busy)
+            if let notice = model.notice { Text(notice).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
+            Button("Speichern") { Task { await model.perform { try await repository.saveSiteSettings(FormValidation.payload(values, fields: fields)); initial = values; model.notice = "Gespeichert." } } }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy)
         }.formStyle(.grouped).navigationTitle("Impressum & Datenschutz").protectDraft(values != initial)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
         .task { await model.perform { values = try await repository.siteSettings(); initial = values } }
     }
 }

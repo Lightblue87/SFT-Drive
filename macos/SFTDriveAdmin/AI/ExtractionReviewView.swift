@@ -1,4 +1,75 @@
 import SwiftUI
+import PDFKit
+import Vision
+import ImageIO
+import UniformTypeIdentifiers
+
+/// Rein lokale Textextraktion für den KI-Import (§39.2/§40.7-Ergänzung):
+/// PDFKit für PDFs, Vision/VNRecognizeTextRequest für Fotos. Das Original
+/// (PDF/Bilddatei) verlässt diesen Mac nie und wird nirgendwo hochgeladen --
+/// nur der lokal erkannte Text landet, wie eingefügter Mailtext auch, im
+/// editierbaren Textfeld, das der Admin vor jeder Analyse sieht und
+/// korrigieren kann (§39.8).
+enum ImportedFileError: LocalizedError {
+    case unsupported, empty, tooLarge
+    var errorDescription: String? {
+        switch self {
+        case .unsupported: return "Dateityp wird nicht unterstützt. Bitte PDF, PNG, JPG oder HEIC verwenden."
+        case .empty: return "Es konnte kein Text erkannt werden. Bitte Text manuell einfügen oder ergänzen."
+        case .tooLarge: return "Datei ist größer als \(LocalTextExtraction.maxFileSizeMB) MB. Bitte eine kleinere Datei wählen oder den Text manuell einfügen."
+        }
+    }
+}
+enum LocalTextExtraction {
+    static let supportedTypes: [UTType] = [.pdf, .png, .jpeg, .heic, .heif]
+    // Owner-Review auf PR #20 (P2): ohne Obergrenze konnten sehr große PDFs/
+    // HEICs unnötig viel RAM belegen und PDFKit/Vision lange blockieren.
+    static let maxFileSizeMB = 20
+    static var maxFileSizeBytes: Int { maxFileSizeMB * 1_000_000 }
+    // Läuft absichtlich nicht auf dem Main Actor -- der Aufrufer (importFile()
+    // in ExtractionReviewView) startet dies über Task.detached, damit große
+    // Dateien die UI nicht blockieren (Owner-Review auf PR #20, P2).
+    static func extractText(from url: URL) async throws -> String {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int, size > maxFileSizeBytes {
+            throw ImportedFileError.tooLarge
+        }
+        let data = try Data(contentsOf: url)
+        guard data.count <= maxFileSizeBytes else { throw ImportedFileError.tooLarge }
+        let ext = url.pathExtension.lowercased()
+        if ext == "pdf" { return try extractFromPDF(data) }
+        if ["png", "jpg", "jpeg", "heic", "heif"].contains(ext) { return try await recognizeText(in: data) }
+        throw ImportedFileError.unsupported
+    }
+    static func extractFromPDF(_ data: Data) throws -> String {
+        guard let document = PDFDocument(data: data) else { throw ImportedFileError.unsupported }
+        var text = ""
+        for index in 0..<document.pageCount {
+            if let page = document.page(at: index), let pageText = page.string { text += pageText + "\n" }
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw ImportedFileError.empty }
+        return trimmed
+    }
+    static func recognizeText(in data: Data) async throws -> String {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ImportedFileError.unsupported }
+        return try await withCheckedThrowingContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, error in
+                if let error { continuation.resume(throwing: error); return }
+                let lines = (request.results as? [VNRecognizedTextObservation])?.compactMap { $0.topCandidates(1).first?.string } ?? []
+                let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                if text.isEmpty { continuation.resume(throwing: ImportedFileError.empty) } else { continuation.resume(returning: text) }
+            }
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["de-DE", "en-US"]
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do { try handler.perform([request]) } catch { continuation.resume(throwing: error) }
+        }
+    }
+}
 
 struct AISettingsView: View {
     @State private var configuration = AIConfiguration.load()
@@ -10,28 +81,33 @@ struct AISettingsView: View {
             Toggle("KI-Unterstützung", isOn: $configuration.enabled)
             Text("Ollama · optionale Analyse, keine automatischen Datenbankänderungen").font(.caption)
             TextField("Ollama-Endpunkt", text: $configuration.endpoint)
-            SecureField("Zugangsschlüssel für eigenen Server (optional lokal)", text: $token)
+            Button("Ollama Cloud (https://ollama.com) verwenden") { configuration.endpoint = "https://ollama.com" }.buttonStyle(.link)
+            SecureField("Zugangsschlüssel (API-Key für Cloud, optional für eigenen Server)", text: $token)
+            Toggle("Cloud-Modell (Text verlässt diesen Mac an Ollama)", isOn: $configuration.cloudConfirmed)
+            Text("Bei Ollama Cloud wird der eingefügte Text an ollama.com übertragen. Modellname gemäß https://ollama.com/models manuell eintragen (z. B. \"…-cloud\"); die lokale Modellliste gilt dafür nicht.").font(.caption).foregroundStyle(.secondary)
             Toggle("Lokale Modelle; Cloud-Funktionen in Ollama deaktiviert", isOn: $configuration.localInferenceConfirmed)
+                .disabled(configuration.cloudConfirmed)
             Text("Ollama mit OLLAMA_NO_CLOUD=1 neu starten. Ein localhost-Endpunkt allein verhindert keine Cloud-Weiterleitung. Es werden keine Modelle installiert.").font(.caption).foregroundStyle(.secondary)
             TextField("Modell", text: $configuration.model)
             if !models.isEmpty { Picker("Installierte Modelle", selection: $configuration.model) { Text("Auswählen").tag(""); ForEach(models, id: \.self) { Text($0).tag($0) } } }
             Button("Modelle laden") { Task { await state.perform {
                 try saveCredential()
                 models = try await OllamaProvider(configuration: configuration, model: configuration.model).models()
-            } } }
+            } } }.disabled(configuration.cloudConfirmed)
+            if configuration.cloudConfirmed { Text("Bei Cloud-Nutzung nicht verfügbar -- die lokale Modellliste (api/tags) gehört zum lokalen Ollama-Daemon.").font(.caption).foregroundStyle(.secondary) }
             Toggle("Fallback bei vorübergehender Nichtverfügbarkeit", isOn: $configuration.fallbackEnabled)
             TextField("Weitere lokale Modelle (je eine Zeile)", text: $configuration.fallbackModels, axis: .vertical).lineLimit(3...4)
             Slider(value: $configuration.timeout, in: 10...180, step: 10) { Text("Zeitlimit") }
             Text("Gemeinsames Zeitlimit: \(Int(configuration.timeout)) Sekunden")
             Button("Einstellungen speichern") {
                 do { try saveCredential(); try configuration.save(); state.notice = "Gespeichert." } catch { state.error = error.localizedDescription }
-            }
+            }.buttonStyle(SFTPrimaryButtonStyle())
             Button("Gespeicherten Zugangsschlüssel entfernen", role: .destructive) {
                 do { try KeychainStore(service: "de.sportfahrertreff.sft-drive-admin.ai").remove(key: configuration.credentialKey); token = ""; state.notice = "Zugangsschlüssel entfernt." } catch { state.error = error.localizedDescription }
-            }
+            }.buttonStyle(SFTDestructiveOutlineButtonStyle())
             ErrorBanner(message: state.error)
-            if let notice = state.notice { Text(notice) }
-        }.formStyle(.grouped)
+            if let notice = state.notice { Text(notice).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
+        }.formStyle(.grouped).background(SFT.canvas).foregroundStyle(SFT.ink)
     }
     private func saveCredential() throws {
         _ = try configuration.validatedEndpoint()
@@ -61,59 +137,110 @@ struct ExtractionReviewView: View {
     @State private var editor: ResourceEditorRequest?
     @State private var night = ""
     @State private var restaurantDraft = false
+    @State private var filePicker = false
+    @State private var importing = false
+    @State private var dropTargeted = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Planung aus einer E-Mail").font(.title3.bold())
-                Text("Signaturen, Buchungsnummern und unnötige personenbezogene Angaben vorher entfernen. Der Text bleibt bis zur bewussten Analyse im Arbeitsspeicher.").font(.caption).foregroundStyle(.secondary)
+                Text("Planung aus einer E-Mail, PDF oder einem Foto").font(SFT.ui(18, .bold))
+                Text("Signaturen, Buchungsnummern und unnötige personenbezogene Angaben vorher entfernen. Text bleibt bis zur bewussten Analyse im Arbeitsspeicher; PDF/Foto werden nur lokal gelesen und nie hochgeladen.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                 Picker("Inhalt", selection: $model.kind) { Text("Hotelangebot").tag(ExtractionKind.hotel_offer); Text("Restaurant").tag(ExtractionKind.restaurant) }.disabled(model.busy)
-                TextEditor(text: $model.text).frame(height: 180).font(.body).accessibilityLabel("Ausgewählter E-Mail-Text").disabled(model.busy)
+                TextEditor(text: $model.text).frame(height: 180).font(.body).accessibilityLabel("Ausgewählter E-Mail-Text, oder aus PDF/Foto erkannter Text").disabled(model.busy || importing)
+                    .overlay {
+                        if dropTargeted {
+                            RoundedRectangle(cornerRadius: SFT.Radius.control).strokeBorder(SFT.red, lineWidth: 2)
+                        }
+                    }
+                    .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                        guard let provider = providers.first else { return false }
+                        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                            guard let url else { return }
+                            Task { @MainActor in importFile(url) }
+                        }
+                        return true
+                    }
                 HStack {
-                    Button("Analysevorschau") { consent = true }.buttonStyle(.borderedProminent).disabled(model.busy || model.text.isEmpty)
-                    if model.busy { ProgressView().controlSize(.small); Button("Abbrechen") { model.task?.cancel() } }
-                    Button("Verwerfen") { model.clear() }
+                    Button("PDF oder Foto importieren", systemImage: "doc.badge.plus") { filePicker = true }.buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy || importing)
+                    if importing { ProgressView().controlSize(.small); Text("Text wird lokal erkannt …").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary) }
+                }
+                HStack {
+                    Button("Analysevorschau") { consent = true }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy || model.text.isEmpty)
+                    if model.busy { ProgressView().controlSize(.small); Button("Abbrechen") { model.task?.cancel() }.buttonStyle(SFTSecondaryButtonStyle()) }
+                    Button("Verwerfen") { model.clear() }.buttonStyle(SFTSecondaryButtonStyle())
                 }
                 ErrorBanner(message: model.error)
                 if let result = model.result {
-                    Text("Erkannt mit \(result.model) · \(result.inputTokens ?? 0) Eingabe- / \(result.outputTokens ?? 0) Ausgabetokens").font(.caption)
+                    Text("Erkannt mit \(result.model) · \(result.inputTokens ?? 0) Eingabe- / \(result.outputTokens ?? 0) Ausgabetokens").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
                     ForEach(ExtractionSchema.keys(model.kind), id: \.self) { key in
-                        VStack(alignment: .leading) {
-                            if key == "menu_items", case .array(let items) = result.values[key] {
-                                Text("Speisekarte: \(items.count) Gerichte")
-                                ForEach(Array(items.enumerated()), id: \.offset) { entry in
-                                    if case .object(let item) = entry.element {
-                                        Text("\(item.text("name")) · \(item.text("price")) €")
-                                        Text("Quelle: \(item.text("evidence"))").font(.caption).foregroundStyle(.secondary)
+                        SFTCard {
+                            VStack(alignment: .leading) {
+                                if key == "menu_items", case .array(let items) = result.values[key] {
+                                    Text("Speisekarte: \(items.count) Gerichte").font(SFT.ui(13, .semibold))
+                                    ForEach(Array(items.enumerated()), id: \.offset) { entry in
+                                        if case .object(let item) = entry.element {
+                                            Text("\(item.text("name")) · \(item.text("price")) €").font(SFT.ui(12))
+                                            Text("Quelle: \(item.text("evidence"))").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                                        }
                                     }
-                                }
-                            } else { LabeledContent(label(key), value: result.values.text(key).nilIfEmpty ?? "Ungeklärt") }
-                            if let evidence = result.evidence[key] { Text("Quelle: \(evidence)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                        }.padding(8).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                                } else { LabeledContent(label(key), value: result.values.text(key).nilIfEmpty ?? "Ungeklärt") }
+                                if let evidence = result.evidence[key] { Text("Quelle: \(evidence)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary).textSelection(.enabled) }
+                            }
+                        }
                     }
                     if model.kind == .hotel_offer {
                         Picker("Zielnacht in \(tour.title)", selection: $night) { ForEach(TourDates.days(start: tour.start_date, end: tour.end_date, nights: true), id: \.self) { Text($0).tag($0) } }
                     }
-                    Text("Die nächste Ansicht ist ein korrigierbarer Entwurf. Erst „Speichern“ legt den Hotelvorschlag bzw. Restaurant-Stopp an. Keine Buchungsbestätigung wird erzeugt.").font(.caption)
-                    Button("Entwurf prüfen und übernehmen …") { openDraft(result) }.disabled(model.kind == .hotel_offer && night.isEmpty)
+                    Text("Die nächste Ansicht ist ein korrigierbarer Entwurf. Erst „Speichern“ legt den Hotelvorschlag bzw. Restaurant-Stopp an. Keine Buchungsbestätigung wird erzeugt.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                    Button("Entwurf prüfen und übernehmen …") { openDraft(result) }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.kind == .hotel_offer && night.isEmpty)
                 }
             }
-        }.onAppear { night = tour.end_date > tour.start_date ? tour.start_date : "" }
+            .padding()
+        }
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
+        .onAppear { night = tour.end_date > tour.start_date ? tour.start_date : "" }
         .onDisappear { model.clear() }
         .onChange(of: model.kind) { _, _ in model.result = nil }
         .onChange(of: model.text) { _, _ in if !model.busy { model.result = nil } }
         .sheet(isPresented: $consent) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Diese Analyse senden?").font(.headline)
-                Text("Empfänger: \(AIConfiguration.load().endpoint)\nModell: \(AIConfiguration.load().model)")
-                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene lokale Modelle: \(AIConfiguration.load().fallbackModels)").font(.caption) }
+                Text("Diese Analyse senden?").font(SFT.ui(16, .bold))
+                Text("Empfänger: \(AIConfiguration.load().endpoint)\nModell: \(AIConfiguration.load().model)").font(SFT.mono(12)).foregroundStyle(SFT.inkSecondary)
+                if AIConfiguration.load().cloudConfirmed {
+                    SFTNotice(text: "Cloud-Modell: der unten stehende Text verlässt diesen Mac und wird an den genannten Empfänger übertragen.", tone: .open)
+                }
+                if AIConfiguration.load().fallbackEnabled { Text("Weitere freigegebene Modelle: \(AIConfiguration.load().fallbackModels)").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary) }
                 ScrollView { Text(model.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 260)
-                Text("Systemauftrag: ausschließlich belegte Hotel-/Restaurantfelder extrahieren; unklare Angaben leer lassen. Keine Datenbankdaten oder Zugangsschlüssel werden an das Modell geschickt.").font(.caption)
-                HStack { Button("Abbrechen") { consent = false }; Spacer(); Button("Jetzt analysieren") { consent = false; model.analyze() }.buttonStyle(.borderedProminent) }
-            }.padding().frame(width: 600)
+                Text("Systemauftrag: ausschließlich belegte Hotel-/Restaurantfelder extrahieren; unklare Angaben leer lassen. Keine Datenbankdaten oder Zugangsschlüssel werden an das Modell geschickt.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                HStack { Button("Abbrechen") { consent = false }.buttonStyle(SFTSecondaryButtonStyle()); Spacer(); Button("Jetzt analysieren") { consent = false; model.analyze() }.buttonStyle(SFTPrimaryButtonStyle()) }
+            }.padding().frame(width: 600).background(SFT.canvas).foregroundStyle(SFT.ink)
         }
         .sheet(item: $editor) { request in ResourceEditorView(repository: services.content, kind: model.kind == .hotel_offer ? .hotels : .stops, parentID: tour.id, tour: tour, request: request) { editor = nil; model.clear() } }
         .sheet(isPresented: $restaurantDraft) {
             if let result = model.result { RestaurantImportReviewView(repository: services.content, tour: tour, result: result) { restaurantDraft = false; model.clear() } }
+        }
+        .fileImporter(isPresented: $filePicker, allowedContentTypes: LocalTextExtraction.supportedTypes) { result in
+            do { importFile(try result.get()) } catch { model.error = error.localizedDescription }
+        }
+    }
+    /// Liest PDF/Foto ausschließlich lokal (§39.2/§40.7-Ergänzung) und füllt
+    /// nur den erkannten Text in das ohnehin editierbare Textfeld ein -- nie
+    /// wird das Original hochgeladen, nie automatisch analysiert.
+    private func importFile(_ url: URL) {
+        importing = true; model.error = nil
+        // Task.detached statt Task {} -- die Extraktion (PDFKit/Vision) soll
+        // nicht auf dem Main Actor laufen, sonst blockiert eine große Datei
+        // kurzzeitig die UI (Owner-Review auf PR #20, P2). Rückweg auf den
+        // Main Actor erfolgt explizit über model (bereits @MainActor) bzw.
+        // MainActor.run für den View-lokalen @State.
+        Task.detached(priority: .userInitiated) { [self] in
+            do {
+                let text = try await LocalTextExtraction.extractText(from: url)
+                await MainActor.run { model.text = model.text.isEmpty ? text : model.text + "\n\n" + text }
+            } catch {
+                await MainActor.run { model.error = error.localizedDescription }
+            }
+            await MainActor.run { importing = false }
         }
     }
     private func openDraft(_ result: StructuredResult) {
@@ -148,8 +275,8 @@ struct RestaurantImportReviewView: View {
     @State private var discard = false
     var body: some View {
         VStack {
-            Text("Restaurant-Entwurf · \(tour.title)").font(.headline)
-            Text("Neuer Stopp, Bestellfenster und ausgewählte Gerichte werden gemeinsam gespeichert.").font(.caption)
+            Text("Restaurant-Entwurf · \(tour.title)").font(SFT.ui(16, .bold))
+            Text("Neuer Stopp, Bestellfenster und ausgewählte Gerichte werden gemeinsam gespeichert.").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
             ErrorBanner(message: state.error)
             Form {
                 Section("Neuer Restaurant-Stopp") { FormFields(fields: ResourceKind.stops.fields.filter { $0.id != "type" }, values: $stop) }
@@ -157,12 +284,12 @@ struct RestaurantImportReviewView: View {
                 Section("Gerichte prüfen") {
                     ForEach($menu) { $item in
                         FormFields(fields: ResourceKind.menu.fields, values: $item.values)
-                        Button("Gericht aus Entwurf entfernen", role: .destructive) { menu.removeAll { $0.id == item.id } }
-                        Divider()
+                        Button("Gericht aus Entwurf entfernen", role: .destructive) { menu.removeAll { $0.id == item.id } }.buttonStyle(SFTDestructiveOutlineButtonStyle())
+                        Divider().overlay(SFT.border)
                     }
                 }
             }.formStyle(.grouped).disabled(state.busy)
-            HStack { Button("Abbrechen") { discard = true }; Spacer(); Button("Geprüften Entwurf speichern") {
+            HStack { Button("Abbrechen") { discard = true }.buttonStyle(SFTSecondaryButtonStyle()); Spacer(); Button("Geprüften Entwurf speichern") {
                 Task { await state.perform {
                     let stopPayload = try FormValidation.payload(stop, fields: ResourceKind.stops.fields)
                     let settingsPayload = try FormValidation.payload(settings, fields: ResourceKind.restaurantSettings.fields)
@@ -171,8 +298,9 @@ struct RestaurantImportReviewView: View {
                     try await repository.createRestaurant(id: stopID, tourID: tour.id, stop: stopPayload, settings: settingsPayload, menu: items)
                     close()
                 } }
-            }.buttonStyle(.borderedProminent).disabled(state.busy) }
+            }.buttonStyle(SFTPrimaryButtonStyle()).disabled(state.busy) }
         }.padding().frame(width: 690, height: 750).interactiveDismissDisabled().protectDraft(true)
+        .background(SFT.canvas).foregroundStyle(SFT.ink)
         .onAppear {
             stop = Dictionary(uniqueKeysWithValues: ResourceKind.stops.fields.map { ($0.id, $0.initial) })
             stop["title"] = result.values["name"] ?? .null
