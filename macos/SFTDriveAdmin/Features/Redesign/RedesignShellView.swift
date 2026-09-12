@@ -49,14 +49,28 @@ enum RedesignSection: String, CaseIterable, Identifiable {
 
 struct RedesignShellView: View {
     @State private var section: RedesignSection = .dashboard
-    @State private var selectedTourID: String = SFTRedesignSample.tours[0].id
+    @State private var selectedTourID: String
     @AppStorage("redesign.showShortcutBar") private var showShortcutBar = true
 
-    /// In der App: `let services: AppServices` und die View-Models daraus speisen.
-    var tours: [TourRow] = SFTRedesignSample.tours
-    var openAccommodations: Int = 9
-    var openMeals: Int = 14
-    var lastRefresh: String = "14:32"
+    /// In der App: `let services: AppServices` und die View-Models daraus speisen
+    /// (siehe RedesignLiveData.swift / LiveRedesignShellView).
+    var tours: [TourRow]
+    var openAccommodations: Int
+    var openMeals: Int
+    var lastRefresh: String
+
+    init(
+        tours: [TourRow] = SFTRedesignSample.tours,
+        openAccommodations: Int = 9,
+        openMeals: Int = 14,
+        lastRefresh: String = "14:32"
+    ) {
+        self.tours = tours
+        self.openAccommodations = openAccommodations
+        self.openMeals = openMeals
+        self.lastRefresh = lastRefresh
+        _selectedTourID = State(initialValue: tours.first?.id ?? "")
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -71,6 +85,13 @@ struct RedesignShellView: View {
         .frame(minWidth: 1100, minHeight: 720)
         .background(SFT.canvas)
         .foregroundStyle(SFT.ink)
+        // Live-Daten laden asynchron nach: springt auf die erste echte Tour,
+        // sobald sie eintrifft, statt dauerhaft auf der Platzhalter-ID stehen
+        // zu bleiben (die Ansicht selbst bleibt über section/selectedTourID
+        // bestehen, @State wird beim erneuten Rendern nicht neu initialisiert).
+        .onChange(of: tours.map(\.id)) { _, ids in
+            if !ids.contains(selectedTourID) { selectedTourID = ids.first ?? "" }
+        }
     }
 
     // MARK: Sidebar

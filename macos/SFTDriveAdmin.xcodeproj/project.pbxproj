@@ -37,6 +37,7 @@
 		1E530428BBC5AB9B8531EA32 /* SFTDriveAdmin/Features/Redesign/RedesignModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F6E98C0EEBD1CDFF4C25E8 /* SFTDriveAdmin/Features/Redesign/RedesignModels.swift */; };
 		914C40E99B9C667C22301636 /* SFTDriveAdmin/Features/Redesign/RedesignSampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFB1C34FDF382B15197636D /* SFTDriveAdmin/Features/Redesign/RedesignSampleData.swift */; };
 		5CD391C9ED3E1BB182E8024F /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 764C0A8D010FAAB62914867B /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift */; };
+		C553FC7BD78B8063FD806C16 /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5DCBD9804373F84E0DCD85F /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift */; };
 		EF26194495A2E7943CED032C /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13047D008EBA9F7B99CE91A9 /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift */; };
 		1E58597AD8B634C03DDDA91A /* SFTDriveAdmin/Features/Redesign/TourWizardRedesignView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE323C8856EC876D0EEA2A4 /* SFTDriveAdmin/Features/Redesign/TourWizardRedesignView.swift */; };
 		0630A1CD56B86F312BA2051C /* SFTDriveAdmin/Features/Redesign/ToursRedesignView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73EA5773C131B75659161FC9 /* SFTDriveAdmin/Features/Redesign/ToursRedesignView.swift */; };
@@ -73,6 +74,7 @@
 		F3F6E98C0EEBD1CDFF4C25E8 /* SFTDriveAdmin/Features/Redesign/RedesignModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/RedesignModels.swift; sourceTree = SOURCE_ROOT; };
 		5FFB1C34FDF382B15197636D /* SFTDriveAdmin/Features/Redesign/RedesignSampleData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/RedesignSampleData.swift; sourceTree = SOURCE_ROOT; };
 		764C0A8D010FAAB62914867B /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/RedesignShellView.swift; sourceTree = SOURCE_ROOT; };
+		A5DCBD9804373F84E0DCD85F /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift; sourceTree = SOURCE_ROOT; };
 		13047D008EBA9F7B99CE91A9 /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift; sourceTree = SOURCE_ROOT; };
 		0EE323C8856EC876D0EEA2A4 /* SFTDriveAdmin/Features/Redesign/TourWizardRedesignView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/TourWizardRedesignView.swift; sourceTree = SOURCE_ROOT; };
 		73EA5773C131B75659161FC9 /* SFTDriveAdmin/Features/Redesign/ToursRedesignView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/ToursRedesignView.swift; sourceTree = SOURCE_ROOT; };
@@ -122,6 +124,7 @@
 				F3F6E98C0EEBD1CDFF4C25E8 /* SFTDriveAdmin/Features/Redesign/RedesignModels.swift */,
 				5FFB1C34FDF382B15197636D /* SFTDriveAdmin/Features/Redesign/RedesignSampleData.swift */,
 				764C0A8D010FAAB62914867B /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift */,
+				A5DCBD9804373F84E0DCD85F /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift */,
 				13047D008EBA9F7B99CE91A9 /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift */,
 				0EE323C8856EC876D0EEA2A4 /* SFTDriveAdmin/Features/Redesign/TourWizardRedesignView.swift */,
 				73EA5773C131B75659161FC9 /* SFTDriveAdmin/Features/Redesign/ToursRedesignView.swift */,
@@ -235,6 +238,7 @@
 				1E530428BBC5AB9B8531EA32 /* SFTDriveAdmin/Features/Redesign/RedesignModels.swift in Sources */,
 				914C40E99B9C667C22301636 /* SFTDriveAdmin/Features/Redesign/RedesignSampleData.swift in Sources */,
 				5CD391C9ED3E1BB182E8024F /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift in Sources */,
+				C553FC7BD78B8063FD806C16 /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift in Sources */,
 				EF26194495A2E7943CED032C /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift in Sources */,
 				1E58597AD8B634C03DDDA91A /* SFTDriveAdmin/Features/Redesign/TourWizardRedesignView.swift in Sources */,
 				0630A1CD56B86F312BA2051C /* SFTDriveAdmin/Features/Redesign/ToursRedesignView.swift in Sources */,
