@@ -73,19 +73,31 @@ export function ToursPage() {
 
   const todayKey = dateKey(today)
 
+  // Der Kalender ist nur Filter (Tagesauswahl) bzw. Übersicht, in welchem
+  // Monat wie viele Touren liegen (Badge neben dem Monatsnamen) -- er schränkt
+  // "Geplante Ausfahrten" nicht auf den gerade angezeigten Monat ein. Ohne
+  // gewählten Tag zeigt die Liste deshalb immer den vollständigen Bestand.
   const monthStartKey = dateKey(new Date(viewYear, viewMonth, 1))
   const monthEndKey = dateKey(new Date(viewYear, viewMonth + 1, 0))
   const monthTours = tours.filter((t) => t.tour.start_date <= monthEndKey && t.tour.end_date >= monthStartKey)
 
   const dayFiltered = selectedDay
     ? tours.filter((t) => t.tour.start_date <= selectedDay && t.tour.end_date >= selectedDay)
-    : monthTours
+    : tours
+
+  // Vergangene Touren bleiben bewusst auf den Tag bzw. den im Kalender
+  // angezeigten Monat begrenzt (§13.17) -- sonst würde bei jedem beliebigen
+  // Monat sofort das gesamte historische Archiv im eingeklappten Bereich
+  // landen, und die "keine Ausfahrt geplant"-Leermeldung unten würde nie mehr
+  // greifen, sobald irgendwann einmal eine Tour stattgefunden hat (Codex-
+  // Review auf PR #23). Nur running/upcoming sind bewusst global (siehe oben).
+  const pastSource = selectedDay ? dayFiltered : monthTours
 
   const running = dayFiltered.filter((t) => t.tour.start_date <= todayKey && t.tour.end_date >= todayKey)
   const upcoming = dayFiltered
     .filter((t) => t.tour.start_date > todayKey)
     .sort((a, b) => a.tour.start_date.localeCompare(b.tour.start_date))
-  const past = dayFiltered
+  const past = pastSource
     .filter((t) => t.tour.end_date < todayKey)
     .sort((a, b) => b.tour.end_date.localeCompare(a.tour.end_date))
 
@@ -161,7 +173,7 @@ export function ToursPage() {
           <p className="px-1 text-sm text-sft-gray">
             {selectedDay
               ? 'An diesem Tag findet keine Ausfahrt statt.'
-              : 'Für diesen Monat sind aktuell keine Ausfahrten geplant.'}
+              : 'Aktuell ist noch keine neue Ausfahrt geplant.'}
           </p>
         )}
 
