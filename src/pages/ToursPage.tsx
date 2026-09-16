@@ -73,13 +73,17 @@ export function ToursPage() {
 
   const todayKey = dateKey(today)
 
+  // Der Kalender ist nur Filter (Tagesauswahl) bzw. Übersicht, in welchem
+  // Monat wie viele Touren liegen (Badge neben dem Monatsnamen) -- er schränkt
+  // "Geplante Ausfahrten" nicht auf den gerade angezeigten Monat ein. Ohne
+  // gewählten Tag zeigt die Liste deshalb immer den vollständigen Bestand.
   const monthStartKey = dateKey(new Date(viewYear, viewMonth, 1))
   const monthEndKey = dateKey(new Date(viewYear, viewMonth + 1, 0))
   const monthTours = tours.filter((t) => t.tour.start_date <= monthEndKey && t.tour.end_date >= monthStartKey)
 
   const dayFiltered = selectedDay
     ? tours.filter((t) => t.tour.start_date <= selectedDay && t.tour.end_date >= selectedDay)
-    : monthTours
+    : tours
 
   const running = dayFiltered.filter((t) => t.tour.start_date <= todayKey && t.tour.end_date >= todayKey)
   const upcoming = dayFiltered
@@ -161,7 +165,7 @@ export function ToursPage() {
           <p className="px-1 text-sm text-sft-gray">
             {selectedDay
               ? 'An diesem Tag findet keine Ausfahrt statt.'
-              : 'Für diesen Monat sind aktuell keine Ausfahrten geplant.'}
+              : 'Aktuell ist noch keine neue Ausfahrt geplant.'}
           </p>
         )}
 

@@ -1997,6 +1997,23 @@ Standardansicht:
 
 Vergangene Touren werden nicht zwischen zukünftigen Touren dargestellt.
 
+#### Umsetzung: Kalender filtert die Liste nicht nach Monat
+
+„Geplante Ausfahrten" zeigt immer den vollständigen Bestand aller noch
+bevorstehenden (bzw. laufenden) Touren, unabhängig davon, welcher Monat
+gerade im Kalender angezeigt wird. Der Kalender dient dabei nur als:
+
+- **Filter** über die explizite Tagesauswahl (§13.8) — tippt der User einen
+  Tag an, wird die Liste tatsächlich eingeschränkt,
+- **Übersicht**, in welchem Monat wie viele Touren liegen (Badge neben dem
+  Monatsnamen sowie die Eventpunkte/Zeitraum-Balken im Kalender selbst).
+
+Reines Blättern zu einem anderen Monat blendet also keine Touren aus der
+Liste aus. Andernfalls verschwinden Ausfahrten aus späteren Monaten für den
+Betrachter vollständig aus dem Blick, sobald er zufällig einen anderen Monat
+im Kalender offen hat — das widerspricht dem primären UX-Ziel aus §13 ("App
+öffnen → nächste Ausfahrten sofort erkennen").
+
 ---
 
 ### 13.17 Vergangene Touren
