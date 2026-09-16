@@ -200,10 +200,14 @@ export function AdminTourRegistrationsPage() {
       `${tourTitle} — Teilnehmer`,
       `${confirmedCount} bestätigte Fahrzeuge · ${confirmedPersons} Personen`,
       '',
-      ...confirmedRows.map(
-        (r) =>
-          `${r.profiles?.username ?? '—'} · ${r.vehicle_manufacturer} ${r.vehicle_model} · ${r.vehicle_power_ps} PS · ${1 + r.passenger_count} Person${1 + r.passenger_count === 1 ? '' : 'en'}`,
-      ),
+      ...confirmedRows.map((r) => {
+        const name = includePrivateExportFields
+          ? [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(' ')
+          : ''
+        const who = name ? `${name} · ${r.profiles?.username ?? '—'}` : (r.profiles?.username ?? '—')
+        const plate = includePrivateExportFields && r.license_plate ? ` · ${r.license_plate}` : ''
+        return `${who} · ${r.vehicle_manufacturer} ${r.vehicle_model} · ${r.vehicle_power_ps} PS · ${1 + r.passenger_count} Person${1 + r.passenger_count === 1 ? '' : 'en'}${plate}`
+      }),
     ]
     const result = await shareOrCopyText(`${tourTitle} — Teilnehmer`, lines.join('\n'))
     setShareStatus(
