@@ -85,11 +85,19 @@ export function ToursPage() {
     ? tours.filter((t) => t.tour.start_date <= selectedDay && t.tour.end_date >= selectedDay)
     : tours
 
+  // Vergangene Touren bleiben bewusst auf den Tag bzw. den im Kalender
+  // angezeigten Monat begrenzt (§13.17) -- sonst würde bei jedem beliebigen
+  // Monat sofort das gesamte historische Archiv im eingeklappten Bereich
+  // landen, und die "keine Ausfahrt geplant"-Leermeldung unten würde nie mehr
+  // greifen, sobald irgendwann einmal eine Tour stattgefunden hat (Codex-
+  // Review auf PR #23). Nur running/upcoming sind bewusst global (siehe oben).
+  const pastSource = selectedDay ? dayFiltered : monthTours
+
   const running = dayFiltered.filter((t) => t.tour.start_date <= todayKey && t.tour.end_date >= todayKey)
   const upcoming = dayFiltered
     .filter((t) => t.tour.start_date > todayKey)
     .sort((a, b) => a.tour.start_date.localeCompare(b.tour.start_date))
-  const past = dayFiltered
+  const past = pastSource
     .filter((t) => t.tour.end_date < todayKey)
     .sort((a, b) => b.tour.end_date.localeCompare(a.tour.end_date))
 
