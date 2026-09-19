@@ -7,6 +7,7 @@ import type { RegistrationStatus, RegistrationResult } from '@/types/tour'
 import { rpcErrorMessage } from '@/types/tour'
 import { downloadCsv } from '@/utils/csv'
 import { shareOrCopyText } from '@/utils/share'
+import { formatDateRange } from '@/utils/date'
 
 interface AdminRegistrationRow {
   id: string
@@ -79,6 +80,7 @@ function PassengerCountEditor({
 export function AdminTourRegistrationsPage() {
   const { id } = useParams<{ id: string }>()
   const [tourTitle, setTourTitle] = useState('')
+  const [tourDates, setTourDates] = useState<{ start_date: string; end_date: string } | null>(null)
   const [rows, setRows] = useState<AdminRegistrationRow[]>([])
   const [interestCount, setInterestCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -93,10 +95,13 @@ export function AdminTourRegistrationsPage() {
 
     supabase
       .from('tours')
-      .select('title')
+      .select('title, start_date, end_date')
       .eq('id', id)
       .single()
-      .then(({ data }) => setTourTitle(data?.title ?? ''))
+      .then(({ data }) => {
+        setTourTitle(data?.title ?? '')
+        setTourDates(data ? { start_date: data.start_date, end_date: data.end_date } : null)
+      })
 
     supabase
       .from('tour_interests')
@@ -198,6 +203,7 @@ export function AdminTourRegistrationsPage() {
     setShareStatus(null)
     const lines = [
       `${tourTitle} — Teilnehmer`,
+      ...(tourDates ? [formatDateRange(tourDates.start_date, tourDates.end_date)] : []),
       `${confirmedCount} bestätigte Fahrzeuge · ${confirmedPersons} Personen`,
       '',
       ...confirmedRows.map((r) => {
