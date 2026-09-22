@@ -54,31 +54,50 @@ interface RequestBody {
 
 const ALLOWED_STATUSES = ['confirmed', 'pending', 'waitlisted']
 
+// Ohne diese Header liefert der Browser den (serverseitig durchaus
+// erfolgreichen) Response niemals an den aufrufenden JS-Code aus -- der
+// fetch()-Aufruf schlägt dann mit einem generischen Netzwerkfehler fehl,
+// obwohl die Function selbst korrekt durchgelaufen ist (in den Supabase-
+// Logs als Status 200 sichtbar). supabase-js ruft ausschließlich per Browser-
+// fetch() auf, daher zwingend auf jeder Response inkl. Preflight nötig.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405 })
+    return new Response(JSON.stringify({ error: 'method_not_allowed' }), {
+      status: 405,
+      headers: corsHeaders,
+    })
   }
 
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: corsHeaders })
   }
 
   let payload: RequestBody
   try {
     payload = await req.json()
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
 
   if ((!payload.tour_id && !payload.broadcast) || !payload.title || !payload.body) {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
   if (payload.user_ids && !payload.tour_id) {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
   if (payload.statuses && (!payload.tour_id || !payload.statuses.every((s) => ALLOWED_STATUSES.includes(s)))) {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -98,6 +117,7 @@ Deno.serve(async (req: Request) => {
     // Beide Kanäle optional (§27.16) — kein harter Fehler, nur nichts zu tun.
     return new Response(JSON.stringify({ ok: true, sent: 0, skipped: 'not_configured' }), {
       status: 200,
+      headers: corsHeaders,
     })
   }
 
@@ -111,12 +131,12 @@ Deno.serve(async (req: Request) => {
 
   const { data: userData, error: userError } = await userClient.auth.getUser()
   if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: corsHeaders })
   }
 
   const { data: isAdmin } = await userClient.rpc('is_admin')
   if (!isAdmin) {
-    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders })
   }
 
   // Ab hier service_role — ausschließlich serverseitig, nie im Client.
@@ -143,7 +163,7 @@ Deno.serve(async (req: Request) => {
       userIds = userIds.filter((uid) => requested.has(uid))
     }
     if (userIds.length === 0) {
-      return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200 })
+      return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200, headers: corsHeaders })
     }
     subscriptionsQuery = subscriptionsQuery.in('user_id', userIds)
   }
@@ -220,6 +240,6 @@ Deno.serve(async (req: Request) => {
 
   return new Response(JSON.stringify({ ok: true, sent, failed, email_sent: emailSent, email_failed: emailFailed }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })
