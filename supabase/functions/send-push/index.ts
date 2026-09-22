@@ -17,6 +17,17 @@
 // (Dashboard → Edge Functions → Secrets, projektweit) hinterlegen:
 //   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (z. B. "mailto:admin@example.de")
 // SUPABASE_URL/ANON_KEY/SERVICE_ROLE_KEY sind automatisch verfügbar.
+//
+// E-Mail als zusätzlicher Kanal (siehe CLAUDE.md §27.22): erreicht auch
+// Teilnehmer ohne aktivierten Push. Optional, über Brevo (kostenloses
+// Free-Tier, Single-Sender-Verifizierung ohne eigene Domain möglich).
+// Zusätzliche Secrets, falls gewünscht:
+//   BREVO_API_KEY, BREVO_SENDER_EMAIL, BREVO_SENDER_NAME (optional, Default "SFT Drive")
+// Ohne diese Secrets bleibt E-Mail-Versand deaktiviert (fail-soft, analog VAPID).
+// Bewusst nur für die tour_id-Fälle (registrierungsbasierter, klar begrenzter
+// Empfängerkreis) — nicht für broadcast: dort müsste der Empfängerkreis erst
+// unabhängig von Push-Subscriptions neu definiert werden (potenziell alle
+// Nutzer), das ist eine gesonderte Entscheidung.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
@@ -76,12 +87,22 @@ Deno.serve(async (req: Request) => {
   const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
   const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
   const vapidSubject = Deno.env.get('VAPID_SUBJECT')
+  const brevoApiKey = Deno.env.get('BREVO_API_KEY')
+  const brevoSenderEmail = Deno.env.get('BREVO_SENDER_EMAIL')
+  const brevoSenderName = Deno.env.get('BREVO_SENDER_NAME') || 'SFT Drive'
 
-  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) {
-    // Push ist optional (§27.16) — kein harter Fehler, nur nichts zu tun.
-    return new Response(JSON.stringify({ ok: true, sent: 0, skipped: 'vapid_not_configured' }), {
+  const pushConfigured = Boolean(vapidPublicKey && vapidPrivateKey && vapidSubject)
+  const emailConfigured = Boolean(brevoApiKey && brevoSenderEmail)
+
+  if (!pushConfigured && !emailConfigured) {
+    // Beide Kanäle optional (§27.16) — kein harter Fehler, nur nichts zu tun.
+    return new Response(JSON.stringify({ ok: true, sent: 0, skipped: 'not_configured' }), {
       status: 200,
     })
+  }
+
+  if (pushConfigured) {
+    webpush.setVapidDetails(vapidSubject!, vapidPublicKey!, vapidPrivateKey!)
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -98,12 +119,14 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
   }
 
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
-
   // Ab hier service_role — ausschließlich serverseitig, nie im Client.
   const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
   let subscriptionsQuery = adminClient.from('push_subscriptions').select('id, endpoint, p256dh, auth')
+
+  // userIds bleibt bei broadcast bewusst null: E-Mail-Versand ist dafür
+  // absichtlich nicht vorgesehen (siehe Kommentar oben).
+  let userIds: string[] | null = null
 
   if (payload.broadcast) {
     // Keine weitere Einschränkung — alle Subscriptions.
@@ -114,7 +137,7 @@ Deno.serve(async (req: Request) => {
       .eq('tour_id', payload.tour_id!)
       .in('status', payload.statuses ?? ['confirmed'])
 
-    let userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
+    userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
     if (payload.user_ids && payload.user_ids.length > 0) {
       const requested = new Set(payload.user_ids)
       userIds = userIds.filter((uid) => requested.has(uid))
@@ -125,36 +148,73 @@ Deno.serve(async (req: Request) => {
     subscriptionsQuery = subscriptionsQuery.in('user_id', userIds)
   }
 
-  const { data: subscriptions } = await subscriptionsQuery
-
   let sent = 0
   let failed = 0
 
-  for (const sub of subscriptions ?? []) {
-    try {
-      await webpush.sendNotification(
-        {
-          endpoint: sub.endpoint,
-          keys: { p256dh: sub.p256dh, auth: sub.auth },
-        },
-        JSON.stringify({
-          title: payload.title,
-          body: payload.body,
-          target_path: `/notifications`,
-        }),
-      )
-      sent++
-    } catch (err) {
-      failed++
-      const statusCode = (err as { statusCode?: number }).statusCode
-      if (statusCode === 404 || statusCode === 410) {
-        // Subscription ist nicht mehr gültig (§27.15 "ungültige Subscriptions entfernbar").
-        await adminClient.from('push_subscriptions').delete().eq('id', sub.id)
+  if (pushConfigured) {
+    const { data: subscriptions } = await subscriptionsQuery
+
+    for (const sub of subscriptions ?? []) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          },
+          JSON.stringify({
+            title: payload.title,
+            body: payload.body,
+            target_path: `/notifications`,
+          }),
+        )
+        sent++
+      } catch (err) {
+        failed++
+        const statusCode = (err as { statusCode?: number }).statusCode
+        if (statusCode === 404 || statusCode === 410) {
+          // Subscription ist nicht mehr gültig (§27.15 "ungültige Subscriptions entfernbar").
+          await adminClient.from('push_subscriptions').delete().eq('id', sub.id)
+        }
       }
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, sent, failed }), {
+  let emailSent = 0
+  let emailFailed = 0
+
+  if (emailConfigured && userIds && userIds.length > 0) {
+    for (const uid of userIds) {
+      const { data } = await adminClient.auth.admin.getUserById(uid)
+      const email = data.user?.email
+      if (!email) continue
+
+      try {
+        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': brevoApiKey!,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            sender: { name: brevoSenderName, email: brevoSenderEmail },
+            to: [{ email }],
+            subject: payload.title,
+            textContent: `${payload.body}\n\n— SFT Drive\nhttps://sft-drive.pages.dev/notifications`,
+          }),
+        })
+        if (res.ok) {
+          emailSent++
+        } else {
+          emailFailed++
+        }
+      } catch {
+        emailFailed++
+      }
+    }
+  }
+
+  return new Response(JSON.stringify({ ok: true, sent, failed, email_sent: emailSent, email_failed: emailFailed }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })
