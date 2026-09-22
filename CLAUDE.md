@@ -4397,6 +4397,28 @@ Nutzer
 Impressum & Datenschutz
 ```
 
+#### Umsetzung: Aktive, einmalige Aufforderung zur Push-Aktivierung
+
+Push-Mitteilungen waren zuvor ausschließlich über einen manuellen Schalter in
+`/profile` aktivierbar — ohne dass die App je aktiv darauf hinwies. Nutzer, die
+diesen Schalter nicht von sich aus finden, verpassten dadurch Tourabsagen,
+Treffpunktänderungen und Restaurant-Bestellfenster vollständig.
+
+`PushPermissionBanner` (`src/components/PushPermissionBanner.tsx`, in
+`AppLayout` eingebunden) zeigt deshalb für jeden eingeloggten User mit noch
+unentschiedener Browser-Berechtigung (`Notification.permission === 'default'`)
+einmalig einen dismissbaren Hinweis mit Nutzenerklärung und den Optionen
+„Aktivieren“ / „Später“. Ein Klick auf „Später“ merkt sich die Ablehnung
+per `localStorage` (geräte-/browserbezogen, analog zur Push-Subscription
+selbst) und blendet den Hinweis auf diesem Gerät dauerhaft aus — Push bleibt
+danach weiterhin jederzeit manuell im Profil aktivierbar. Derselbe Mechanismus
+deckt sowohl frisch registrierte als auch bereits bestehende Bestandsuser ab,
+ohne zwei getrennte Codepfade zu benötigen. §27.16 bleibt dabei vollständig
+gewahrt: keine Abfrage beim reinen App-Start (der Banner erscheint nur nach
+Login, wenn `user` vorhanden ist), Nutzen wird vor der eigentlichen
+Browser-Berechtigungsabfrage erklärt, Ablehnung bleibt jederzeit möglich, App
+bleibt vollständig nutzbar.
+
 ---
 
 ## 28. Nicht im ersten MVP
