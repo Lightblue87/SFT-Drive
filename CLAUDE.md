@@ -3711,7 +3711,11 @@ rekonstruiert werden muss.
   zusätzlich drei projektweite Edge-Function-Secrets gesetzt:
   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche
   VAPID-Schlüssel liegt zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den
-  Cloudflare-Pages-Umgebungsvariablen (Production und Preview). Für
+  Cloudflare-Pages-Umgebungsvariablen (Production und Preview). `send-push`
+  kann zusätzlich optional per `BREVO_API_KEY`/`BREVO_SENDER_EMAIL`/
+  `BREVO_SENDER_NAME` E-Mails versenden (§27.22) — ohne diese drei Secrets
+  bleibt der E-Mail-Kanal deaktiviert, der bestehende Push-Versand ist davon
+  unabhängig. Für
   `restaurant-order-notifications` und `tour-interest-notifications` ist
   zusätzlich je ein per `pg_cron`/`pg_net`/Supabase Vault eingerichteter
   15-Minuten-Job nötig (Setup-Anleitung als Kommentar am Anfang der jeweiligen
@@ -4418,6 +4422,50 @@ gewahrt: keine Abfrage beim reinen App-Start (der Banner erscheint nur nach
 Login, wenn `user` vorhanden ist), Nutzen wird vor der eigentlichen
 Browser-Berechtigungsabfrage erklärt, Ablehnung bleibt jederzeit möglich, App
 bleibt vollständig nutzbar.
+
+### 27.22 E-Mail als zusätzlicher Benachrichtigungskanal
+
+Push erreicht nur Teilnehmer, die eine Subscription aktiviert haben (§27.16
+verbietet ausdrücklich eine erzwungene Aktivierung). Damit wichtige
+Tour-Mitteilungen auch Teilnehmer ohne Push erreichen, kann `send-push`
+optional zusätzlich eine E-Mail verschicken — über
+[Brevo](https://www.brevo.com), da dessen kostenloses Free-Tier eine
+Single-Sender-Verifizierung der bereits für die Registrierungsbestätigung
+genutzten Absenderadresse ohne eigene Domain erlaubt (im Unterschied zu
+Anbietern wie Resend, die eine per DNS verifizierte eigene Domain
+voraussetzen).
+
+Umsetzung:
+
+- Neue, rein optionale Secrets in `send-push`: `BREVO_API_KEY`,
+  `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` (Default `"SFT Drive"`, falls
+  nicht gesetzt). Fehlen sie, bleibt der E-Mail-Kanal deaktiviert
+  (fail-soft, analog zu fehlenden VAPID-Secrets) — der bestehende
+  Push-Versand ist davon vollständig unabhängig.
+- E-Mail-Versand ist bewusst nur für die `tour_id`-Fälle vorgesehen (die
+  Empfängerliste ergibt sich dort ohnehin bereits serverseitig aus
+  `tour_registrations`, unabhängig von einer vorhandenen Push-Subscription),
+  **nicht** für `broadcast`: dort gibt es aktuell keine von
+  Push-Subscriptions unabhängige Empfängerliste, und "an wirklich alle
+  Nutzer" wäre eine gesonderte, hier bewusst nicht getroffene Entscheidung.
+- E-Mail-Adressen werden serverseitig über die Supabase-Auth-Admin-API
+  (`adminClient.auth.admin.getUserById()`) aufgelöst — dieselbe
+  `service_role`-Berechtigungsgrenze wie beim bestehenden Push-Versand,
+  niemals eine vom Client mitgelieferte Adresse.
+- Der E-Mail-Inhalt ist bewusst reiner Text (Titel als Betreff, Text plus
+  Link zurück in die App) — kein HTML-Template, um die Komplexität in einem
+  ersten Schritt gering zu halten.
+- Fehlerhafte Einzelversände (`email_failed`) blockieren weder den
+  Push-Versand noch die übrigen E-Mails — dieselbe Fail-soft-Logik wie beim
+  bestehenden Push-Versand pro Subscription.
+- Die Antwort von `send-push` enthält zusätzlich zu `sent`/`failed` (Push)
+  nun `email_sent`/`email_failed`.
+
+Noch offen, bevor der Kanal produktiv nutzbar ist: Brevo-Account anlegen,
+Single-Sender-Verifizierung der Gmail-Absenderadresse durchführen, die drei
+Secrets im Supabase Dashboard hinterlegen. Ohne diesen manuellen Schritt
+bleibt der Code inaktiv (§26 "das Repository allein sagt nichts darüber
+aus, was tatsächlich läuft").
 
 ---
 
