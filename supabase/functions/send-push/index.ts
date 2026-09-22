@@ -184,11 +184,15 @@ Deno.serve(async (req: Request) => {
 
   if (emailConfigured && userIds && userIds.length > 0) {
     for (const uid of userIds) {
-      const { data } = await adminClient.auth.admin.getUserById(uid)
-      const email = data.user?.email
-      if (!email) continue
-
+      // Jeder Empfänger wird unabhängig behandelt -- ein Fehler bei genau
+      // diesem Nutzer (Auth-Admin-API-Hänger, keine E-Mail hinterlegt,
+      // Brevo lehnt ab) darf weder die übrigen E-Mails noch das bereits
+      // berechnete Push-Ergebnis der Function zum Absturz bringen.
       try {
+        const { data } = await adminClient.auth.admin.getUserById(uid)
+        const email = data.user?.email
+        if (!email) continue
+
         const res = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {

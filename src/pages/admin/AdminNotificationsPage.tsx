@@ -121,7 +121,10 @@ export function AdminNotificationsPage() {
     })
 
     if (pushError) {
-      setDeliveryError('Push/E-Mail-Versand konnte nicht ausgewertet werden (Funktionsaufruf fehlgeschlagen).')
+      // pushError.message ist der einzige Diagnosehinweis ohne Supabase-
+      // Dashboard-Zugriff -- lieber zeigen als generisch verschlucken, auch
+      // wenn er technisch klingt (§27.16: blockiert weiterhin nichts).
+      setDeliveryError(`Push/E-Mail-Versand fehlgeschlagen: ${pushError.message}`)
     } else {
       setDeliveryStats(pushData)
     }
