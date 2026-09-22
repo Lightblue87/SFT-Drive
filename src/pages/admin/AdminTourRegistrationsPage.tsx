@@ -476,7 +476,7 @@ export function AdminTourRegistrationsPage() {
       </div>
 
       <Link
-        to="/admin/notifications"
+        to={`/admin/notifications?tour=${id}`}
         className="tap-scale mt-3.5 block rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-center text-[15px] font-semibold text-white"
       >
         Mitteilung an diese Tour

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import { rpcErrorMessage } from '@/types/tour'
@@ -18,6 +19,9 @@ type Target = 'tour' | 'broadcast'
  * sind, nicht nur an die Teilnehmer einer bestimmten Tour.
  */
 export function AdminNotificationsPage() {
+  const [searchParams] = useSearchParams()
+  const preselectedTourId = searchParams.get('tour')
+
   const [tours, setTours] = useState<TourOption[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -36,10 +40,19 @@ export function AdminNotificationsPage() {
       .order('start_date', { ascending: false })
       .then(({ data }) => {
         setTours((data as TourOption[]) ?? [])
-        if (data && data.length > 0) setTourId(data[0].id)
+        // Aus der Teilnehmerverwaltung einer Tour verlinkt ("Mitteilung an
+        // diese Tour") soll genau diese Tour vorausgewählt sein, nicht die
+        // per Default zuerst sortierte -- nur auf eine tatsächlich noch
+        // existierende Tour zurückfallen, sonst bliebe die Auswahl leer.
+        const preselected = data?.find((t) => t.id === preselectedTourId)
+        if (preselected) {
+          setTourId(preselected.id)
+        } else if (data && data.length > 0) {
+          setTourId(data[0].id)
+        }
         setLoading(false)
       })
-  }, [])
+  }, [preselectedTourId])
 
   async function send() {
     setError(null)
