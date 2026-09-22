@@ -12,6 +12,16 @@ interface TourOption {
 
 type Target = 'tour' | 'broadcast'
 
+/** Antwortform von send-push (§27.16/§27.22) -- alle Felder optional, da sie
+ * bei nicht konfiguriertem Kanal (skipped) fehlen können. */
+interface DeliveryStats {
+  sent?: number
+  failed?: number
+  email_sent?: number
+  email_failed?: number
+  skipped?: string
+}
+
 /**
  * Zentrale Mitteilungsverwaltung (siehe CLAUDE.md §27.11 Admin Notification
  * Trigger) — bewusst als eigener Admin-Bereich statt verschachtelt in einer
@@ -32,6 +42,8 @@ export function AdminNotificationsPage() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
+  const [deliveryError, setDeliveryError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -57,6 +69,8 @@ export function AdminNotificationsPage() {
   async function send() {
     setError(null)
     setSent(false)
+    setDeliveryStats(null)
+    setDeliveryError(null)
 
     if (!title.trim() || !body.trim()) {
       setError('Bitte Titel und Text ausfüllen.')
@@ -94,15 +108,23 @@ export function AdminNotificationsPage() {
       return
     }
 
-    // Push ist rein zusätzlich zur bereits erstellten In-App-Mitteilung
+    // Push/E-Mail sind rein zusätzlich zur bereits erstellten In-App-Mitteilung
     // (§27.16) — ein Fehlschlag hier darf die Kernfunktion nicht als
-    // gescheitert melden, deshalb bewusst kein await auf den Erfolg.
-    void supabase.functions.invoke('send-push', {
+    // gescheitert melden, In-App-Erfolg bleibt also unabhängig von diesem
+    // Ergebnis sichtbar. Die Auswertung unten dient nur der Diagnose (§27.22
+    // Debugging), nicht als Voraussetzung für "gesendet".
+    const { data: pushData, error: pushError } = await supabase.functions.invoke<DeliveryStats>('send-push', {
       body:
         target === 'tour'
           ? { tour_id: tourId, title: title.trim(), body: body.trim() }
           : { broadcast: true, title: title.trim(), body: body.trim() },
     })
+
+    if (pushError) {
+      setDeliveryError('Push/E-Mail-Versand konnte nicht ausgewertet werden (Funktionsaufruf fehlgeschlagen).')
+    } else {
+      setDeliveryStats(pushData)
+    }
 
     setTitle('')
     setBody('')
@@ -179,6 +201,25 @@ export function AdminNotificationsPage() {
 
           {error && <p className="text-sm text-sft-red">{error}</p>}
           {sent && <p className="font-mono text-[11px] text-sft-gray">MITTEILUNG GESENDET</p>}
+          {sent && deliveryError && <p className="font-mono text-[11px] text-sft-red">{deliveryError}</p>}
+          {sent && deliveryStats && (
+            <div className="rounded-xl border border-white/10 bg-[#0f0f12] p-3 font-mono text-[11px] leading-relaxed text-sft-gray">
+              {deliveryStats.skipped ? (
+                <p>Push/E-Mail nicht konfiguriert ({deliveryStats.skipped}).</p>
+              ) : (
+                <>
+                  <p>
+                    Push: {deliveryStats.sent ?? 0} gesendet
+                    {deliveryStats.failed ? `, ${deliveryStats.failed} fehlgeschlagen` : ''}
+                  </p>
+                  <p>
+                    E-Mail: {deliveryStats.email_sent ?? 0} gesendet
+                    {deliveryStats.email_failed ? `, ${deliveryStats.email_failed} fehlgeschlagen` : ''}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <button
             onClick={send}
