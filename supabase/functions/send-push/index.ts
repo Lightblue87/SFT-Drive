@@ -151,11 +151,22 @@ Deno.serve(async (req: Request) => {
   if (payload.broadcast) {
     // Keine weitere Einschränkung — alle Subscriptions.
   } else {
-    const { data: registrations } = await adminClient
+    const { data: registrations, error: registrationsError } = await adminClient
       .from('tour_registrations')
       .select('user_id')
       .eq('tour_id', payload.tour_id!)
       .in('status', payload.statuses ?? ['confirmed'])
+
+    // TEMPORÄRES DEBUGGING (siehe CLAUDE.md §27.22-Fehlersuche) -- vor Merge
+    // wieder entfernen, sobald die Ursache gefunden ist.
+    console.log('send-push debug', {
+      pushConfigured,
+      emailConfigured,
+      tour_id: payload.tour_id,
+      statuses: payload.statuses ?? ['confirmed'],
+      registrationsError,
+      registrationsCount: registrations?.length ?? null,
+    })
 
     userIds = [...new Set((registrations ?? []).map((r) => r.user_id as string))]
     if (payload.user_ids && payload.user_ids.length > 0) {
