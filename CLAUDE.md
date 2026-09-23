@@ -4586,6 +4586,44 @@ Supabase-Variable) austauschen. Bei einem neuen `send-push`-E-Mail-Inhalt
 `renderEmailHtml()` erweitern statt eine zweite, abweichende Funktion zu
 bauen (§23 „keine parallele zweite Architektur für dieselbe Funktion").
 
+### 27.24 Lesebestätigung für Admin-Mitteilungen
+
+Ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. `notifications` legt bereits
+pro Empfänger eine eigene Zeile mit `read_at` an (§27.14) — die Rohdaten für
+eine Lesequote existierten also schon, es fehlte nur eine zuverlässige
+Gruppierung der Zeilen **eines** Admin-Versands (mehrere Mitteilungen an
+dieselbe Tour oder mehrere Broadcasts wären über `tour_id`/`title`/`body`/
+`created_at` nur heuristisch unterscheidbar gewesen).
+
+Migration `20260923020000_notification_read_receipts.sql`:
+
+- `notifications.batch_id uuid not null default gen_random_uuid()`. Der
+  Spaltendefault sorgt dafür, dass jede bereits bestehende automatische
+  Einzel-Mitteilung (Tourabsage, Regionsbenachrichtigung, Restaurant-/
+  Übernachtungserinnerung usw.) automatisch ihre eigene, isolierte
+  `batch_id` bekommt — an diesen Stellen war keine Änderung nötig.
+- `admin_send_tour_notification()` und `admin_send_broadcast_notification()`
+  erzeugen jetzt bewusst **eine** `batch_id` pro Aufruf und setzen sie für
+  alle Empfängerzeilen dieses einen Versands explizit gleich.
+- `admin_list_notification_batches(p_tour_id uuid default null)`: gebündelte
+  Übersicht bereits versendeter Admin-Mitteilungen (`type = 'ADMIN_MESSAGE'`)
+  je Ziel (Tour oder Broadcast bei `p_tour_id = null`) samt
+  `recipient_count`/`read_count` — eine aggregierende Abfrage statt einer
+  Einzelabfrage pro Versand (§4 „keine N+1-Abfragen").
+- `admin_get_notification_batch_recipients(p_batch_id uuid)`: Detailliste je
+  Versand, wer gelesen hat und wer nicht — nur `username` und `read_at`,
+  keine Klarnamen oder sonstigen privaten Profildaten (dieselbe
+  Datensparsamkeit wie in §8.9 für die Teilnehmer-Fahrzeugliste).
+
+UI in `/admin/notifications` (`AdminNotificationsPage`): unterhalb des
+Sende-Formulars ein „Verlauf"-Bereich mit den letzten Versänden an das
+aktuell gewählte Ziel (Tour bzw. Broadcast), je Zeile „X / Y gelesen". Tippen
+öffnet ein Sheet mit dem vollständigen Text sowie der Empfängerliste
+(gelesen mit Zeitpunkt, ungelesen hervorgehoben). Da jeder Versand seine
+eigene `batch_id` besitzt, bleiben mehrere Mitteilungen an dieselbe Tour
+sauber getrennt auswertbar, statt sich zu einer einzigen Gesamtquote zu
+vermischen.
+
 ---
 
 ## 28. Nicht im ersten MVP
