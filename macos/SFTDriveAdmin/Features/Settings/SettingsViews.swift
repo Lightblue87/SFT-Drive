@@ -116,10 +116,18 @@ struct NotificationsView: View {
         .confirmationDialog("An \(model.target.isEmpty ? "alle Nutzer" : model.tours.first(where: { $0.id == model.target })?.title ?? "Tourteilnehmer") senden?\n\(model.title)\n\(model.body)", isPresented: $confirm, titleVisibility: .visible) {
             Button("Jetzt senden") { Task { await model.perform {
                 model.deliveryStats = nil
-                let (notice, stats) = try await services.content.notify(tourID: model.target.nilIfEmpty, title: model.title, body: model.body)
+                // Ziel beim Absenden festhalten: der Picker bleibt während des
+                // Sendens bedienbar, dieser Task läuft aber (anders als der
+                // Verlauf-Reload oben) nicht über .task(id:) und würde sonst
+                // bei einem Zielwechsel während des Sendens den Verlauf des
+                // inzwischen ausgewählten, anderen Ziels überschreiben
+                // (PR-Review zu PR #30).
+                let sentTarget = model.target
+                let (notice, stats) = try await services.content.notify(tourID: sentTarget.nilIfEmpty, title: model.title, body: model.body)
                 model.notice = notice; model.deliveryStats = stats
                 model.title = ""; model.body = ""
-                model.batches = try await services.content.notificationBatches(tourID: model.target.nilIfEmpty)
+                let refreshedBatches = try await services.content.notificationBatches(tourID: sentTarget.nilIfEmpty)
+                if model.target == sentTarget { model.batches = refreshedBatches }
             } } }
         }
         .sheet(item: $openBatch) { batch in
