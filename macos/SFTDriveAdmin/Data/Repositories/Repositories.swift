@@ -258,7 +258,8 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
     }
     func notificationBatchRecipients(_ batchID: String) async throws -> [NotificationBatchRecipient] {
         try await requireAdmin()
-        return try await client.rpc("admin_get_notification_batch_recipients", params: ["p_batch_id": .string(batchID)]).execute().value
+        let params: Payload = ["p_batch_id": .string(batchID)]
+        return try await client.rpc("admin_get_notification_batch_recipients", params: params).execute().value
     }
     func siteSettings() async throws -> Payload {
         try await requireAdmin()
