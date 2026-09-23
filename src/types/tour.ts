@@ -82,8 +82,11 @@ export interface TourRegistration {
   checked_in_at: string | null
 }
 
+export type FriendshipStatus = 'self' | 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted'
+
 export interface ConfirmedVehicle {
   registration_id: string
+  user_id: string
   username: string
   // Nur bei akzeptierter Freundschaft zwischen Betrachter und Fahrer gesetzt
   // (Phase 12, siehe CLAUDE.md §34.1/§8.9) — sonst null.
@@ -93,6 +96,7 @@ export interface ConfirmedVehicle {
   vehicle_model: string
   vehicle_power_ps: number
   is_self: boolean
+  friendship_status: FriendshipStatus
 }
 
 export interface ArchiveEntry {
