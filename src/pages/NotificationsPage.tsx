@@ -117,7 +117,9 @@ export function NotificationsPage() {
               />
               <div className="min-w-0 flex-1">
                 <div className="text-[14px] font-semibold leading-tight">{n.title}</div>
-                <div className="mt-1.5 text-pretty text-[13px] leading-relaxed text-sft-gray">{n.body}</div>
+                <div className="mt-1.5 line-clamp-2 text-pretty text-[13px] leading-relaxed text-sft-gray">
+                  {n.body}
+                </div>
                 <div className="mt-1.5 font-mono text-[10px] tracking-[0.1em] text-[#8a8a92]">
                   {formatNotificationTimestamp(n.created_at)}
                 </div>
