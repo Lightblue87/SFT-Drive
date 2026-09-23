@@ -18,6 +18,7 @@ import { MealOrderForm } from '@/features/tours/MealOrderForm'
 import { CheckInButton } from '@/features/tours/CheckInButton'
 import { TourInterestButton } from '@/features/tours/TourInterestButton'
 import { AccommodationSection } from '@/features/tours/AccommodationSection'
+import { ConfirmedVehiclesList } from '@/features/tours/ConfirmedVehiclesList'
 import { YouTubeVideo } from '@/features/tours/YouTubeVideo'
 import { useEffect, useState } from 'react'
 
@@ -396,45 +397,7 @@ export function TourDetailPage() {
               </div>
             )}
 
-            {confirmedVehicles.length > 0 && (
-              <div className={card}>
-                <div className="flex items-baseline justify-between px-4 pb-2.5 pt-3.5">
-                  <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
-                    BESTÄTIGTE FAHRZEUGE
-                  </div>
-                  <div className="font-mono text-[11px] text-sft-gray">
-                    {stats ? `${stats.confirmed_vehicles}/${stats.max_vehicles}` : confirmedVehicles.length}
-                  </div>
-                </div>
-                {confirmedVehicles.map((v) => (
-                  <div
-                    key={v.registration_id}
-                    className={`flex items-center gap-2.5 border-t border-white/6 px-4 py-2.5 ${
-                      v.is_self ? 'bg-sft-red/7' : ''
-                    }`}
-                  >
-                    <div
-                      className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg font-mono text-[11px] font-bold ${
-                        v.is_self ? 'bg-sft-red text-white' : 'bg-white/6 text-[#c9c9ce]'
-                      }`}
-                    >
-                      {initials(v.first_name ?? v.username)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-[13px] font-semibold ${v.is_self ? 'text-white' : 'text-sft-white'}`}>
-                        {v.first_name && v.last_name
-                          ? `${v.first_name} ${v.last_name} · ${v.username}`
-                          : v.username}
-                      </div>
-                      <div className="mt-0.5 font-mono text-[11px] text-sft-gray">
-                        {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
-                      </div>
-                    </div>
-                    {v.is_self && <span className="font-mono text-[9px] tracking-[0.12em] text-sft-red">DU</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+            <ConfirmedVehiclesList vehicles={confirmedVehicles} maxVehicles={stats?.max_vehicles} />
 
             <div className="mt-3.5 rounded-2xl border border-white/9 bg-sft-card px-4 py-3.5">
               <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">DEINE ANMELDUNG</div>
@@ -551,8 +514,4 @@ function requirements(tour: {
   if (tour.min_driver_age != null) list.push(`Mindestalter ${tour.min_driver_age} Jahre`)
   if (tour.license_plate_required) list.push('Kennzeichen bei Anmeldung erforderlich')
   return list
-}
-
-function initials(name: string): string {
-  return name.replace('@', '').slice(0, 2).toUpperCase()
 }
