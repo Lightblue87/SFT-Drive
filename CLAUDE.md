@@ -4473,9 +4473,16 @@ Umsetzung:
   (`adminClient.auth.admin.getUserById()`) aufgelöst — dieselbe
   `service_role`-Berechtigungsgrenze wie beim bestehenden Push-Versand,
   niemals eine vom Client mitgelieferte Adresse.
-- Der E-Mail-Inhalt ist bewusst reiner Text (Titel als Betreff, Text plus
-  Link zurück in die App) — kein HTML-Template, um die Komplexität in einem
-  ersten Schritt gering zu halten.
+- Der E-Mail-Inhalt wird sowohl als `htmlContent` als auch als `textContent`
+  (Fallback für Clients ohne HTML-Rendering) an Brevo übergeben. Das
+  HTML-Layout (`renderEmailHtml()`) ist bewusst optisch an das bestehende
+  Supabase-Auth-Template "Confirm signup" angelehnt (dunkler Header mit
+  SFT-DRIVE-Branding, weiße Karte, roter CTA-Button zur App) — dieselbe
+  Farb-/Formsprache wie in der App und der Registrierungsbestätigung (§17),
+  nachträglich ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. Titel und
+  Text stammen aus freier Admin-Eingabe und werden vor dem Einsetzen ins
+  HTML per `escapeHtml()` escaped (gespeicherte XSS-Lücke im Mailclient des
+  Empfängers sonst möglich).
 - Fehlerhafte Einzelversände (`email_failed`) blockieren weder den
   Push-Versand noch die übrigen E-Mails — dieselbe Fail-soft-Logik wie beim
   bestehenden Push-Versand pro Subscription.

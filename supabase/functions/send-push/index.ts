@@ -28,6 +28,12 @@
 // Empfängerkreis) — nicht für broadcast: dort müsste der Empfängerkreis erst
 // unabhängig von Push-Subscriptions neu definiert werden (potenziell alle
 // Nutzer), das ist eine gesonderte Entscheidung.
+//
+// HTML-Layout ist bewusst an das bestehende Supabase-Auth-Template
+// ("Confirm signup", Dashboard → Authentication → Email Templates)
+// angelehnt: dunkler Header mit SFT-DRIVE-Branding, weiße Karte,
+// roter CTA-Button — dieselbe Farb-/Formsprache wie in der App (§17).
+// textContent bleibt zusätzlich als Fallback für Clients ohne HTML-Rendering.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
@@ -53,6 +59,60 @@ interface RequestBody {
 }
 
 const ALLOWED_STATUSES = ['confirmed', 'pending', 'waitlisted']
+
+// Titel/Text kommen aus dem Admin-Formular (freier Text) und landen direkt in
+// HTML -- ohne Escaping wäre das eine gespeicherte XSS-Lücke im Mailclient
+// des Empfängers.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderEmailHtml(title: string, body: string): string {
+  const safeTitle = escapeHtml(title)
+  const safeBody = escapeHtml(body).replace(/\n/g, '<br>')
+  return `<div style='background-color:#f4f4f5; padding:32px 16px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;'>
+  <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:480px; margin:0 auto;'>
+    <tr>
+      <td style='background-color:#0a0a0c; border-radius:16px 16px 0 0; padding:28px 32px; text-align:center;'>
+        <span style='font-size:20px; font-weight:700; letter-spacing:0.02em;'>
+          <span style='color:#ffffff;'>SFT</span>
+          <span style='color:#e10600;'>&nbsp;DRIVE</span>
+        </span>
+        <div style='color:#8a8a92; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; margin-top:4px;'>
+          Sportfahrer Treff
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style='background-color:#ffffff; border-radius:0 0 16px 16px; padding:36px 32px; color:#1a1a1e;'>
+        <h1 style='font-size:20px; font-weight:700; margin:0 0 16px 0; color:#0a0a0c;'>
+          ${safeTitle}
+        </h1>
+        <p style='font-size:14px; line-height:1.6; color:#4a4a52; margin:0 0 28px 0;'>
+          ${safeBody}
+        </p>
+        <table role='presentation' cellpadding='0' cellspacing='0' style='margin:0 0 28px 0;'>
+          <tr>
+            <td style='border-radius:14px; background-color:#e10600;'>
+              <a href='https://sft-drive.pages.dev/notifications' style='display:inline-block; padding:14px 32px; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none;'>
+                In der App öffnen
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style='font-size:12px; line-height:1.6; color:#8a8a92; margin:0;'>
+          Diese Mitteilung wurde von SFT Drive an bestätigte Teilnehmer der betreffenden Tour gesendet.
+        </p>
+      </td>
+    </tr>
+  </table>
+</div>`
+}
 
 // Ohne diese Header liefert der Browser den (serverseitig durchaus
 // erfolgreichen) Response niemals an den aufrufenden JS-Code aus -- der
@@ -224,6 +284,7 @@ Deno.serve(async (req: Request) => {
             sender: { name: brevoSenderName, email: brevoSenderEmail },
             to: [{ email }],
             subject: payload.title,
+            htmlContent: renderEmailHtml(payload.title, payload.body),
             textContent: `${payload.body}\n\n— SFT Drive\nhttps://sft-drive.pages.dev/notifications`,
           }),
         })
