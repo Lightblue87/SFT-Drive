@@ -4520,6 +4520,72 @@ aus, was tatsächlich läuft").
   `console.log`-Ausgaben). Bei „X gesendet, Y fehlgeschlagen" ohne
   erkennbaren Grund ist das der erste Anlaufpunkt.
 
+### 27.23 E-Mail-Design-Richtlinie (verbindliche Vorlage für künftige HTML-Mails)
+
+SFT Drive verschickt HTML-E-Mails aus zwei unabhängigen Quellen, die beide
+dasselbe visuelle Design verwenden (nachträglich vereinheitlicht am
+23.09.2026, auf ausdrücklichen Wunsch):
+
+```text
+Supabase Auth Email Templates (Dashboard → Authentication → Email Templates)
+  → Confirm signup, Reset password, Magic Link, Change Email usw.
+  → liegen außerhalb des Repositories, rein manuell im Supabase Dashboard
+    gepflegt — kein Code, keine Versionierung, kein automatischer Abgleich.
+
+send-push (supabase/functions/send-push/index.ts, renderEmailHtml())
+  → Admin-Mitteilungen (§27.10-§27.22) über Brevo.
+```
+
+Beide folgen demselben Aufbau, damit E-Mails erkennbar zu SFT Drive gehören
+(konsistent mit dem App-Branding aus §17):
+
+```text
+┌─────────────────────────────┐
+│  dunkler Header (#0a0a0c)    │  ← abgerundete obere Ecken (16px)
+│  Logo (48×48, siehe unten)   │
+│  "SFT DRIVE" (weiß/rot)      │
+│  "Sportfahrer Treff" (grau)  │
+├─────────────────────────────┤
+│  weiße Karte (#ffffff)       │  ← abgerundete untere Ecken (16px)
+│  Überschrift (h1, #0a0a0c)   │
+│  Fließtext (#4a4a52)         │
+│  roter CTA-Button (#e10600)  │  ← abgerundet (14px), weißer Text
+│  Kleingedrucktes (#8a8a92)   │
+└─────────────────────────────┘
+```
+
+Verbindliche Eckwerte für jede neue Vorlage:
+
+- **Logo:** `<img src='https://sft-drive.pages.dev/icons/icon-192.png' width='48' height='48' alt='SFT Drive'>` —
+  lädt vom bereits öffentlich ausgelieferten PWA-Icon, kein separater Upload
+  oder Storage-Bucket nötig. Zentriert im Header, `border-radius:12px`.
+- **Farben:** Header-Hintergrund `#0a0a0c`, Karten-Hintergrund `#ffffff`,
+  Akzent-/Button-Farbe `#e10600` (SFT-Rot), Fließtext `#4a4a52`,
+  Kleingedrucktes/Dachmarke `#8a8a92` — dieselben Werte wie die
+  Tailwind-Klassen `sft-black`/`sft-red`/`sft-gray*` in der App, nicht
+  eigenständig neu gewählt.
+- **Schrift:** Systemschriftstapel
+  `-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif`
+  (kein Web-Font-Import in E-Mails — unzuverlässige Unterstützung in
+  Mailclients, zusätzliche externe Anfrage ohne echten Nutzen).
+- **Struktur:** `<table role='presentation'>`-Layout mit `max-width:480px`,
+  keine CSS-Klassen oder `<style>`-Blöcke (Mailclients filtern beides oft
+  heraus) — ausschließlich Inline-`style`-Attribute, wie im bestehenden
+  `renderEmailHtml()` bzw. dem Auth-Template vorgemacht.
+- **CTA-Button:** immer als verschachtelte `<table>` mit farbiger `<td>`
+  und `<a>` darin (robuster in Outlook als ein direkt gestyltes `<a>`).
+- **Freier Admin-/Nutzertext:** vor dem Einsetzen ins HTML immer escapen
+  (siehe `escapeHtml()` in `send-push`) — gilt für jede künftige Vorlage,
+  die nutzergenerierten oder admin-generierten Text enthält.
+
+Bei einer neuen Supabase-Auth-Vorlage (z. B. „Reset password") den
+Grundaufbau aus dem bestehenden „Confirm signup"-Template 1:1 übernehmen
+und nur Überschrift, Fließtext, Button-Beschriftung und Variable
+(`{{ .ConfirmationURL }}` bzw. die für den jeweiligen Vorlagentyp passende
+Supabase-Variable) austauschen. Bei einem neuen `send-push`-E-Mail-Inhalt
+`renderEmailHtml()` erweitern statt eine zweite, abweichende Funktion zu
+bauen (§23 „keine parallele zweite Architektur für dieselbe Funktion").
+
 ---
 
 ## 28. Nicht im ersten MVP
