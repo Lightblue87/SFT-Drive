@@ -148,7 +148,13 @@ export function ConfirmedVehiclesList({ vehicles, maxVehicles }: Props) {
                     {open.username} hat dir bereits eine Freundschaftsanfrage gesendet. Antworte darauf unter
                     „Freunde" in deinem Profil.
                   </p>
-                  <Link to="/profile/friends" className={ghostLinkButton}>
+                  {/* replace: true ersetzt den von BottomSheet gepushten History-Eintrag
+                      direkt durch das Ziel, statt einen weiteren draufzulegen -- sonst
+                      bleibt beim Navigieren weg von der (dabei unmountenden) Sheet-Seite
+                      dessen sftSheet-Eintrag als Karteileiche stehen und ein Zurück-Tap
+                      von /profile/friends aus landet zunächst dort statt auf der
+                      Tourdetailseite (analog zu NotificationsPage.goToTarget, PR-Review). */}
+                  <Link to="/profile/friends" replace className={ghostLinkButton}>
                     Zu Freunde
                   </Link>
                 </>
