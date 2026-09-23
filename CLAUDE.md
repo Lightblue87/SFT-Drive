@@ -184,7 +184,7 @@ Die Anwendung soll grundsätzlich ohne eigenen klassischen Application Server au
 
 Das Projekt ist auf einen kostenlosen Betrieb ausgelegt.
 
-Claude muss deshalb bei neuen Features immer prüfen:
+Entwicklungsagenten (einschließlich Codex) müssen deshalb bei neuen Features prüfen:
 
 - Kann das Feature innerhalb der bestehenden Architektur umgesetzt werden?
 - Erzeugt es laufende Kosten?
@@ -3408,7 +3408,7 @@ Wenn eine Tour nicht existiert oder nicht veröffentlicht ist:
 
 ---
 
-### 21.11 Routing-Regeln für Claude
+### 21.11 Routing-Regeln für Entwicklungsagenten
 
 - Keine doppelte Seitenlogik für `/` und `/tours`
 - gemeinsame Komponenten wiederverwenden
@@ -3504,7 +3504,12 @@ Wenn eine neue Anforderung bereits teilweise durch bestehende Funktionen abgedec
 
 ---
 
-## 24. Coding-Regeln für Claude
+## 24. Coding-Regeln für Entwicklungsagenten
+
+Diese Regeln gelten auch für Codex mit GPT-6 Astra. `AGENTS.md` enthält den
+Einstieg, die Projektkarte und Prüfkommandos; diese Datei bleibt die zentrale
+Produktspezifikation. Die Wahl des Entwicklungsmodells ändert keine
+KI-Anbindung innerhalb der Anwendung.
 
 Bei jeder Implementierung:
 
@@ -6239,11 +6244,11 @@ Umsetzung (Migration `20260909060000_admin_delete_tour.sql`):
 
 ## 38. Native macOS-Admin-App & optionale KI-Unterstützung
 
-Diese Phase ist **geplant, noch nicht umgesetzt**. Der Abschnitt hält die
-bisher getroffenen Architekturentscheidungen fest, bevor mit der
-Implementierung begonnen wird — er darf nicht als bereits produktiver Stand
-missverstanden werden (§34.5/§35.4-Grundsatz: "Noch nicht implementierte
-Punkte niemals als produktiv vorhanden darstellen").
+Die native Mac-App ist im Repository unter `macos/` implementiert. Dieser
+Abschnitt beschreibt die Produktarchitektur und den angestrebten Funktionsumfang;
+konkrete Umsetzungsstände stehen in §40.10–§40.13. Einzelne Zielanforderungen
+sind am Code zu prüfen. Repository-Stand, automatisierte Prüfung und produktive
+Bereitstellung bleiben getrennt (§34.5/§35.4).
 
 Ziel: Zusätzlich zur mobilen PWA entsteht eine eigenständige native
 macOS-Anwendung ausschließlich für Administratoren. Sie ist kein
@@ -6623,8 +6628,10 @@ Tour-Workspace losgelöster Importbereich ist nicht vorgesehen.
 
 ## 39. Optionale KI-Assistenz für die Tourplanung
 
-Ebenfalls **geplant, noch nicht umgesetzt** (siehe Hinweis zu Beginn von
-§38).
+Die optionale Extraktion für Hotels und Restaurants ist über Ollama implementiert,
+einschließlich lokaler PDF-/Foto-Texterkennung und Versandvorschau (§40.13).
+Die folgenden Regeln beschreiben den bestehenden Vertrag und geplante
+Provider-Erweiterungen; ein eigenständiger OpenAI-Adapter ist weiterhin geplant.
 
 ### 39.1 Grundidee
 
@@ -6993,10 +7000,10 @@ reduziert werden.
 
 ## 40. Implementierungskonzept native macOS-App (Umsetzung zu §38/§39)
 
-Dieser Abschnitt ist die konkrete technische Umsetzungsplanung zu §38/§39.
-Wie dort gilt: **geplant, noch nicht umgesetzt.** Er wird durch
-`Umsetzungsstand`-Ergänzungen fortgeschrieben, sobald einzelne Phasen
-tatsächlich gebaut sind — analog zu §26/§34/§35/§37.
+Dieser Abschnitt beschreibt Architektur und Umsetzung zu §38/§39.
+Die Mac-App liegt bereits unter `macos/`; §40.10–§40.13 dokumentieren die
+Entwicklungsschritte. Als Zielstruktur gekennzeichnete Teile sind keine
+Behauptung über vorhandene Dateien oder produktiv bereitgestellte Funktionen.
 
 ### 40.1 Mac-App im bestehenden Repository (Entscheidung 10.09.2026)
 
@@ -7009,13 +7016,20 @@ Repository. Vite/PWA und Xcode behalten getrennte Build-Prozesse;
 Backend-Migrationen und Edge Functions bleiben unter `supabase/`.
 Die Mindestversion ist ausdrücklich **macOS 15**. Verteilung ausschließlich
 manuell, ohne Developer-ID und ohne Notarisierung (§40.9).
-Die erste KI-Version verwendet ausdrücklich **nur Ollama**, kein OpenAI
-oder anderer Cloudanbieter. Phase M8 wird erst nach neuer Entscheidung verfolgt.
+Die KI verwendet den Ollama-Adapter; inzwischen ist darüber auch ausdrücklich
+bestätigte Ollama-Cloud-Nutzung implementiert (§40.13). Ein eigenständiger
+OpenAI-Adapter ist nicht implementiert. Phase M8 bleibt eine separate
+Produkterweiterung und folgt nicht aus der Nutzung von Astra in Codex.
 
 Entwicklung und Tests verwenden synthetische Daten. Die Veröffentlichung
 von Code wendet keine Migration automatisch in Supabase an.
 
 ### 40.2 Projektstruktur
+
+Konzeptionelle Zielstruktur, keine vollständige Dateiliste: Der tatsächliche
+Projektwurzelordner ist `macos/`. `AIProvider.swift` enthält derzeit auch
+`OllamaProvider` und `AIProviderChain`; `OpenAIProvider.swift` ist ein geplanter
+Adapter und keine vorhandene Implementierung.
 
 ```text
 SFTDriveAdmin/
@@ -7280,8 +7294,8 @@ Mac-Build/Tests auf unterstütztem macOS ausführen, bevor eine Phase als fertig
 
 ### 40.9 Offene Entscheidungen
 
-Der Verteilungsweg ist durch den Projektinhaber festgelegt; die übrigen
-technischen Entscheidungen vor Beginn von Phase M1 klären:
+Der Verteilungsweg und die Mindestplattform sind festgelegt. Die folgende Liste
+enthält diese Entscheidungen sowie weiterhin nötige Betriebs- und Releaseprüfungen:
 
 - **Verteilungsweg (entschieden):** ausschließlich manuelle Weitergabe an
   die benötigten Personen, keine Veröffentlichung im Mac App Store.
@@ -7327,9 +7341,9 @@ technischen Entscheidungen vor Beginn von Phase M1 klären:
 ### 40.10 Implementierung im Ordner `macos/` (10.09.2026)
 
 Der native Quellcode und das Xcode-Projekt sind in `macos/` auf `main` implementiert.
-Die älteren Formulierungen „geplant, noch nicht umgesetzt“ in §38–40
-beschreiben die ursprüngliche Planungsphase. Dieser Abschnitt unterscheidet
-Implementierung, automatisierte Prüfung und produktive Bereitstellung.
+Dieser Abschnitt hält den historischen Stand vom 10.09.2026 fest.
+Spätere Ergänzungen stehen in §40.11–§40.13. Implementierung, automatisierte
+Prüfung und produktive Bereitstellung sind getrennte Nachweise.
 
 - M1–M6: SwiftUI-Shell, Keychain-Auth, serverseitige Adminprüfung,
   Touren-/Teilnehmerverwaltung, organisatorische Masken, Nutzerverwaltung,
@@ -7359,9 +7373,10 @@ Implementierung, automatisierte Prüfung und produktive Bereitstellung.
 
 ### 40.11 Erweiterung in PR #19 (11.09.2026)
 
-PR #19 setzt die verbindlichen Produktentscheidungen aus §36 und §38 als
-zusammenhängenden Planungs-Workflow um. Bis zum Merge und zur gesonderten
-Produktivmigration ist dies **Repository-Stand, nicht Produktivstand**:
+PR #19 wurde in `main` zusammengeführt und setzt die Produktentscheidungen
+aus §36 und §38 als Planungs-Workflow um. Dies dokumentiert den
+**Repository-Stand**; die Produktivmigration und Geräteabnahme benötigen
+weiterhin eigene Nachweise:
 
 - Dashboard-To-dos mit Drilldown Kategorie → Tour → Teilnehmer/Objekt und
   Aktionen für Teilnahme, Warteliste, Unterkunft, Essen, Check-in und
@@ -7530,3 +7545,29 @@ Dieser Abschnitt gilt als **umgesetzt** für den in dieser Umgebung
 verifizierbaren Umfang (Build, Tests, Code-Review); die manuelle Geräteprüfung
 oben bleibt ein gesondert auszuweisender, noch offener Schritt vor einem
 produktiven Rollout an Administratoren.
+
+### 40.13 Repository-Abgleich für Codex (13.09.2026)
+
+Geprüfte Basis: `main` bei Commit `7cdf7c4`. Der damalige GitHub-Standardbranch
+`claude/new-session-7ewrsz` liegt 53 Commits zurück und hat keine eigenen
+zusätzlichen Commits gegenüber dieser Basis. Vor künftigen Arbeiten den
+aktuellen Branchstand prüfen; diese Feststellung ändert den Standardbranch nicht.
+
+- Die Mac-App liegt im selben Repository unter `macos/`. PR #19 (Planung),
+  PR #20 (Admin-Oberfläche) und PR #21 (DMG-Distribution) sind in `main` enthalten.
+- `macos/SFTDriveAdmin/AI/AIProvider.swift` implementiert den Ollama-Adapter,
+  Modell-Fallbacks und getrennte Einstellungen für lokale Inferenz und
+  ausdrücklich bestätigte Cloud-Nutzung. Die historische Aussage „Keine
+  Cloudanbieter“ aus §40.10 beschreibt nur die erste Version vom 10.09.2026.
+- `ExtractionReviewView.swift` enthält lokale PDF-/Foto-Texterkennung,
+  Anbieter-/Textvorschau und editierbare Übernahme. Originaldateien werden
+  in diesem Ablauf nicht zum Modell hochgeladen.
+- `macos/scripts/release.sh` erzeugt ZIP und DMG samt Prüfsummen. Der
+  GitHub-Workflow `.github/workflows/macos-admin.yml` enthält Backendtests,
+  Swift-Tests, nativen Build und die Paketierung auf einem macOS-Runner.
+- Diese Dokumentationsarbeit hat keine neuen App-Builds, Live-API-Aufrufe,
+  Geräteprüfungen oder Produktionsmigrationen ausgeführt. Frühere Prüfnachweise
+  sind historisch und werden hier nicht als erneut bestanden ausgewiesen.
+- Die Weiterentwicklung mit GPT-6 Astra in Codex wird durch die zentrale
+  `AGENTS.md` unterstützt. Die Produktspezifikation bleibt in `CLAUDE.md`;
+  dieser Wechsel führt keinen OpenAI-Anbieter in der App ein.
