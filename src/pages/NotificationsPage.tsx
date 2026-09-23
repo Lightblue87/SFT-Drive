@@ -42,7 +42,13 @@ export function NotificationsPage() {
 
   function goToTarget() {
     if (openNotification?.target_path) {
-      navigate(openNotification.target_path)
+      // { replace: true } ersetzt den von BottomSheet gepushten History-
+      // Eintrag direkt durch das Ziel, statt einen weiteren draufzulegen --
+      // sonst bleibt beim Schließen des (bereits unmounteten) Sheets dessen
+      // sftSheet-Eintrag als Karteileiche zwischen Ursprungsseite und Ziel
+      // stehen, und ein Zurück-Tap vom Ziel aus landet zunächst dort statt
+      // auf der Ursprungsseite (PR-Review).
+      navigate(openNotification.target_path, { replace: true })
     }
     setOpenNotification(null)
   }

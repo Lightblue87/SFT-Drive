@@ -23,6 +23,7 @@ export function useNotifications() {
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(50)
     // Bei einem Fehler (z. B. offline während des Resume-Refreshs) die

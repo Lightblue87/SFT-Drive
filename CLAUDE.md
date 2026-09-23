@@ -4657,6 +4657,41 @@ Altbestand — künftige Versände sind davon nicht betroffen, da
 bereits seit der ersten Migration `batch_id` explizit pro Aufruf setzen
 (nicht über den Spaltendefault).
 
+**Nachtrag/Review-Fixes 23.09.2026 (Migration
+`20260923040000_notification_receipt_review_fixes.sql`), aus einem
+automatisierten PR-Review zu PR #29:**
+
+- `delete_notification()` löschte die eigene Empfängerzeile bisher physisch
+  — dadurch verschwand ein Empfänger beim Swipe-to-delete rückwirkend sowohl
+  aus dem Nenner als auch aus der Lesequote in `admin_list_notification_batches()`,
+  was eine ungelesene, gelöschte Mitteilung fälschlich als vollständig
+  gelesen erscheinen ließ. Fix: neues `notifications.deleted_at`, `delete_notification()`
+  setzt nur noch dieses Feld statt zu löschen; `useNotifications.ts` filtert
+  zusätzlich `deleted_at is null`. Die Empfängerzeile bleibt damit für die
+  Admin-Statistik korrekt erhalten.
+- `notifications.tour_id` verwendet `on delete set null`; `admin_delete_tour()`
+  (§37.3) löscht eine Tour, behält aber bewusst deren Mitteilungen — eine
+  Admin-Mitteilung an eine später gelöschte Tour hatte danach `tour_id = null`,
+  exakt wie eine echte Broadcast-Mitteilung, und erschien deshalb fälschlich
+  unter „An alle Nutzer“. Fix: neues, beim Versand explizit gesetztes und von
+  einer späteren Tour-Löschung unberührtes `notifications.is_broadcast`;
+  `admin_list_notification_batches()` filtert jetzt darüber statt über
+  `tour_id is null`.
+- Race Condition in `AdminNotificationsPage`: schnelles Wechseln zwischen
+  Tour/Broadcast bzw. zwei Touren konnte dazu führen, dass eine langsamere,
+  aber später eintreffende Antwort für ein bereits verlassenes Ziel den
+  Verlauf des inzwischen aktuell gewählten Ziels überschreibt. Fix: einfache
+  Request-Zähler-Refs (`batchesRequestRef`/`recipientsRequestRef`), die
+  veraltete Antworten verwerfen.
+- `NotificationsPage.goToTarget()`: `navigate()` pushte bisher einen neuen
+  History-Eintrag, während `BottomSheet` seinen eigenen `sftSheet`-Eintrag
+  beim Unmount nur entfernt, wenn er noch der aktuell oberste ist — nach dem
+  Navigieren war das nicht mehr der Fall, wodurch der Sheet-Eintrag als
+  Karteileiche zwischen Ursprungsseite und Ziel stehen blieb und ein
+  Zurück-Tap vom Ziel aus zunächst dorthin statt zur Ursprungsseite führte.
+  Fix: `navigate(target_path, { replace: true })` ersetzt den Sheet-Eintrag
+  direkt, statt einen weiteren obendrauf zu legen.
+
 ---
 
 ## 28. Nicht im ersten MVP

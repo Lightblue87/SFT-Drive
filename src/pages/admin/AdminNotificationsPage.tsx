@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
@@ -91,7 +91,17 @@ export function AdminNotificationsPage() {
   const [batchRecipients, setBatchRecipients] = useState<BatchRecipient[] | null>(null)
   const [recipientsLoading, setRecipientsLoading] = useState(false)
 
+  // Schnelles Wechseln zwischen Tour/Broadcast bzw. zwei Touren kann mehrere
+  // Requests gleichzeitig auslösen; ohne Reihenfolgeprüfung könnte eine
+  // spätere, aber langsamere Antwort für das vorherige Ziel die Anzeige des
+  // inzwischen aktuell gewählten Ziels überschreiben (PR-Review). Ein simpler
+  // Zähler genügt: nur die jeweils zuletzt gestartete Anfrage darf ihr
+  // Ergebnis noch übernehmen.
+  const batchesRequestRef = useRef(0)
+  const recipientsRequestRef = useRef(0)
+
   const loadBatches = useCallback(async () => {
+    const requestId = ++batchesRequestRef.current
     if (target === 'tour' && !tourId) {
       setBatches([])
       return
@@ -100,6 +110,7 @@ export function AdminNotificationsPage() {
     const { data } = await supabase.rpc('admin_list_notification_batches', {
       p_tour_id: target === 'tour' ? tourId : null,
     })
+    if (batchesRequestRef.current !== requestId) return
     setBatches((data as NotificationBatch[]) ?? [])
     setBatchesLoading(false)
   }, [target, tourId])
@@ -109,10 +120,12 @@ export function AdminNotificationsPage() {
   }, [loadBatches])
 
   async function openBatchDetail(batch: NotificationBatch) {
+    const requestId = ++recipientsRequestRef.current
     setOpenBatch(batch)
     setBatchRecipients(null)
     setRecipientsLoading(true)
     const { data } = await supabase.rpc('admin_get_notification_batch_recipients', { p_batch_id: batch.batch_id })
+    if (recipientsRequestRef.current !== requestId) return
     setBatchRecipients((data as BatchRecipient[]) ?? [])
     setRecipientsLoading(false)
   }
