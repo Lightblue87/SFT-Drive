@@ -1020,6 +1020,27 @@ die Migration selbst fehlerfrei durchläuft (siehe `admin_list_users()`,
 `RETURNS TABLE` auf Spalten aus `auth.users` oder anderen nicht selbst definierten
 Tabellen deshalb vorsorglich explizit casten.
 
+**Praxis-Falle: `service_role` braucht trotz `BYPASSRLS` explizite Tabellen-GRANTs.**
+Edge Functions, die sich mit dem Service-Role-Key authentifizieren und dann per
+`adminClient.from(...)` (PostgREST) **direkt** auf eine Tabelle zugreifen — statt über
+eine `SECURITY DEFINER`-RPC, deren Owner-Rechte davon unberührt bleiben —, brauchen dafür
+ein eigenes `grant ... to service_role`. Die `BYPASSRLS`-Eigenschaft der Rolle umgeht nur
+RLS-*Policies*, nicht die normale PostgreSQL-Tabellenberechtigungsprüfung; ohne GRANT
+schlägt der Zugriff mit `permission denied for table ...` fehl. Alle bisherigen
+Migrationen haben konsequent nur `authenticated`/`anon` berechtigt, nie `service_role` —
+dadurch lieferten die direkten Abfragen in `send-push` (`tour_registrations`,
+`push_subscriptions`), `restaurant-order-notifications`
+(`restaurant_stop_settings`, `tour_registrations`, `meal_orders`, `notifications`,
+`tour_stops`, `tours`) und `tour-interest-notifications` (`tour_interests`, `tours`,
+`notifications`, `push_subscriptions`) seit jeher leere Ergebnisse bzw. Fehler, ohne dass
+dies auffiel: §27.16 verlangt ausdrücklich, dass ein Push-Fehlschlag die App-Nutzung
+nicht blockiert, wodurch der Fehler bis zur gezielten Fehlersuche am 23.09.2026 nirgends
+sichtbar gemeldet wurde (behoben in Migration
+`20260923000000_grant_service_role_notification_tables.sql`, mit den jeweils
+tatsächlich genutzten Operationen je Tabelle statt eines generischen Vollzugriffs, §8.12).
+Bei jeder neuen Edge Function mit direktem `service_role`-Tabellenzugriff dieses GRANT von
+Anfang an in derselben Migration mit ergänzen.
+
 ---
 
 ## 9. Tour-Anmeldung, Freigabe, Warteliste und Kapazität
