@@ -214,3 +214,32 @@ struct PlanningDeadline: Decodable, Identifiable, Sendable {
     let title: String
     let due_at: String
 }
+// Verlauf bereits versendeter Admin-Mitteilungen samt Lesequote je Versand
+// (§27.24, admin_list_notification_batches/admin_get_notification_batch_recipients).
+struct NotificationBatch: Decodable, Identifiable, Sendable {
+    var id: String { batch_id }
+    let batch_id: String
+    let title: String
+    let body: String
+    let created_at: String
+    let recipient_count: Int
+    let read_count: Int
+    static func displayTimestamp(_ text: String) -> String {
+        guard let date = TourDates.instant(text) else { return text }
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+struct NotificationBatchRecipient: Decodable, Identifiable, Sendable {
+    var id: String { username }
+    let username: String
+    let read_at: String?
+}
+// Antwortform von send-push (§27.16/§27.22) -- alle Felder optional, da sie
+// bei nicht konfiguriertem Kanal (skipped) fehlen können.
+struct DeliveryStats: Decodable, Sendable {
+    let sent: Int?
+    let failed: Int?
+    let email_sent: Int?
+    let email_failed: Int?
+    let skipped: String?
+}
