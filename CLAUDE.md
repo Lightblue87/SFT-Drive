@@ -4488,6 +4488,27 @@ Secrets im Supabase Dashboard hinterlegen. Ohne diesen manuellen Schritt
 bleibt der Code inaktiv (§26 "das Repository allein sagt nichts darüber
 aus, was tatsächlich läuft").
 
+**Praxis-Fallen bei der Brevo-Einrichtung (23.09.2026):**
+
+- `BREVO_API_KEY` muss der **REST-API-Key** aus Brevo → SMTP & API →
+  „API Keys" sein, nicht der separate SMTP-Schlüssel aus dem Bereich
+  „SMTP" (beide sehen ähnlich aus, sind aber unterschiedliche Secrets).
+  Ein SMTP-Schlüssel führt zu `401 { "code": "unauthorized", "message":
+  "Key not found" }`, weil unser Code die v3-REST-API
+  (`api.brevo.com/v3/smtp/email`) mit dem Header `api-key` aufruft.
+- Brevo beschränkt API-Zugriffe standardmäßig auf bekannte IP-Adressen.
+  Da Supabase Edge Functions ohne feste ausgehende IP laufen, muss unter
+  https://app.brevo.com/security/authorised_ips die IP-Beschränkung für
+  API-Keys deaktiviert werden — sonst `401 { "code": "unauthorized",
+  "message": "We have detected you are using an unrecognised IP
+  address ..." }`.
+- `send-push` loggt einen fehlgeschlagenen E-Mail-Versand (Status + Body
+  der Brevo-Antwort, ohne Empfängeradresse) über `console.log`, sichtbar
+  im Supabase-Dashboard unter Edge Functions → `send-push` → **Logs**
+  (nicht „Invocations" — dort stehen nur Status/Dauer, keine
+  `console.log`-Ausgaben). Bei „X gesendet, Y fehlgeschlagen" ohne
+  erkennbaren Grund ist das der erste Anlaufpunkt.
+
 ---
 
 ## 28. Nicht im ersten MVP

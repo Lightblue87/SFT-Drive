@@ -231,10 +231,11 @@ Deno.serve(async (req: Request) => {
           emailSent++
         } else {
           emailFailed++
-          // Temporäres Diagnose-Logging (23.09.2026): Brevo antwortet bei
-          // Fehlern mit einem JSON-Body, der den konkreten Grund nennt
-          // (z. B. ungültiger Key, nicht verifizierter Absender, Limit) --
-          // ohne das bleibt "0 gesendet, 2 fehlgeschlagen" unauswertbar.
+          // Brevo antwortet bei Fehlern mit einem aussagekräftigen JSON-Body
+          // (ungültiger Key, nicht verifizierter Absender, IP-Sperre, Limit) --
+          // ohne dieses Logging bleibt "0 gesendet, X fehlgeschlagen" für den
+          // Admin unauswertbar, da §27.16 einen Fehlschlag bewusst nicht
+          // blockierend im UI eskaliert. Enthält keine Empfängeradresse.
           const errorBody = await res.text().catch(() => '<unlesbar>')
           console.log('send-push email failed', { status: res.status, body: errorBody })
         }
