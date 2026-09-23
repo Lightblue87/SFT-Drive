@@ -28,6 +28,12 @@
 // Empfängerkreis) — nicht für broadcast: dort müsste der Empfängerkreis erst
 // unabhängig von Push-Subscriptions neu definiert werden (potenziell alle
 // Nutzer), das ist eine gesonderte Entscheidung.
+//
+// HTML-Layout ist bewusst an das bestehende Supabase-Auth-Template
+// ("Confirm signup", Dashboard → Authentication → Email Templates)
+// angelehnt: dunkler Header mit SFT-DRIVE-Branding, weiße Karte,
+// roter CTA-Button — dieselbe Farb-/Formsprache wie in der App (§17).
+// textContent bleibt zusätzlich als Fallback für Clients ohne HTML-Rendering.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'npm:web-push@3.6.7'
@@ -54,31 +60,105 @@ interface RequestBody {
 
 const ALLOWED_STATUSES = ['confirmed', 'pending', 'waitlisted']
 
+// Titel/Text kommen aus dem Admin-Formular (freier Text) und landen direkt in
+// HTML -- ohne Escaping wäre das eine gespeicherte XSS-Lücke im Mailclient
+// des Empfängers.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderEmailHtml(title: string, body: string): string {
+  const safeTitle = escapeHtml(title)
+  const safeBody = escapeHtml(body).replace(/\n/g, '<br>')
+  return `<div style='background-color:#f4f4f5; padding:32px 16px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;'>
+  <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:480px; margin:0 auto;'>
+    <tr>
+      <td style='background-color:#0a0a0c; border-radius:16px 16px 0 0; padding:28px 32px; text-align:center;'>
+        <img src='https://sft-drive.pages.dev/icons/icon-192.png' width='48' height='48' alt='SFT Drive' style='display:block; margin:0 auto 12px auto; border-radius:12px;'>
+        <span style='font-size:20px; font-weight:700; letter-spacing:0.02em;'>
+          <span style='color:#ffffff;'>SFT</span>
+          <span style='color:#e10600;'>&nbsp;DRIVE</span>
+        </span>
+        <div style='color:#8a8a92; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; margin-top:4px;'>
+          Sportfahrer Treff
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style='background-color:#ffffff; border-radius:0 0 16px 16px; padding:36px 32px; color:#1a1a1e;'>
+        <h1 style='font-size:20px; font-weight:700; margin:0 0 16px 0; color:#0a0a0c;'>
+          ${safeTitle}
+        </h1>
+        <p style='font-size:14px; line-height:1.6; color:#4a4a52; margin:0 0 28px 0;'>
+          ${safeBody}
+        </p>
+        <table role='presentation' cellpadding='0' cellspacing='0' style='margin:0 0 28px 0;'>
+          <tr>
+            <td style='border-radius:14px; background-color:#e10600;'>
+              <a href='https://sft-drive.pages.dev/notifications' style='display:inline-block; padding:14px 32px; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none;'>
+                In der App öffnen
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style='font-size:12px; line-height:1.6; color:#8a8a92; margin:0;'>
+          Diese Mitteilung wurde von SFT Drive an bestätigte Teilnehmer der betreffenden Tour gesendet.
+        </p>
+      </td>
+    </tr>
+  </table>
+</div>`
+}
+
+// Ohne diese Header liefert der Browser den (serverseitig durchaus
+// erfolgreichen) Response niemals an den aufrufenden JS-Code aus -- der
+// fetch()-Aufruf schlägt dann mit einem generischen Netzwerkfehler fehl,
+// obwohl die Function selbst korrekt durchgelaufen ist (in den Supabase-
+// Logs als Status 200 sichtbar). supabase-js ruft ausschließlich per Browser-
+// fetch() auf, daher zwingend auf jeder Response inkl. Preflight nötig.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405 })
+    return new Response(JSON.stringify({ error: 'method_not_allowed' }), {
+      status: 405,
+      headers: corsHeaders,
+    })
   }
 
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: corsHeaders })
   }
 
   let payload: RequestBody
   try {
     payload = await req.json()
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
 
   if ((!payload.tour_id && !payload.broadcast) || !payload.title || !payload.body) {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
   if (payload.user_ids && !payload.tour_id) {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
   if (payload.statuses && (!payload.tour_id || !payload.statuses.every((s) => ALLOWED_STATUSES.includes(s)))) {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400, headers: corsHeaders })
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -98,6 +178,7 @@ Deno.serve(async (req: Request) => {
     // Beide Kanäle optional (§27.16) — kein harter Fehler, nur nichts zu tun.
     return new Response(JSON.stringify({ ok: true, sent: 0, skipped: 'not_configured' }), {
       status: 200,
+      headers: corsHeaders,
     })
   }
 
@@ -111,12 +192,12 @@ Deno.serve(async (req: Request) => {
 
   const { data: userData, error: userError } = await userClient.auth.getUser()
   if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401, headers: corsHeaders })
   }
 
   const { data: isAdmin } = await userClient.rpc('is_admin')
   if (!isAdmin) {
-    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders })
   }
 
   // Ab hier service_role — ausschließlich serverseitig, nie im Client.
@@ -143,7 +224,7 @@ Deno.serve(async (req: Request) => {
       userIds = userIds.filter((uid) => requested.has(uid))
     }
     if (userIds.length === 0) {
-      return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200 })
+      return new Response(JSON.stringify({ ok: true, sent: 0 }), { status: 200, headers: corsHeaders })
     }
     subscriptionsQuery = subscriptionsQuery.in('user_id', userIds)
   }
@@ -184,11 +265,15 @@ Deno.serve(async (req: Request) => {
 
   if (emailConfigured && userIds && userIds.length > 0) {
     for (const uid of userIds) {
-      const { data } = await adminClient.auth.admin.getUserById(uid)
-      const email = data.user?.email
-      if (!email) continue
-
+      // Jeder Empfänger wird unabhängig behandelt -- ein Fehler bei genau
+      // diesem Nutzer (Auth-Admin-API-Hänger, keine E-Mail hinterlegt,
+      // Brevo lehnt ab) darf weder die übrigen E-Mails noch das bereits
+      // berechnete Push-Ergebnis der Function zum Absturz bringen.
       try {
+        const { data } = await adminClient.auth.admin.getUserById(uid)
+        const email = data.user?.email
+        if (!email) continue
+
         const res = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
@@ -200,6 +285,7 @@ Deno.serve(async (req: Request) => {
             sender: { name: brevoSenderName, email: brevoSenderEmail },
             to: [{ email }],
             subject: payload.title,
+            htmlContent: renderEmailHtml(payload.title, payload.body),
             textContent: `${payload.body}\n\n— SFT Drive\nhttps://sft-drive.pages.dev/notifications`,
           }),
         })
@@ -207,15 +293,23 @@ Deno.serve(async (req: Request) => {
           emailSent++
         } else {
           emailFailed++
+          // Brevo antwortet bei Fehlern mit einem aussagekräftigen JSON-Body
+          // (ungültiger Key, nicht verifizierter Absender, IP-Sperre, Limit) --
+          // ohne dieses Logging bleibt "0 gesendet, X fehlgeschlagen" für den
+          // Admin unauswertbar, da §27.16 einen Fehlschlag bewusst nicht
+          // blockierend im UI eskaliert. Enthält keine Empfängeradresse.
+          const errorBody = await res.text().catch(() => '<unlesbar>')
+          console.log('send-push email failed', { status: res.status, body: errorBody })
         }
-      } catch {
+      } catch (err) {
         emailFailed++
+        console.log('send-push email exception', { message: (err as Error).message })
       }
     }
   }
 
   return new Response(JSON.stringify({ ok: true, sent, failed, email_sent: emailSent, email_failed: emailFailed }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

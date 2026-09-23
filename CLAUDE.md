@@ -1020,6 +1020,27 @@ die Migration selbst fehlerfrei durchläuft (siehe `admin_list_users()`,
 `RETURNS TABLE` auf Spalten aus `auth.users` oder anderen nicht selbst definierten
 Tabellen deshalb vorsorglich explizit casten.
 
+**Praxis-Falle: `service_role` braucht trotz `BYPASSRLS` explizite Tabellen-GRANTs.**
+Edge Functions, die sich mit dem Service-Role-Key authentifizieren und dann per
+`adminClient.from(...)` (PostgREST) **direkt** auf eine Tabelle zugreifen — statt über
+eine `SECURITY DEFINER`-RPC, deren Owner-Rechte davon unberührt bleiben —, brauchen dafür
+ein eigenes `grant ... to service_role`. Die `BYPASSRLS`-Eigenschaft der Rolle umgeht nur
+RLS-*Policies*, nicht die normale PostgreSQL-Tabellenberechtigungsprüfung; ohne GRANT
+schlägt der Zugriff mit `permission denied for table ...` fehl. Alle bisherigen
+Migrationen haben konsequent nur `authenticated`/`anon` berechtigt, nie `service_role` —
+dadurch lieferten die direkten Abfragen in `send-push` (`tour_registrations`,
+`push_subscriptions`), `restaurant-order-notifications`
+(`restaurant_stop_settings`, `tour_registrations`, `meal_orders`, `notifications`,
+`tour_stops`, `tours`) und `tour-interest-notifications` (`tour_interests`, `tours`,
+`notifications`, `push_subscriptions`) seit jeher leere Ergebnisse bzw. Fehler, ohne dass
+dies auffiel: §27.16 verlangt ausdrücklich, dass ein Push-Fehlschlag die App-Nutzung
+nicht blockiert, wodurch der Fehler bis zur gezielten Fehlersuche am 23.09.2026 nirgends
+sichtbar gemeldet wurde (behoben in Migration
+`20260923000000_grant_service_role_notification_tables.sql`, mit den jeweils
+tatsächlich genutzten Operationen je Tabelle statt eines generischen Vollzugriffs, §8.12).
+Bei jeder neuen Edge Function mit direktem `service_role`-Tabellenzugriff dieses GRANT von
+Anfang an in derselben Migration mit ergänzen.
+
 ---
 
 ## 9. Tour-Anmeldung, Freigabe, Warteliste und Kapazität
@@ -4452,9 +4473,20 @@ Umsetzung:
   (`adminClient.auth.admin.getUserById()`) aufgelöst — dieselbe
   `service_role`-Berechtigungsgrenze wie beim bestehenden Push-Versand,
   niemals eine vom Client mitgelieferte Adresse.
-- Der E-Mail-Inhalt ist bewusst reiner Text (Titel als Betreff, Text plus
-  Link zurück in die App) — kein HTML-Template, um die Komplexität in einem
-  ersten Schritt gering zu halten.
+- Der E-Mail-Inhalt wird sowohl als `htmlContent` als auch als `textContent`
+  (Fallback für Clients ohne HTML-Rendering) an Brevo übergeben. Das
+  HTML-Layout (`renderEmailHtml()`) ist bewusst optisch an das bestehende
+  Supabase-Auth-Template "Confirm signup" angelehnt (dunkler Header mit
+  SFT-DRIVE-Branding, weiße Karte, roter CTA-Button zur App) — dieselbe
+  Farb-/Formsprache wie in der App und der Registrierungsbestätigung (§17),
+  nachträglich ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. Titel und
+  Text stammen aus freier Admin-Eingabe und werden vor dem Einsetzen ins
+  HTML per `escapeHtml()` escaped (gespeicherte XSS-Lücke im Mailclient des
+  Empfängers sonst möglich). Der Header bindet zusätzlich das Tacho-Icon als
+  `<img>` ein, geladen von der bereits öffentlich erreichbaren PWA-Adresse
+  `https://sft-drive.pages.dev/icons/icon-192.png` — kein separater Upload
+  oder Storage-Bucket nötig, da dieses Icon ohnehin schon Teil des
+  ausgelieferten Production-Builds ist.
 - Fehlerhafte Einzelversände (`email_failed`) blockieren weder den
   Push-Versand noch die übrigen E-Mails — dieselbe Fail-soft-Logik wie beim
   bestehenden Push-Versand pro Subscription.
@@ -4466,6 +4498,93 @@ Single-Sender-Verifizierung der Gmail-Absenderadresse durchführen, die drei
 Secrets im Supabase Dashboard hinterlegen. Ohne diesen manuellen Schritt
 bleibt der Code inaktiv (§26 "das Repository allein sagt nichts darüber
 aus, was tatsächlich läuft").
+
+**Praxis-Fallen bei der Brevo-Einrichtung (23.09.2026):**
+
+- `BREVO_API_KEY` muss der **REST-API-Key** aus Brevo → SMTP & API →
+  „API Keys" sein, nicht der separate SMTP-Schlüssel aus dem Bereich
+  „SMTP" (beide sehen ähnlich aus, sind aber unterschiedliche Secrets).
+  Ein SMTP-Schlüssel führt zu `401 { "code": "unauthorized", "message":
+  "Key not found" }`, weil unser Code die v3-REST-API
+  (`api.brevo.com/v3/smtp/email`) mit dem Header `api-key` aufruft.
+- Brevo beschränkt API-Zugriffe standardmäßig auf bekannte IP-Adressen.
+  Da Supabase Edge Functions ohne feste ausgehende IP laufen, muss unter
+  https://app.brevo.com/security/authorised_ips die IP-Beschränkung für
+  API-Keys deaktiviert werden — sonst `401 { "code": "unauthorized",
+  "message": "We have detected you are using an unrecognised IP
+  address ..." }`.
+- `send-push` loggt einen fehlgeschlagenen E-Mail-Versand (Status + Body
+  der Brevo-Antwort, ohne Empfängeradresse) über `console.log`, sichtbar
+  im Supabase-Dashboard unter Edge Functions → `send-push` → **Logs**
+  (nicht „Invocations" — dort stehen nur Status/Dauer, keine
+  `console.log`-Ausgaben). Bei „X gesendet, Y fehlgeschlagen" ohne
+  erkennbaren Grund ist das der erste Anlaufpunkt.
+
+### 27.23 E-Mail-Design-Richtlinie (verbindliche Vorlage für künftige HTML-Mails)
+
+SFT Drive verschickt HTML-E-Mails aus zwei unabhängigen Quellen, die beide
+dasselbe visuelle Design verwenden (nachträglich vereinheitlicht am
+23.09.2026, auf ausdrücklichen Wunsch):
+
+```text
+Supabase Auth Email Templates (Dashboard → Authentication → Email Templates)
+  → Confirm signup, Reset password, Magic Link, Change Email usw.
+  → liegen außerhalb des Repositories, rein manuell im Supabase Dashboard
+    gepflegt — kein Code, keine Versionierung, kein automatischer Abgleich.
+
+send-push (supabase/functions/send-push/index.ts, renderEmailHtml())
+  → Admin-Mitteilungen (§27.10-§27.22) über Brevo.
+```
+
+Beide folgen demselben Aufbau, damit E-Mails erkennbar zu SFT Drive gehören
+(konsistent mit dem App-Branding aus §17):
+
+```text
+┌─────────────────────────────┐
+│  dunkler Header (#0a0a0c)    │  ← abgerundete obere Ecken (16px)
+│  Logo (48×48, siehe unten)   │
+│  "SFT DRIVE" (weiß/rot)      │
+│  "Sportfahrer Treff" (grau)  │
+├─────────────────────────────┤
+│  weiße Karte (#ffffff)       │  ← abgerundete untere Ecken (16px)
+│  Überschrift (h1, #0a0a0c)   │
+│  Fließtext (#4a4a52)         │
+│  roter CTA-Button (#e10600)  │  ← abgerundet (14px), weißer Text
+│  Kleingedrucktes (#8a8a92)   │
+└─────────────────────────────┘
+```
+
+Verbindliche Eckwerte für jede neue Vorlage:
+
+- **Logo:** `<img src='https://sft-drive.pages.dev/icons/icon-192.png' width='48' height='48' alt='SFT Drive'>` —
+  lädt vom bereits öffentlich ausgelieferten PWA-Icon, kein separater Upload
+  oder Storage-Bucket nötig. Zentriert im Header, `border-radius:12px`.
+- **Farben:** Header-Hintergrund `#0a0a0c`, Karten-Hintergrund `#ffffff`,
+  Akzent-/Button-Farbe `#e10600` (SFT-Rot), Fließtext `#4a4a52`,
+  Kleingedrucktes/Dachmarke `#8a8a92` — dieselben Werte wie die
+  Tailwind-Klassen `sft-black`/`sft-red`/`sft-gray*` in der App, nicht
+  eigenständig neu gewählt.
+- **Schrift:** Systemschriftstapel
+  `-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif`
+  (kein Web-Font-Import in E-Mails — unzuverlässige Unterstützung in
+  Mailclients, zusätzliche externe Anfrage ohne echten Nutzen).
+- **Struktur:** `<table role='presentation'>`-Layout mit `max-width:480px`,
+  keine CSS-Klassen oder `<style>`-Blöcke (Mailclients filtern beides oft
+  heraus) — ausschließlich Inline-`style`-Attribute, wie im bestehenden
+  `renderEmailHtml()` bzw. dem Auth-Template vorgemacht.
+- **CTA-Button:** immer als verschachtelte `<table>` mit farbiger `<td>`
+  und `<a>` darin (robuster in Outlook als ein direkt gestyltes `<a>`).
+- **Freier Admin-/Nutzertext:** vor dem Einsetzen ins HTML immer escapen
+  (siehe `escapeHtml()` in `send-push`) — gilt für jede künftige Vorlage,
+  die nutzergenerierten oder admin-generierten Text enthält.
+
+Bei einer neuen Supabase-Auth-Vorlage (z. B. „Reset password") den
+Grundaufbau aus dem bestehenden „Confirm signup"-Template 1:1 übernehmen
+und nur Überschrift, Fließtext, Button-Beschriftung und Variable
+(`{{ .ConfirmationURL }}` bzw. die für den jeweiligen Vorlagentyp passende
+Supabase-Variable) austauschen. Bei einem neuen `send-push`-E-Mail-Inhalt
+`renderEmailHtml()` erweitern statt eine zweite, abweichende Funktion zu
+bauen (§23 „keine parallele zweite Architektur für dieselbe Funktion").
 
 ---
 
