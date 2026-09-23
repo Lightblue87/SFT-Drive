@@ -4706,6 +4706,16 @@ vorherige Anfrage automatisch abbricht — dasselbe Race-Condition-Problem wie
 der PWA-Fix oben, hier aber über natives Structured-Concurrency-Cancellation
 statt eines manuellen Request-Zählers gelöst.
 
+`ContentRepository.notify()` wertet außerdem die Antwort von `send-push`
+jetzt aus, statt sie zu verwerfen: `client.functions.invoke(...) { data, _ in
+try JSONDecoder().decode(DeliveryStats.self, from: data) }` liefert dieselben
+Felder (`sent`/`failed`/`email_sent`/`email_failed`/`skipped`) wie die PWA
+(`deliveryStats` in `AdminNotificationsPage`) zurück; `notify()` gibt seither
+ein `(notice, stats)`-Tupel zurück. Nach dem Senden zeigt `NotificationsView`
+dieselbe Zustellstatistik wie die PWA ("Push: X gesendet[, Y fehlgeschlagen]",
+"E-Mail: X gesendet[, Y fehlgeschlagen]" bzw. "Push/E-Mail nicht konfiguriert
+(…)."), statt nur einer generischen Erfolgsmeldung.
+
 ---
 
 ## 28. Nicht im ersten MVP

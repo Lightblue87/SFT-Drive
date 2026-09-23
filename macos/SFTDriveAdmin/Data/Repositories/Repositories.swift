@@ -237,16 +237,24 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
     func order(stopID: String, registrationID: String, expected: Payload, items: [Payload]) async throws {
         try await action("admin_replace_meal_order", ["p_restaurant_stop_id": .string(stopID), "p_registration_id": .string(registrationID), "p_expected": .object(expected), "p_items": .array(items.map(JSONValue.object))])
     }
-    func notify(tourID: String?, title: String, body: String) async throws -> String {
+    // Rückgabe enthält zusätzlich die Zustellstatistik von send-push (Push/
+    // E-Mail gesendet/fehlgeschlagen bzw. "nicht konfiguriert") -- analog zur
+    // PWA (AdminNotificationsPage.deliveryStats), damit der Admin auch hier
+    // sieht, ob der Versand tatsächlich ankam, nicht nur, dass die RPC lief.
+    func notify(tourID: String?, title: String, body: String) async throws -> (notice: String, stats: DeliveryStats?) {
         var params: Payload = ["p_title": .string(title), "p_body": .string(body)]
         if let tourID { params["p_tour_id"] = .string(tourID) }
         try await action(tourID == nil ? "admin_send_broadcast_notification" : "admin_send_tour_notification", params)
         var push: Payload = ["title": .string(title), "body": .string(body)]
         if let tourID { push["tour_id"] = .string(tourID) } else { push["broadcast"] = .bool(true) }
         do {
-            try await client.functions.invoke("send-push", options: .init(body: push))
-            return "In-App-Mitteilung erstellt und Push-Versand angefordert."
-        } catch { return "In-App-Mitteilung erstellt. Push-Zustellung konnte nicht bestätigt werden; bitte nicht erneut senden." }
+            let stats = try await client.functions.invoke("send-push", options: .init(body: push)) { data, _ in
+                try JSONDecoder().decode(DeliveryStats.self, from: data)
+            }
+            return ("In-App-Mitteilung erstellt und Push-Versand angefordert.", stats)
+        } catch {
+            return ("In-App-Mitteilung erstellt. Push-Zustellung konnte nicht bestätigt werden; bitte nicht erneut senden.", nil)
+        }
     }
     // Verlauf der zuletzt versendeten Admin-Mitteilungen für das gewählte Ziel
     // (§27.24) -- dieselben RPCs wie in der PWA (AdminNotificationsPage),

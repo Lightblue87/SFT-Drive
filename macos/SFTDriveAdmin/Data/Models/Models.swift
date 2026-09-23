@@ -234,3 +234,12 @@ struct NotificationBatchRecipient: Decodable, Identifiable, Sendable {
     let username: String
     let read_at: String?
 }
+// Antwortform von send-push (§27.16/§27.22) -- alle Felder optional, da sie
+// bei nicht konfiguriertem Kanal (skipped) fehlen können.
+struct DeliveryStats: Decodable, Sendable {
+    let sent: Int?
+    let failed: Int?
+    let email_sent: Int?
+    let email_failed: Int?
+    let skipped: String?
+}

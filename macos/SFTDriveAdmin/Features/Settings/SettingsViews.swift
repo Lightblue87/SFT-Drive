@@ -32,6 +32,7 @@ struct ConnectionView: View {
     @Published var batches: [NotificationBatch] = []
     @Published var batchesLoading = false
     @Published var batchesError: String?
+    @Published var deliveryStats: DeliveryStats?
 }
 struct NotificationsView: View {
     let services: AppServices
@@ -53,6 +54,16 @@ struct NotificationsView: View {
                     .disabled(model.busy || model.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 ErrorBanner(message: model.error)
                 if let notice = model.notice { Text(notice).font(SFT.mono(11)).foregroundStyle(SFT.inkSecondary) }
+                if let stats = model.deliveryStats {
+                    if let skipped = stats.skipped {
+                        Text("Push/E-Mail nicht konfiguriert (\(skipped)).").font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                    } else {
+                        Text("Push: \(stats.sent ?? 0) gesendet\(stats.failed.map { $0 > 0 ? ", \($0) fehlgeschlagen" : "" } ?? "")")
+                            .font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                        Text("E-Mail: \(stats.email_sent ?? 0) gesendet\(stats.email_failed.map { $0 > 0 ? ", \($0) fehlgeschlagen" : "" } ?? "")")
+                            .font(SFT.mono(11)).foregroundStyle(SFT.inkTertiary)
+                    }
+                }
             }
             // Lesebestätigung/Verlauf bereits versendeter Mitteilungen an das
             // aktuell gewählte Ziel (§27.24) -- dieselben admin_list_notification_batches/
@@ -104,7 +115,9 @@ struct NotificationsView: View {
         }
         .confirmationDialog("An \(model.target.isEmpty ? "alle Nutzer" : model.tours.first(where: { $0.id == model.target })?.title ?? "Tourteilnehmer") senden?\n\(model.title)\n\(model.body)", isPresented: $confirm, titleVisibility: .visible) {
             Button("Jetzt senden") { Task { await model.perform {
-                model.notice = try await services.content.notify(tourID: model.target.nilIfEmpty, title: model.title, body: model.body)
+                model.deliveryStats = nil
+                let (notice, stats) = try await services.content.notify(tourID: model.target.nilIfEmpty, title: model.title, body: model.body)
+                model.notice = notice; model.deliveryStats = stats
                 model.title = ""; model.body = ""
                 model.batches = try await services.content.notificationBatches(tourID: model.target.nilIfEmpty)
             } } }
