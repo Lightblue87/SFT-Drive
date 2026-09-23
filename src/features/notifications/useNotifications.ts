@@ -20,12 +20,16 @@ export function useNotifications() {
       return
     }
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50)
-    setNotifications((data as AppNotification[]) ?? [])
+    // Bei einem Fehler (z. B. offline während des Resume-Refreshs) die
+    // zuletzt geladene Liste beibehalten statt sie durch [] zu ersetzen --
+    // sonst wirkt die Glocke kurzzeitig fälschlich leer, obwohl nur der
+    // Refetch fehlgeschlagen ist, nicht die eigentlichen Daten.
+    if (!error) setNotifications((data as AppNotification[]) ?? [])
     setLoading(false)
   }, [user])
 

@@ -62,14 +62,23 @@ export function AdminNotificationsPage() {
 
   // Ein per Link mitgegebenes ?tour= ist eine bewusste Navigationsentscheidung
   // und soll einen älteren, unabhängigen Entwurf überstimmen -- Titel/Text
-  // werden trotzdem wiederhergestellt, nur die Tourauswahl nicht.
+  // werden trotzdem wiederhergestellt, Ziel und Tourauswahl nicht. Ohne die
+  // Erzwingung von target='tour' könnte ein zuvor gespeicherter
+  // broadcast-Entwurf sonst dazu führen, dass die über den Link verlinkte
+  // Mitteilung versehentlich an alle Nutzer statt nur an diese Tour geht.
   useEffect(() => {
+    if (preselectedTourId) {
+      setTarget('tour')
+      setTourId(preselectedTourId)
+    }
     try {
       const saved = localStorage.getItem(DRAFT_KEY)
       if (saved) {
         const draft = JSON.parse(saved) as Partial<Draft>
-        if (typeof draft.target === 'string') setTarget(draft.target)
-        if (typeof draft.tourId === 'string' && !preselectedTourId) setTourId(draft.tourId)
+        if (!preselectedTourId) {
+          if (typeof draft.target === 'string') setTarget(draft.target)
+          if (typeof draft.tourId === 'string') setTourId(draft.tourId)
+        }
         if (typeof draft.title === 'string') setTitle(draft.title)
         if (typeof draft.body === 'string') setBody(draft.body)
       }
@@ -157,6 +166,18 @@ export function AdminNotificationsPage() {
       return
     }
 
+    // Die In-App-Mitteilung ist ab hier bereits unwiderruflich angelegt --
+    // der Entwurf muss deshalb sofort verworfen werden, nicht erst nach dem
+    // optionalen (potenziell langsamen) send-push-Aufruf unten. Würde die
+    // PWA währenddessen aus dem Speicher geworfen, käme sonst beim nächsten
+    // Start derselbe Entwurf zurück und ein erneutes Absenden würde die
+    // nicht-idempotente RPC ein zweites Mal auslösen (doppelte Mitteilung).
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+    } catch {
+      // localStorage nicht verfügbar — kein Problem, der Entwurf ist ohnehin leer.
+    }
+
     // Push/E-Mail sind rein zusätzlich zur bereits erstellten In-App-Mitteilung
     // (§27.16) — ein Fehlschlag hier darf die Kernfunktion nicht als
     // gescheitert melden, In-App-Erfolg bleibt also unabhängig von diesem
@@ -181,11 +202,6 @@ export function AdminNotificationsPage() {
     setTitle('')
     setBody('')
     setSent(true)
-    try {
-      localStorage.removeItem(DRAFT_KEY)
-    } catch {
-      // localStorage nicht verfügbar — kein Problem, der Entwurf ist ohnehin leer.
-    }
   }
 
   if (loading) return <PageLoading />
