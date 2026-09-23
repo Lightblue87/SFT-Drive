@@ -4635,6 +4635,28 @@ die vorausgewählte Tour direkt deren eigenen „Verlauf“ — Titel/Text erneu
 aufrufen und sehen, wer die jeweilige Mitteilung bekommen und gelesen hat,
 ohne die Tour manuell aus dem Dropdown wählen zu müssen.
 
+**Nachtrag/Bugfix 23.09.2026 (Migration
+`20260923030000_fix_notification_batch_backfill.sql`):** `batch_id` wurde
+oben mit `default gen_random_uuid()` ergänzt. `gen_random_uuid()` ist
+VOLATILE — Postgres nutzt den schnellen "Fast Default"-Pfad für
+`ADD COLUMN ... DEFAULT` nur bei konstanten Defaults; bei einem volatilen
+Default erfolgt stattdessen ein vollständiger Table-Rewrite, bei dem der
+Default für **jede** bestehende Zeile einzeln neu ausgewertet wird. Jede vor
+dieser Migration bereits versendete Admin-Mitteilung bekam dadurch pro
+Empfängerzeile eine eigene, unterschiedliche `batch_id` — im Verlauf
+erschien ein ursprünglich an mehrere Teilnehmer gesendeter Versand seither
+als mehrere einzelne „1/1 gelesen“-Einträge statt als ein gemeinsamer
+Eintrag. Die Korrekturmigration führt betroffene historische Zeilen anhand
+von `(type, tour_id, title, body, created_at)` wieder zusammen — alle
+Empfängerzeilen eines `admin_send_*`-Aufrufs teilen sich denselben
+Anweisungszeitpunkt (`created_at default now()`, innerhalb einer
+`INSERT…SELECT`-Anweisung konstant), das identifiziert zuverlässig, welche
+Zeilen ursprünglich zusammengehörten. Reine einmalige Datenkorrektur für
+Altbestand — künftige Versände sind davon nicht betroffen, da
+`admin_send_tour_notification()`/`admin_send_broadcast_notification()`
+bereits seit der ersten Migration `batch_id` explizit pro Aufruf setzen
+(nicht über den Spaltendefault).
+
 ---
 
 ## 28. Nicht im ersten MVP
