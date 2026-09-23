@@ -20,17 +20,40 @@ export function useNotifications() {
       return
     }
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50)
-    setNotifications((data as AppNotification[]) ?? [])
+    // Bei einem Fehler (z. B. offline während des Resume-Refreshs) die
+    // zuletzt geladene Liste beibehalten statt sie durch [] zu ersetzen --
+    // sonst wirkt die Glocke kurzzeitig fälschlich leer, obwohl nur der
+    // Refetch fehlgeschlagen ist, nicht die eigentlichen Daten.
+    if (!error) setNotifications((data as AppNotification[]) ?? [])
     setLoading(false)
   }, [user])
 
   useEffect(() => {
     reload()
+  }, [reload])
+
+  // Eine installierte PWA wird beim Sperren/Entsperren des Displays meist
+  // nicht neu geladen (kein Remount, kein erneuter Mount-Effect) -- ohne
+  // diesen Listener bleibt die Liste auf dem Stand vor dem Wegklicken
+  // stehen, auch wenn zwischenzeitlich (z. B. während das Handy aus war)
+  // neue Mitteilungen in der Datenbank entstanden sind. Die In-App-
+  // Mitteilung existiert dort bereits zuverlässig (§27.16), sie muss nur
+  // beim Zurückkehren tatsächlich nachgeladen werden.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') reload()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [reload])
 
   const unreadCount = notifications.filter((n) => !n.read_at).length

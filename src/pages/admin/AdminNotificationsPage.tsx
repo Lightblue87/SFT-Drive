@@ -22,6 +22,20 @@ interface DeliveryStats {
   skipped?: string
 }
 
+interface Draft {
+  target: Target
+  tourId: string
+  title: string
+  body: string
+}
+
+// iOS/Android können den Tab beim Displaysperren jederzeit aus dem Speicher
+// werfen -- ohne Zwischenspeicherung wäre ein noch nicht abgesendeter Titel/
+// Text danach komplett weg (§16 "Formular-Resilienz bei Tab-Reloads", analog
+// zum bestehenden Muster in AdminTourFormPage). Ein einzelner globaler
+// Schlüssel genügt, da diese Seite nur ein Formular gleichzeitig zeigt.
+const DRAFT_KEY = 'sft-drive-notification-draft'
+
 /**
  * Zentrale Mitteilungsverwaltung (siehe CLAUDE.md §27.11 Admin Notification
  * Trigger) — bewusst als eigener Admin-Bereich statt verschachtelt in einer
@@ -34,6 +48,7 @@ export function AdminNotificationsPage() {
 
   const [tours, setTours] = useState<TourOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [draftHydrated, setDraftHydrated] = useState(false)
 
   const [target, setTarget] = useState<Target>('tour')
   const [tourId, setTourId] = useState('')
@@ -44,6 +59,44 @@ export function AdminNotificationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
+
+  // Ein per Link mitgegebenes ?tour= ist eine bewusste Navigationsentscheidung
+  // und soll einen älteren, unabhängigen Entwurf überstimmen -- Titel/Text
+  // werden trotzdem wiederhergestellt, Ziel und Tourauswahl nicht. Ohne die
+  // Erzwingung von target='tour' könnte ein zuvor gespeicherter
+  // broadcast-Entwurf sonst dazu führen, dass die über den Link verlinkte
+  // Mitteilung versehentlich an alle Nutzer statt nur an diese Tour geht.
+  useEffect(() => {
+    if (preselectedTourId) {
+      setTarget('tour')
+      setTourId(preselectedTourId)
+    }
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const draft = JSON.parse(saved) as Partial<Draft>
+        if (!preselectedTourId) {
+          if (typeof draft.target === 'string') setTarget(draft.target)
+          if (typeof draft.tourId === 'string') setTourId(draft.tourId)
+        }
+        if (typeof draft.title === 'string') setTitle(draft.title)
+        if (typeof draft.body === 'string') setBody(draft.body)
+      }
+    } catch {
+      // localStorage nicht verfügbar (z. B. privater Modus) oder Entwurf beschädigt — ignorieren.
+    }
+    setDraftHydrated(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!draftHydrated) return
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ target, tourId, title, body }))
+    } catch {
+      // localStorage nicht verfügbar — Entwurfssicherung ist ein reines Komfort-Feature.
+    }
+  }, [draftHydrated, target, tourId, title, body])
 
   useEffect(() => {
     supabase
@@ -56,11 +109,16 @@ export function AdminNotificationsPage() {
         // diese Tour") soll genau diese Tour vorausgewählt sein, nicht die
         // per Default zuerst sortierte -- nur auf eine tatsächlich noch
         // existierende Tour zurückfallen, sonst bliebe die Auswahl leer.
+        // Ein per Draft wiederhergestelltes tourId (siehe oben) bleibt dabei
+        // unangetastet, solange es zu einer noch vorhandenen Tour gehört.
         const preselected = data?.find((t) => t.id === preselectedTourId)
         if (preselected) {
           setTourId(preselected.id)
-        } else if (data && data.length > 0) {
-          setTourId(data[0].id)
+        } else {
+          setTourId((current) => {
+            if (current && data?.some((t) => t.id === current)) return current
+            return data && data.length > 0 ? data[0].id : current
+          })
         }
         setLoading(false)
       })
@@ -106,6 +164,18 @@ export function AdminNotificationsPage() {
     if (result.code !== 'OK') {
       setError(rpcErrorMessage(result.code))
       return
+    }
+
+    // Die In-App-Mitteilung ist ab hier bereits unwiderruflich angelegt --
+    // der Entwurf muss deshalb sofort verworfen werden, nicht erst nach dem
+    // optionalen (potenziell langsamen) send-push-Aufruf unten. Würde die
+    // PWA währenddessen aus dem Speicher geworfen, käme sonst beim nächsten
+    // Start derselbe Entwurf zurück und ein erneutes Absenden würde die
+    // nicht-idempotente RPC ein zweites Mal auslösen (doppelte Mitteilung).
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+    } catch {
+      // localStorage nicht verfügbar — kein Problem, der Entwurf ist ohnehin leer.
     }
 
     // Push/E-Mail sind rein zusätzlich zur bereits erstellten In-App-Mitteilung
