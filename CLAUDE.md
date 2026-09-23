@@ -4586,6 +4586,112 @@ Supabase-Variable) austauschen. Bei einem neuen `send-push`-E-Mail-Inhalt
 `renderEmailHtml()` erweitern statt eine zweite, abweichende Funktion zu
 bauen (§23 „keine parallele zweite Architektur für dieselbe Funktion").
 
+### 27.24 Lesebestätigung für Admin-Mitteilungen
+
+Ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. `notifications` legt bereits
+pro Empfänger eine eigene Zeile mit `read_at` an (§27.14) — die Rohdaten für
+eine Lesequote existierten also schon, es fehlte nur eine zuverlässige
+Gruppierung der Zeilen **eines** Admin-Versands (mehrere Mitteilungen an
+dieselbe Tour oder mehrere Broadcasts wären über `tour_id`/`title`/`body`/
+`created_at` nur heuristisch unterscheidbar gewesen).
+
+Migration `20260923020000_notification_read_receipts.sql`:
+
+- `notifications.batch_id uuid not null default gen_random_uuid()`. Der
+  Spaltendefault sorgt dafür, dass jede bereits bestehende automatische
+  Einzel-Mitteilung (Tourabsage, Regionsbenachrichtigung, Restaurant-/
+  Übernachtungserinnerung usw.) automatisch ihre eigene, isolierte
+  `batch_id` bekommt — an diesen Stellen war keine Änderung nötig.
+- `admin_send_tour_notification()` und `admin_send_broadcast_notification()`
+  erzeugen jetzt bewusst **eine** `batch_id` pro Aufruf und setzen sie für
+  alle Empfängerzeilen dieses einen Versands explizit gleich.
+- `admin_list_notification_batches(p_tour_id uuid default null)`: gebündelte
+  Übersicht bereits versendeter Admin-Mitteilungen (`type = 'ADMIN_MESSAGE'`)
+  je Ziel (Tour oder Broadcast bei `p_tour_id = null`) samt
+  `recipient_count`/`read_count` — eine aggregierende Abfrage statt einer
+  Einzelabfrage pro Versand (§4 „keine N+1-Abfragen").
+- `admin_get_notification_batch_recipients(p_batch_id uuid)`: Detailliste je
+  Versand, wer gelesen hat und wer nicht — nur `username` und `read_at`,
+  keine Klarnamen oder sonstigen privaten Profildaten (dieselbe
+  Datensparsamkeit wie in §8.9 für die Teilnehmer-Fahrzeugliste).
+
+UI in `/admin/notifications` (`AdminNotificationsPage`): unterhalb des
+Sende-Formulars ein „Verlauf"-Bereich mit den letzten Versänden an das
+aktuell gewählte Ziel (Tour bzw. Broadcast), je Zeile „X / Y gelesen". Tippen
+öffnet ein Sheet mit dem vollständigen Text sowie der Empfängerliste
+(gelesen mit Zeitpunkt, ungelesen hervorgehoben). Da jeder Versand seine
+eigene `batch_id` besitzt, bleiben mehrere Mitteilungen an dieselbe Tour
+sauber getrennt auswertbar, statt sich zu einer einzigen Gesamtquote zu
+vermischen.
+
+Zugang direkt aus der Tourenverwaltung: Jede Tourzeile in `/admin/tours`
+besitzt einen Button „Nachrichten“ neben „Teilnehmer“/„Stopps“ (analog zu
+„Tagesrouten verwalten“/„Hotels verwalten“, siehe §12 "Umsetzung: Archivierte
+Touren standardmäßig ausgeblendet"), der zu
+`/admin/notifications?tour=<id>` verlinkt. Keine eigene zweite Seite/Route
+nötig: `AdminNotificationsPage` unterstützt dieses `?tour=`-Preselect bereits
+(ursprünglich für den Link aus der Teilnehmerverwaltung gebaut) und zeigt für
+die vorausgewählte Tour direkt deren eigenen „Verlauf“ — Titel/Text erneut
+aufrufen und sehen, wer die jeweilige Mitteilung bekommen und gelesen hat,
+ohne die Tour manuell aus dem Dropdown wählen zu müssen.
+
+**Nachtrag/Bugfix 23.09.2026 (Migration
+`20260923030000_fix_notification_batch_backfill.sql`):** `batch_id` wurde
+oben mit `default gen_random_uuid()` ergänzt. `gen_random_uuid()` ist
+VOLATILE — Postgres nutzt den schnellen "Fast Default"-Pfad für
+`ADD COLUMN ... DEFAULT` nur bei konstanten Defaults; bei einem volatilen
+Default erfolgt stattdessen ein vollständiger Table-Rewrite, bei dem der
+Default für **jede** bestehende Zeile einzeln neu ausgewertet wird. Jede vor
+dieser Migration bereits versendete Admin-Mitteilung bekam dadurch pro
+Empfängerzeile eine eigene, unterschiedliche `batch_id` — im Verlauf
+erschien ein ursprünglich an mehrere Teilnehmer gesendeter Versand seither
+als mehrere einzelne „1/1 gelesen“-Einträge statt als ein gemeinsamer
+Eintrag. Die Korrekturmigration führt betroffene historische Zeilen anhand
+von `(type, tour_id, title, body, created_at)` wieder zusammen — alle
+Empfängerzeilen eines `admin_send_*`-Aufrufs teilen sich denselben
+Anweisungszeitpunkt (`created_at default now()`, innerhalb einer
+`INSERT…SELECT`-Anweisung konstant), das identifiziert zuverlässig, welche
+Zeilen ursprünglich zusammengehörten. Reine einmalige Datenkorrektur für
+Altbestand — künftige Versände sind davon nicht betroffen, da
+`admin_send_tour_notification()`/`admin_send_broadcast_notification()`
+bereits seit der ersten Migration `batch_id` explizit pro Aufruf setzen
+(nicht über den Spaltendefault).
+
+**Nachtrag/Review-Fixes 23.09.2026 (Migration
+`20260923040000_notification_receipt_review_fixes.sql`), aus einem
+automatisierten PR-Review zu PR #29:**
+
+- `delete_notification()` löschte die eigene Empfängerzeile bisher physisch
+  — dadurch verschwand ein Empfänger beim Swipe-to-delete rückwirkend sowohl
+  aus dem Nenner als auch aus der Lesequote in `admin_list_notification_batches()`,
+  was eine ungelesene, gelöschte Mitteilung fälschlich als vollständig
+  gelesen erscheinen ließ. Fix: neues `notifications.deleted_at`, `delete_notification()`
+  setzt nur noch dieses Feld statt zu löschen; `useNotifications.ts` filtert
+  zusätzlich `deleted_at is null`. Die Empfängerzeile bleibt damit für die
+  Admin-Statistik korrekt erhalten.
+- `notifications.tour_id` verwendet `on delete set null`; `admin_delete_tour()`
+  (§37.3) löscht eine Tour, behält aber bewusst deren Mitteilungen — eine
+  Admin-Mitteilung an eine später gelöschte Tour hatte danach `tour_id = null`,
+  exakt wie eine echte Broadcast-Mitteilung, und erschien deshalb fälschlich
+  unter „An alle Nutzer“. Fix: neues, beim Versand explizit gesetztes und von
+  einer späteren Tour-Löschung unberührtes `notifications.is_broadcast`;
+  `admin_list_notification_batches()` filtert jetzt darüber statt über
+  `tour_id is null`.
+- Race Condition in `AdminNotificationsPage`: schnelles Wechseln zwischen
+  Tour/Broadcast bzw. zwei Touren konnte dazu führen, dass eine langsamere,
+  aber später eintreffende Antwort für ein bereits verlassenes Ziel den
+  Verlauf des inzwischen aktuell gewählten Ziels überschreibt. Fix: einfache
+  Request-Zähler-Refs (`batchesRequestRef`/`recipientsRequestRef`), die
+  veraltete Antworten verwerfen.
+- `NotificationsPage.goToTarget()`: `navigate()` pushte bisher einen neuen
+  History-Eintrag, während `BottomSheet` seinen eigenen `sftSheet`-Eintrag
+  beim Unmount nur entfernt, wenn er noch der aktuell oberste ist — nach dem
+  Navigieren war das nicht mehr der Fall, wodurch der Sheet-Eintrag als
+  Karteileiche zwischen Ursprungsseite und Ziel stehen blieb und ein
+  Zurück-Tap vom Ziel aus zunächst dorthin statt zur Ursprungsseite führte.
+  Fix: `navigate(target_path, { replace: true })` ersetzt den Sheet-Eintrag
+  direkt, statt einen weiteren obendrauf zu legen.
+
 ---
 
 ## 28. Nicht im ersten MVP

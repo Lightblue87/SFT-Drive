@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
+import { BottomSheet } from '@/components/BottomSheet'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 
@@ -27,6 +28,30 @@ interface Draft {
   tourId: string
   title: string
   body: string
+}
+
+/** Ein Versand (mehrere notifications-Zeilen mit gemeinsamer batch_id,
+ * siehe Migration 20260923020000) samt Lesequote -- Quelle für den
+ * "Verlauf"-Bereich unten. */
+interface NotificationBatch {
+  batch_id: string
+  title: string
+  body: string
+  created_at: string
+  recipient_count: number
+  read_count: number
+}
+
+interface BatchRecipient {
+  username: string
+  read_at: string | null
+}
+
+function formatBatchTimestamp(value: string): string {
+  const d = new Date(value)
+  const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  return `${date} · ${time}`
 }
 
 // iOS/Android können den Tab beim Displaysperren jederzeit aus dem Speicher
@@ -59,6 +84,51 @@ export function AdminNotificationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [deliveryStats, setDeliveryStats] = useState<DeliveryStats | null>(null)
   const [deliveryError, setDeliveryError] = useState<string | null>(null)
+
+  const [batches, setBatches] = useState<NotificationBatch[]>([])
+  const [batchesLoading, setBatchesLoading] = useState(false)
+  const [openBatch, setOpenBatch] = useState<NotificationBatch | null>(null)
+  const [batchRecipients, setBatchRecipients] = useState<BatchRecipient[] | null>(null)
+  const [recipientsLoading, setRecipientsLoading] = useState(false)
+
+  // Schnelles Wechseln zwischen Tour/Broadcast bzw. zwei Touren kann mehrere
+  // Requests gleichzeitig auslösen; ohne Reihenfolgeprüfung könnte eine
+  // spätere, aber langsamere Antwort für das vorherige Ziel die Anzeige des
+  // inzwischen aktuell gewählten Ziels überschreiben (PR-Review). Ein simpler
+  // Zähler genügt: nur die jeweils zuletzt gestartete Anfrage darf ihr
+  // Ergebnis noch übernehmen.
+  const batchesRequestRef = useRef(0)
+  const recipientsRequestRef = useRef(0)
+
+  const loadBatches = useCallback(async () => {
+    const requestId = ++batchesRequestRef.current
+    if (target === 'tour' && !tourId) {
+      setBatches([])
+      return
+    }
+    setBatchesLoading(true)
+    const { data } = await supabase.rpc('admin_list_notification_batches', {
+      p_tour_id: target === 'tour' ? tourId : null,
+    })
+    if (batchesRequestRef.current !== requestId) return
+    setBatches((data as NotificationBatch[]) ?? [])
+    setBatchesLoading(false)
+  }, [target, tourId])
+
+  useEffect(() => {
+    loadBatches()
+  }, [loadBatches])
+
+  async function openBatchDetail(batch: NotificationBatch) {
+    const requestId = ++recipientsRequestRef.current
+    setOpenBatch(batch)
+    setBatchRecipients(null)
+    setRecipientsLoading(true)
+    const { data } = await supabase.rpc('admin_get_notification_batch_recipients', { p_batch_id: batch.batch_id })
+    if (recipientsRequestRef.current !== requestId) return
+    setBatchRecipients((data as BatchRecipient[]) ?? [])
+    setRecipientsLoading(false)
+  }
 
   // Ein per Link mitgegebenes ?tour= ist eine bewusste Navigationsentscheidung
   // und soll einen älteren, unabhängigen Entwurf überstimmen -- Titel/Text
@@ -202,6 +272,7 @@ export function AdminNotificationsPage() {
     setTitle('')
     setBody('')
     setSent(true)
+    loadBatches()
   }
 
   if (loading) return <PageLoading />
@@ -307,6 +378,69 @@ export function AdminNotificationsPage() {
           </button>
         </div>
       </div>
+
+      <div className="mt-5 px-1">
+        <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">VERLAUF</span>
+      </div>
+
+      {batchesLoading ? (
+        <p className="mt-2 px-1 text-[13px] text-sft-gray">Wird geladen…</p>
+      ) : batches.length === 0 ? (
+        <p className="mt-2 px-1 text-[13px] text-sft-gray">Noch keine Mitteilung an dieses Ziel gesendet.</p>
+      ) : (
+        <div className="mt-2 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
+          {batches.map((b, i) => (
+            <button
+              key={b.batch_id}
+              onClick={() => openBatchDetail(b)}
+              className={`flex w-full flex-col gap-1 px-3.5 py-3 text-left ${i > 0 ? 'border-t border-white/7' : ''}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[14px] font-semibold leading-tight">{b.title}</span>
+                <span className="flex-none font-mono text-[11px] text-sft-gray">
+                  {b.read_count} / {b.recipient_count} gelesen
+                </span>
+              </div>
+              <div className="line-clamp-1 text-[13px] text-sft-gray">{b.body}</div>
+              <div className="font-mono text-[10px] tracking-[0.1em] text-[#8a8a92]">
+                {formatBatchTimestamp(b.created_at)}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {openBatch && (
+        <BottomSheet
+          title={openBatch.title}
+          subtitle={formatBatchTimestamp(openBatch.created_at)}
+          onClose={() => setOpenBatch(null)}
+        >
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-sft-white">{openBatch.body}</p>
+          <div className="mt-5 font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+            GELESEN {openBatch.read_count} / {openBatch.recipient_count}
+          </div>
+          {recipientsLoading ? (
+            <p className="mt-2 text-[13px] text-sft-gray">Wird geladen…</p>
+          ) : (
+            <div className="mt-2 overflow-hidden rounded-xl border border-white/9">
+              {batchRecipients?.map((r, i) => (
+                <div
+                  key={`${r.username}-${i}`}
+                  className={`flex items-center justify-between px-3 py-2.5 text-[13px] ${
+                    i > 0 ? 'border-t border-white/7' : ''
+                  }`}
+                >
+                  <span className={r.read_at ? 'text-sft-white' : 'text-sft-gray'}>{r.username}</span>
+                  <span className={`font-mono text-[11px] ${r.read_at ? 'text-sft-gray' : 'text-sft-red'}`}>
+                    {r.read_at ? formatBatchTimestamp(r.read_at) : 'noch nicht gelesen'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
     </div>
   )
 }
