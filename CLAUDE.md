@@ -4624,6 +4624,17 @@ eigene `batch_id` besitzt, bleiben mehrere Mitteilungen an dieselbe Tour
 sauber getrennt auswertbar, statt sich zu einer einzigen Gesamtquote zu
 vermischen.
 
+Zugang direkt aus der Tourenverwaltung: Jede Tourzeile in `/admin/tours`
+besitzt einen Button „Nachrichten“ neben „Teilnehmer“/„Stopps“ (analog zu
+„Tagesrouten verwalten“/„Hotels verwalten“, siehe §12 "Umsetzung: Archivierte
+Touren standardmäßig ausgeblendet"), der zu
+`/admin/notifications?tour=<id>` verlinkt. Keine eigene zweite Seite/Route
+nötig: `AdminNotificationsPage` unterstützt dieses `?tour=`-Preselect bereits
+(ursprünglich für den Link aus der Teilnehmerverwaltung gebaut) und zeigt für
+die vorausgewählte Tour direkt deren eigenen „Verlauf“ — Titel/Text erneut
+aufrufen und sehen, wer die jeweilige Mitteilung bekommen und gelesen hat,
+ohne die Tour manuell aus dem Dropdown wählen zu müssen.
+
 ---
 
 ## 28. Nicht im ersten MVP
