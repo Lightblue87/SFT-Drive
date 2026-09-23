@@ -79,6 +79,7 @@ function renderEmailHtml(title: string, body: string): string {
   <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:480px; margin:0 auto;'>
     <tr>
       <td style='background-color:#0a0a0c; border-radius:16px 16px 0 0; padding:28px 32px; text-align:center;'>
+        <img src='https://sft-drive.pages.dev/icons/icon-192.png' width='48' height='48' alt='SFT Drive' style='display:block; margin:0 auto 12px auto; border-radius:12px;'>
         <span style='font-size:20px; font-weight:700; letter-spacing:0.02em;'>
           <span style='color:#ffffff;'>SFT</span>
           <span style='color:#e10600;'>&nbsp;DRIVE</span>

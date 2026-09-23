@@ -4482,7 +4482,11 @@ Umsetzung:
   nachträglich ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. Titel und
   Text stammen aus freier Admin-Eingabe und werden vor dem Einsetzen ins
   HTML per `escapeHtml()` escaped (gespeicherte XSS-Lücke im Mailclient des
-  Empfängers sonst möglich).
+  Empfängers sonst möglich). Der Header bindet zusätzlich das Tacho-Icon als
+  `<img>` ein, geladen von der bereits öffentlich erreichbaren PWA-Adresse
+  `https://sft-drive.pages.dev/icons/icon-192.png` — kein separater Upload
+  oder Storage-Bucket nötig, da dieses Icon ohnehin schon Teil des
+  ausgelieferten Production-Builds ist.
 - Fehlerhafte Einzelversände (`email_failed`) blockieren weder den
   Push-Versand noch die übrigen E-Mails — dieselbe Fail-soft-Logik wie beim
   bestehenden Push-Versand pro Subscription.
