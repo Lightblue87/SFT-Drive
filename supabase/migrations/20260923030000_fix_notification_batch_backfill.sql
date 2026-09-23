@@ -27,7 +27,8 @@ with groups as (
     title,
     body,
     created_at,
-    min(batch_id) as canonical_batch_id
+    -- uuid besitzt keinen eingebauten min()-Aggregatstyp -- über text sortieren.
+    min(batch_id::text)::uuid as canonical_batch_id
   from public.notifications
   where type = 'ADMIN_MESSAGE'
   group by type, tour_id, title, body, created_at
