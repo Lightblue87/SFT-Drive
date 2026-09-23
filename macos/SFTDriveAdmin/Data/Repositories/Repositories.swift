@@ -248,6 +248,18 @@ extension Notification.Name { static let sftAdminAccessRevoked = Notification.Na
             return "In-App-Mitteilung erstellt und Push-Versand angefordert."
         } catch { return "In-App-Mitteilung erstellt. Push-Zustellung konnte nicht bestätigt werden; bitte nicht erneut senden." }
     }
+    // Verlauf der zuletzt versendeten Admin-Mitteilungen für das gewählte Ziel
+    // (§27.24) -- dieselben RPCs wie in der PWA (AdminNotificationsPage),
+    // keine eigene zweite Fach-Logik für dieselbe Funktion (§2/§23).
+    func notificationBatches(tourID: String?) async throws -> [NotificationBatch] {
+        try await requireAdmin()
+        let params: Payload = ["p_tour_id": tourID.map(JSONValue.string) ?? .null]
+        return try await client.rpc("admin_list_notification_batches", params: params).execute().value
+    }
+    func notificationBatchRecipients(_ batchID: String) async throws -> [NotificationBatchRecipient] {
+        try await requireAdmin()
+        return try await client.rpc("admin_get_notification_batch_recipients", params: ["p_batch_id": .string(batchID)]).execute().value
+    }
     func siteSettings() async throws -> Payload {
         try await requireAdmin()
         return try await client.from("site_settings").select().eq("id", value: true).single().execute().value

@@ -4692,6 +4692,20 @@ automatisierten PR-Review zu PR #29:**
   Fix: `navigate(target_path, { replace: true })` ersetzt den Sheet-Eintrag
   direkt, statt einen weiteren obendrauf zu legen.
 
+**Mac-Admin-App (§40):** Die Lesebestätigung ist auch in `NotificationsView`
+(`macos/SFTDriveAdmin/Features/Settings/SettingsViews.swift`) verfügbar —
+dieselben RPCs wie in der PWA (`admin_list_notification_batches`/
+`admin_get_notification_batch_recipients` über eine neue
+`ContentRepository.notificationBatches(tourID:)`/`notificationBatchRecipients(_:)`),
+keine eigene zweite Fach-Logik (§2/§23/§40.3 "keine neuen, separaten
+„Mac-App-RPCs“"). Unterhalb des Sendeformulars ein „Verlauf“-Abschnitt mit
+„X / Y gelesen“ je Versand, Klick öffnet ein Sheet mit vollständigem
+Text und Empfängerliste (`NotificationBatchDetailView`). Der Reload beim
+Zielwechsel nutzt SwiftUIs `.task(id: model.target)`, das die noch laufende
+vorherige Anfrage automatisch abbricht — dasselbe Race-Condition-Problem wie
+der PWA-Fix oben, hier aber über natives Structured-Concurrency-Cancellation
+statt eines manuellen Request-Zählers gelöst.
+
 ---
 
 ## 28. Nicht im ersten MVP
