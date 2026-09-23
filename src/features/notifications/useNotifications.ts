@@ -33,6 +33,25 @@ export function useNotifications() {
     reload()
   }, [reload])
 
+  // Eine installierte PWA wird beim Sperren/Entsperren des Displays meist
+  // nicht neu geladen (kein Remount, kein erneuter Mount-Effect) -- ohne
+  // diesen Listener bleibt die Liste auf dem Stand vor dem Wegklicken
+  // stehen, auch wenn zwischenzeitlich (z. B. während das Handy aus war)
+  // neue Mitteilungen in der Datenbank entstanden sind. Die In-App-
+  // Mitteilung existiert dort bereits zuverlässig (§27.16), sie muss nur
+  // beim Zurückkehren tatsächlich nachgeladen werden.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') reload()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [reload])
+
   const unreadCount = notifications.filter((n) => !n.read_at).length
 
   return { notifications, unreadCount, loading, reload }
