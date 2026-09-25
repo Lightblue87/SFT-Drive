@@ -1431,6 +1431,33 @@ Paarbeziehung, RPCs `search_users_by_username`, `send_friend_request`,
 `list_my_friendships`, sowie die Phase-12-Ausnahme in
 `get_confirmed_tour_vehicles` (§8.9) und die UI unter `/profile/friends`.
 
+#### Umsetzung: Freundschaftsanfrage direkt aus der Teilnehmerliste einer Tour
+
+Bislang war eine Freundschaftsanfrage nur über die separate Username-Suche
+unter `/profile/friends` möglich, obwohl bestätigte Teilnehmer sich in der
+Fahrzeugliste einer gemeinsamen Tour (§11, `get_confirmed_tour_vehicles`)
+bereits gegenseitig sehen. Migration
+`20260923050000_confirmed_vehicles_friend_request.sql` ergänzt die Funktion
+um `user_id` (Ziel für `send_friend_request`) und `friendship_status`
+(`self` | `none` | `pending_outgoing` | `pending_incoming` | `accepted`).
+Beides sind keine zusätzlichen privaten Daten im Sinne von §8.9 — `user_id`
+ist eine bloße Kennung, `friendship_status` war für den Caller über
+`list_my_friendships()` ohnehin bereits einsehbar.
+
+UI (`src/features/tours/ConfirmedVehiclesList.tsx`, in `TourDetailPage`
+eingebunden): ein Tap auf eine fremde Zeile öffnet zunächst nur ein
+Bottom-Sheet mit den Details; erst ein zweiter, expliziter Tap auf
+„Freundschaftsanfrage senden" darin löst `send_friend_request` aus. Dieser
+zweistufige Ablauf ist bewusst gewählt, damit beim Scrollen der Liste nie
+versehentlich eine Anfrage ausgelöst wird — ein Scroll-Swipe unterbricht den
+nativen Touch/Click-Zyklus bereits vor dem ersten Tap, und selbst ein
+unbeabsichtigtes Antippen einer Zeile sendet noch nichts, sondern öffnet nur
+das informative Sheet (identisches Muster wie bei Mitteilungen,
+`NotificationsPage`). Die eigene Zeile bleibt nicht antippbar. Bei bereits
+bestehender Beziehung zeigt das Sheet den passenden Status (bereits
+befreundet, Anfrage bereits gesendet, eingehende Anfrage mit Link zu
+„Freunde") statt eines erneuten Sendebuttons.
+
 ---
 
 ## 12. Admin-Bereich
