@@ -14,13 +14,35 @@
  * Domain machen (klassischer Open-Redirect/Phishing-Baustein), auch wenn
  * `navigate()` in `LoginPage` das aktuell nicht ausnutzbar macht.
  *
+ * Ein reiner String-Präfix-Check (`//`, `/\`) reicht dafür nicht: ein Wert
+ * wie `/\t/evil.com` (ein echtes ASCII-Tab direkt nach dem führenden `/` —
+ * `URLSearchParams.get()` hat `%09` an dieser Stelle bereits dekodiert)
+ * beginnt weder mit `//` noch mit `/\`, wird aber von jedem
+ * WHATWG-konformen URL-Parser (Browser, `new URL()`, letztlich auch der
+ * Supabase-Bestätigungslink) als erster Schritt von führenden/eingebetteten
+ * Tabs und Zeilenumbrüchen befreit und danach exakt wie `//evil.com`
+ * behandelt (Codex-Review zu PR #32). Deshalb wird hier dieselbe
+ * URL-Parsing-Logik verwendet statt sie nachzubilden: `value` wird gegen
+ * einen festen Dummy-Origin aufgelöst und nur akzeptiert, wenn dabei
+ * tatsächlich derselbe Origin herauskommt — genau das, was auch beim
+ * späteren Zusammensetzen mit `window.location.origin` passieren würde.
+ *
  * Erlaubt deshalb ausschließlich App-interne, relative Pfade: genau ein
- * führender `/`, kein zweiter `/` bzw. `\` direkt danach. Alles andere fällt
- * auf `/` zurück.
+ * führender `/`, und die Auflösung gegen den Dummy-Origin darf keinen
+ * anderen Origin ergeben. Alles andere fällt auf `/` zurück.
  */
 export function sanitizeReturnTo(value: string | null): string {
-  if (!value) return '/'
-  if (!value.startsWith('/')) return '/'
-  if (value.startsWith('//') || value.startsWith('/\\')) return '/'
-  return value
+  if (!value || !value.startsWith('/')) return '/'
+
+  const dummyOrigin = 'https://sft-drive-returnto.invalid'
+  let resolved: URL
+  try {
+    resolved = new URL(value, dummyOrigin)
+  } catch {
+    return '/'
+  }
+
+  if (resolved.origin !== dummyOrigin) return '/'
+
+  return `${resolved.pathname}${resolved.search}${resolved.hash}`
 }
