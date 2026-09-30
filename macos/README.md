@@ -32,7 +32,7 @@ Die App verwendet die vorhandenen Edge Functions `admin-manage-user` und `send-p
 
 KI und Fallback sind zunächst aus. In Einstellungen → KI Endpunkt und installiertes Modell auswählen. Für lokale Inferenz Ollamas Cloud-Funktionen deaktivieren (`OLLAMA_NO_CLOUD=1`, Ollama neu starten). Es werden keine Modelle automatisch installiert. HTTP ist ausschließlich für Loopback erlaubt. Eigene Server erfordern HTTPS und Zugangsschlüssel; dieser wird im Keychain gespeichert.
 
-Vor jeder Analyse werden Empfänger und Text gezeigt. Fehlende Daten bleiben ungeklärt, Quellenbelege werden geprüft. Hotel-/Restaurant-Ergebnisse werden in einen editierbaren Entwurf übernommen; erst dessen Speichern schreibt Daten. Keine Übernachtungsbestätigung durch KI. Cloudanbieter sind für diese erste Version ausdrücklich nicht vorgesehen.
+Vor jeder Analyse werden Empfänger und Text gezeigt. Fehlende Daten bleiben ungeklärt, Quellenbelege werden geprüft. Hotel-/Restaurant-Ergebnisse werden in einen editierbaren Entwurf übernommen; erst dessen Speichern schreibt Daten. Keine Übernachtungsbestätigung durch KI. Ollama Cloud kann mit API-Key im Keychain und gesonderter Cloud-Zustimmung verwendet werden; lokale Inferenz bleibt separat konfigurierbar. Ein eigenständiger OpenAI-Adapter ist nicht implementiert. PDF- und Fotoimporte werden lokal in Text umgewandelt; zur Analyse wird nur der ausgewählte Text gesendet.
 
 ## Manuelle Weitergabe
 
