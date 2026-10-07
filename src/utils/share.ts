@@ -9,18 +9,29 @@
  * Messages) stellen einen separaten `url`-Wert als anklickbaren Link dar.
  * Ohne Web-Share-API (Zwischenablage-Fallback) wird die URL an den Text
  * angehängt, da die Zwischenablage kein eigenes Link-Feld kennt.
+ *
+ * `navigator.share()` lehnt bei einem vom Nutzer abgebrochenen Share-Dialog
+ * (z. B. Wischen/Schließen des Sheets) mit einer `AbortError`-DOMException
+ * ab — das ist keine fehlende Fähigkeit, sondern eine bewusste Nutzerwahl,
+ * und darf deshalb nicht in den Zwischenablage-Fallback laufen (sonst würde
+ * ein abgebrochener Share den Link trotzdem unbemerkt kopieren bzw. als
+ * "Teilen nicht möglich." missverstanden, Codex-Review auf PR #33).
  */
 export async function shareOrCopyText(
   title: string,
   text: string,
   url?: string,
-): Promise<'shared' | 'copied' | 'failed'> {
+): Promise<'shared' | 'cancelled' | 'copied' | 'failed'> {
   if (navigator.share) {
     try {
       await navigator.share(url ? { title, text, url } : { title, text })
       return 'shared'
-    } catch {
-      // Abgebrochen oder fehlgeschlagen — Zwischenablage als Fallback versuchen.
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return 'cancelled'
+      }
+      // Anderer Fehler (z. B. API nicht wirklich unterstützt) — Zwischenablage
+      // als Fallback versuchen.
     }
   }
 
