@@ -20,6 +20,7 @@ import { TourInterestButton } from '@/features/tours/TourInterestButton'
 import { AccommodationSection } from '@/features/tours/AccommodationSection'
 import { ConfirmedVehiclesList } from '@/features/tours/ConfirmedVehiclesList'
 import { YouTubeVideo } from '@/features/tours/YouTubeVideo'
+import { shareOrCopyText } from '@/utils/share'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -48,6 +49,7 @@ export function TourDetailPage() {
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null)
   const [regSheetOpen, setRegSheetOpen] = useState(false)
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
 
   useEffect(() => {
     if (data?.ownRegistration?.status !== 'waitlisted') {
@@ -123,6 +125,16 @@ export function TourDetailPage() {
     reload()
   }
 
+  async function handleShare() {
+    setShareStatus(null)
+    const url = `${window.location.origin}/tours/${tour.slug}`
+    const text = `${tour.region} · ${formatDateRange(tour.start_date, tour.end_date)}`
+    const result = await shareOrCopyText(tour.title, text, url)
+    setShareStatus(
+      result === 'copied' ? 'Link kopiert.' : result === 'failed' ? 'Teilen nicht möglich.' : null,
+    )
+  }
+
   return (
     <div className="pb-8">
       <div className="relative h-[220px] bg-[repeating-linear-gradient(115deg,#1e1e23_0_10px,#15151a_10px_20px)]">
@@ -130,6 +142,23 @@ export function TourDetailPage() {
           <img src={tour.cover_image_url} alt="" className="h-full w-full object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-sft-black" />
+        <button
+          type="button"
+          onClick={handleShare}
+          aria-label="Tour teilen"
+          className="tap-scale absolute right-3.5 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur"
+          style={{ top: 'calc(0.875rem + env(safe-area-inset-top))' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 16V4m0 0 4 4m-4-4-4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"
+              stroke="#fff"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
         <div className="absolute inset-x-0 bottom-0 px-[18px] pb-3.5">
           <div className="mb-2.5 flex flex-wrap gap-1.5">
             <span
@@ -160,6 +189,7 @@ export function TourDetailPage() {
       </div>
 
       <div className="mx-3.5">
+        {shareStatus && <p className="mt-3 text-center text-xs text-sft-gray">{shareStatus}</p>}
         <div className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/9 bg-white/6">
           <div className="bg-sft-card px-3.5 py-3">
             <div className={factLabel}>DATUM</div>

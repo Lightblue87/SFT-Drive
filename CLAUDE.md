@@ -2146,6 +2146,17 @@ Laufende Mehrtagestour:
 Läuft aktuell · Tag 3 von 5
 ```
 
+#### Umsetzung: Tour per Link teilen
+
+Oben rechts auf dem Tourbild sitzt ein Teilen-Button, für jeden Betrachter sichtbar
+(Visitor eingeschlossen — es wird ausschließlich die bereits öffentliche
+`/tours/:slug`-URL geteilt, keine geschützten Inhalte). Verwendet die bestehende
+`shareOrCopyText()`-Infrastruktur aus §35.1 (Web Share API mit
+Zwischenablage-Fallback), dort um einen optionalen `url`-Parameter ergänzt, damit
+Zielapps (z. B. Nachrichten) den Link als eigenes, anklickbares Feld statt nur als
+Teil des Texts erhalten. Keine zweite Share-Implementierung (§23 „keine parallele
+zweite Architektur für dieselbe Funktion").
+
 ---
 
 ### 14.2 Visitor
