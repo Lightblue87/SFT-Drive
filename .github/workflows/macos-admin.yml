@@ -25,6 +25,8 @@ jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 16.4
@@ -47,3 +49,38 @@ jobs:
           name: SFTDriveAdmin-macOS15
           path: macos/build/distribution/*
           retention-days: 7
+      # Nur bei manuell ausgelöstem Lauf ein GitHub Release veröffentlichen --
+      # ein push/pull_request-Lauf baut nur zur Verifikation (wie bisher).
+      # Läuft direkt im Runner statt die Dateien erst in eine lokale
+      # Entwicklungsumgebung herunterzuladen und von dort wieder hochzuladen:
+      # GitHub-Workflow-Artefakte werden ausschließlich über zeitlich
+      # befristete Azure-Blob-Storage-URLs ausgeliefert, die außerhalb von
+      # github.com liegen und deshalb nicht von jeder Umgebung aus erreichbar
+      # sind -- der Runner selbst hat dieses Problem nicht.
+      - name: Publish GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: macos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(ls build/distribution/SFTDriveAdmin-*.zip | sed -E 's#.*/SFTDriveAdmin-(.+)\.zip#\1#')"
+          tag="macos-admin-v${version}"
+          sha256_zip="$(grep "SFTDriveAdmin-${version}.zip" build/distribution/SHA256.txt | awk '{print $1}')"
+          notes="Native macOS-Admin-App für SFT Drive (§38–40 in CLAUDE.md).
+
+          - macOS 15 oder neuer, Universal (Apple Silicon + Intel)
+          - Ad-hoc signiert, **nicht** Developer-ID-signiert, **nicht** notarisiert — macOS kann die App beim ersten Öffnen blockieren; ggf. gezielt unter Systemeinstellungen → Datenschutz & Sicherheit freigeben. Gatekeeper/SIP nicht global abschalten.
+
+          **SHA-256 (SFTDriveAdmin-${version}.zip):**
+          \`${sha256_zip}\`
+
+          Nur an Administratoren über einen vertrauenswürdigen privaten Weg weitergeben."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" build/distribution/SFTDriveAdmin-*.zip build/distribution/SFTDriveAdmin-*.dmg build/distribution/SHA256.txt --clobber
+          else
+            gh release create "$tag" build/distribution/SFTDriveAdmin-*.zip build/distribution/SFTDriveAdmin-*.dmg build/distribution/SHA256.txt \
+              --title "SFT Drive Admin ${version} (macOS)" \
+              --notes "$notes" \
+              --prerelease
+          fi
