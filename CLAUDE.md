@@ -7568,3 +7568,17 @@ Dieser Abschnitt gilt als **umgesetzt** für den in dieser Umgebung
 verifizierbaren Umfang (Build, Tests, Code-Review); die manuelle Geräteprüfung
 oben bleibt ein gesondert auszuweisender, noch offener Schritt vor einem
 produktiven Rollout an Administratoren.
+
+**Nachtrag 15.10.2026 — Backend-Migrationen produktiv bestätigt:** Der
+Projektinhaber hat im Supabase SQL Editor des produktiven Projekts geprüft,
+dass alle für die Mac-App benötigten `SECURITY DEFINER`-RPCs aus den
+Migrationen `20260910010000` bis `20260911080000` (u. a.
+`admin_get_tour_planning_summary`, `admin_save_tour`,
+`admin_save_tour_resource`, `admin_replace_meal_order`,
+`admin_create_restaurant`) tatsächlich vorhanden sind (`pg_proc`-Abfrage,
+Ergebnis: alle Funktionen existieren). Die in `macos/README.md` genannten
+additiven Migrationen sind damit bestätigt produktiv eingespielt — die in
+§26 beschriebene Unsicherheit ("Repository allein sagt nichts darüber aus,
+was tatsächlich läuft") ist für diesen Stand aufgelöst. Die manuelle
+Geräteprüfung (Login, Offline-Start, UI auf echtem Mac) bleibt davon
+unberührt weiterhin offen.
