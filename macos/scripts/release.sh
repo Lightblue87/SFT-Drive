@@ -1,7 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version="0.1.0"
+# Version aus dem Xcode-Projekt lesen statt hier ein zweites Mal zu pflegen --
+# ein hartcodierter Wert war zuvor nach einem reinen MARKETING_VERSION-Bump
+# im Projekt stillschweigend veraltet (Release-ZIP/DMG trugen noch 0.1.0,
+# während die App selbst bereits 0.2.0 meldete).
+version="$(xcodebuild -project SFTDriveAdmin.xcodeproj -scheme SFTDriveAdmin -showBuildSettings | awk -F ' = ' '/ MARKETING_VERSION /{print $2; exit}')"
 # No Developer-ID account, notarization, or external publication.
 xcodebuild -project SFTDriveAdmin.xcodeproj -scheme SFTDriveAdmin -configuration Release -destination 'generic/platform=macOS' -derivedDataPath build/Release ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
 app="build/Release/Build/Products/Release/SFTDriveAdmin.app"

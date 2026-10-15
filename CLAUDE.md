@@ -7582,3 +7582,49 @@ additiven Migrationen sind damit bestätigt produktiv eingespielt — die in
 was tatsächlich läuft") ist für diesen Stand aufgelöst. Die manuelle
 Geräteprüfung (Login, Offline-Start, UI auf echtem Mac) bleibt davon
 unberührt weiterhin offen.
+
+### 40.13 Update-Hinweis in der Mac-App
+
+Ergänzt am 15.10.2026, auf ausdrücklichen Wunsch: Eine bereits installierte
+Mac-App-Version erfuhr bisher nie von einem neuen Release — der einzige Weg,
+eine neue Version zu bemerken, war ein zufälliger Blick auf die
+GitHub-Releases-Seite.
+
+Bewusst **kein** Sparkle bzw. kein automatischer Download/Ersatz des
+laufenden App-Bundles: Die App ist weiterhin nur ad-hoc signiert, nicht mit
+Developer-ID signiert und nicht notarisiert (§40.9). Ein echter
+Auto-Updater bräuchte dafür eine eigene signierte Appcast-Infrastruktur
+(EdDSA-Schlüsselpaar, Schlüsselverwaltung) — unverhältnismäßiger Aufwand für
+ein kleines Community-Projekt (§32) und ein zusätzliches Sicherheitsrisiko,
+wenn nicht sauber umgesetzt.
+
+Stattdessen eine reine, dismissbare Benachrichtigung:
+
+- `Shared/UpdateChecker.swift` fragt beim App-Start (und danach höchstens
+  einmal pro Tag, auch bei Rückkehr aus dem Hintergrund) die öffentliche,
+  unauthentifizierte GitHub-API `GET /repos/Lightblue87/SFT-Drive/releases/latest`
+  ab — kein zusätzliches Secret, kein kostenpflichtiger Dienst (§4).
+- Nur Release-Tags mit dem Präfix `macos-admin-v` zählen (unterscheidet
+  künftige PWA-Releases im selben Repository, falls welche angelegt werden).
+- Ist die gefundene Version neuer als `CFBundleShortVersionString` der
+  laufenden App, erscheint oberhalb des Bildschirminhalts (`RedesignShellView`)
+  ein schmaler Hinweis mit Versionsnummer, einem Link auf die
+  GitHub-Release-Seite (`NSWorkspace.shared.open`, kein In-App-Download) und
+  einem Schließen-Button.
+- Eine einmal weggeklickte Version wird nicht erneut angezeigt (in
+  `UserDefaults` gemerkt); erst eine noch neuere Version löst den Hinweis
+  erneut aus.
+- Fail-soft: Netzwerkfehler, kein Internetzugang oder ein unerwartetes
+  Antwortformat brechen die Prüfung still ab (analog §27.16 für Web Push in
+  der PWA) — die Prüfung ist nie Voraussetzung für die Nutzung der App.
+- Download und Installation bleiben vollständig manuell, wie bei jedem
+  bisherigen Release (§40.9 "ausschließlich manuelle Weitergabe").
+
+Damit dieser Vergleich funktioniert, muss `MARKETING_VERSION` im
+Xcode-Projekt bei jedem neuen Release tatsächlich erhöht und ein
+entsprechender GitHub-Release-Tag `macos-admin-vX.Y.Z` angelegt werden.
+`scripts/release.sh` liest die Version seit diesem Nachtrag direkt aus den
+Xcode-Build-Settings (`xcodebuild -showBuildSettings`) statt sie als
+zweiten, separat zu pflegenden Wert im Skript zu wiederholen — der zuvor
+dort hartcodierte Wert `0.1.0` war nach dem PR-#20-Release bereits veraltet,
+ohne dass es aufgefallen wäre, weil nichts ihn mit dem Projekt abglich.

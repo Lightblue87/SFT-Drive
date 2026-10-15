@@ -58,6 +58,7 @@ struct RedesignShellView: View {
     let services: AppServices
     @ObservedObject var dashboard: DashboardModel
     @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var updateChecker: UpdateChecker
     @State private var section: RedesignSection = .dashboard
     @AppStorage("redesign.showShortcutBar") private var showShortcutBar = true
 
@@ -71,6 +72,10 @@ struct RedesignShellView: View {
             sidebar
             Divider().overlay(SFT.border)
             VStack(spacing: 0) {
+                if let available = updateChecker.available {
+                    UpdateBanner(available: available) { updateChecker.dismiss() }
+                    Divider().overlay(SFT.border)
+                }
                 detail
                 if showShortcutBar { shortcutBar }
             }
