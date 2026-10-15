@@ -37,16 +37,28 @@ import Foundation
     func check() async {
         let defaults = UserDefaults.standard
         defaults.set(Date(), forKey: lastCheckKey)
-        guard let url = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") else { return }
+        // `/releases/latest` liefert das neueste Release des GESAMTEN Repos
+        // (nicht nach Tag-Präfix gefiltert) und schließt zudem Pre-Releases
+        // aus -- genau der Modus, in dem der bisherige macos-admin-Release
+        // steht. Sobald es ein neueres, nicht als Mac-App markiertes Release
+        // gibt (z. B. künftig für die PWA), würde `/releases/latest` dieses
+        // zurückgeben statt des tatsächlich gesuchten Mac-Releases, und
+        // installierte Macs würden ein verfügbares Update nie bemerken
+        // (Codex-Review auf PR #36). Stattdessen alle Releases abfragen und
+        // selbst das neueste mit dem Mac-App-Präfix auswählen.
+        guard let url = URL(string: "https://api.github.com/repos/\(repo)/releases?per_page=30") else { return }
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return }
-            let payload = try JSONDecoder().decode(ReleasePayload.self, from: data)
-            // Das Repository enthält auch PWA-Releases (falls später welche
-            // angelegt werden) -- nur Tags mit dem Mac-App-Präfix zählen hier.
-            guard payload.tag_name.hasPrefix(tagPrefix) else { return }
+            let payloads = try JSONDecoder().decode([ReleasePayload].self, from: data)
+            let matches = payloads.filter { $0.tag_name.hasPrefix(tagPrefix) }
+            guard
+                let payload = matches.max(by: {
+                    Self.isNewer(String($1.tag_name.dropFirst(tagPrefix.count)), than: String($0.tag_name.dropFirst(tagPrefix.count)))
+                })
+            else { return }
             let remoteVersion = String(payload.tag_name.dropFirst(tagPrefix.count))
             let currentVersion =
                 (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "0"
