@@ -77,10 +77,25 @@ jobs:
 
           Nur an Administratoren über einen vertrauenswürdigen privaten Weg weitergeben."
           if gh release view "$tag" >/dev/null 2>&1; then
+            # Ein wiederholter Lauf für dieselbe (noch nicht angehobene)
+            # Version muss sowohl die Assets als auch die Release-Notes
+            # ersetzen -- sonst zeigt die Release-Seite weiterhin die
+            # Prüfsumme des vorherigen Builds, während bereits ein neues ZIP
+            # dort liegt (Codex-Review auf PR #37). Außerdem muss der
+            # existierende Tag tatsächlich auf diesen Commit zeigen, sonst
+            # würden neue Binärdateien unter einem Tag landen, der auf einen
+            # anderen Quellstand verweist.
+            existing_commit="$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)"
+            if [ "$existing_commit" != "$GITHUB_SHA" ]; then
+              echo "::error::Release $tag zeigt bereits auf Commit $existing_commit, nicht auf $GITHUB_SHA -- Abbruch, um keine inkonsistenten Assets zu veröffentlichen." >&2
+              exit 1
+            fi
             gh release upload "$tag" build/distribution/SFTDriveAdmin-*.zip build/distribution/SFTDriveAdmin-*.dmg build/distribution/SHA256.txt --clobber
+            gh release edit "$tag" --notes "$notes"
           else
             gh release create "$tag" build/distribution/SFTDriveAdmin-*.zip build/distribution/SFTDriveAdmin-*.dmg build/distribution/SHA256.txt \
               --title "SFT Drive Admin ${version} (macOS)" \
               --notes "$notes" \
+              --target "$GITHUB_SHA" \
               --prerelease
           fi
