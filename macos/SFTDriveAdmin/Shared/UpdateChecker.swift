@@ -77,7 +77,11 @@ import Foundation
     /// viele Stellen). Reicht für dieses Projekt vollständig aus -- keine
     /// Abhängigkeit für vollständige SemVer-Prerelease-/Build-Metadaten
     /// nötig, solange Release-Tags schlicht `macos-admin-vX.Y.Z` lauten.
-    static func isNewer(_ remote: String, than current: String) -> Bool {
+    /// `nonisolated`, weil die Funktion rein ist (kein Zugriff auf
+    /// Instanz-/Actor-State) und synchron aus Tests aufrufbar bleiben soll --
+    /// ohne das wäre sie wegen der @MainActor-Klasse implizit isoliert und
+    /// nur noch asynchron aufrufbar (Swift 6 Strict Concurrency).
+    nonisolated static func isNewer(_ remote: String, than current: String) -> Bool {
         func parts(_ s: String) -> [Int] { s.split(separator: ".").map { Int($0.filter(\.isNumber)) ?? 0 } }
         let remoteParts = parts(remote)
         let currentParts = parts(current)
