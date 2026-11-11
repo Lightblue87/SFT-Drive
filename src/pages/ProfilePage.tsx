@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useIsAdmin } from '@/features/auth/useIsAdmin'
@@ -40,6 +40,10 @@ export function ProfilePage() {
 
   // Optionale Telefonnummer für Freunde (§41).
   const [phone, setPhone] = useState<{ phone_number: string; share_with_friends: boolean } | null>(null)
+  // 'ready' erst nach erfolgreicher Abfrage: nur dann ist bekannt, ob bereits
+  // eine Zeile (samt evtl. pausierter Freigabe) existiert. Vorher darf nicht
+  // gespeichert werden, sonst könnte eine pausierte Freigabe überschrieben werden.
+  const [phoneState, setPhoneState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [editingPhone, setEditingPhone] = useState(false)
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneSaving, setPhoneSaving] = useState(false)
@@ -78,17 +82,31 @@ export function ProfilePage() {
       .maybeSingle()
       .then(({ data }) => setDefaultVehicle(data as Vehicle | null))
 
-    supabase
+  }, [user])
+
+  const loadPhone = useCallback(async () => {
+    if (!user) return
+    setPhoneState('loading')
+    const { data, error } = await supabase
       .from('user_phone_numbers')
       .select('phone_number, share_with_friends')
       .eq('user_id', user.id)
       .maybeSingle()
-      .then(({ data }) => setPhone(data))
+    if (error) {
+      setPhoneState('error')
+      return
+    }
+    setPhone(data)
+    setPhoneState('ready')
   }, [user])
+
+  useEffect(() => {
+    loadPhone()
+  }, [loadPhone])
 
   async function handlePhoneSave(event: FormEvent) {
     event.preventDefault()
-    if (!user) return
+    if (!user || phoneState !== 'ready') return
     setPhoneError(null)
 
     const normalized = normalizePhoneNumber(phoneInput)
@@ -98,17 +116,30 @@ export function ProfilePage() {
     }
 
     setPhoneSaving(true)
-    const next = { phone_number: normalized, share_with_friends: phone?.share_with_friends ?? true }
-    const { error } = await supabase
-      .from('user_phone_numbers')
-      .upsert({ user_id: user.id, ...next, updated_at: new Date().toISOString() })
+    // Bestehende Zeile: nur die Nummer ändern, die Freigabe bleibt serverseitig
+    // unangetastet. Neue Zeile: reines Insert — existiert wider Erwarten doch
+    // schon eine, schlägt es fehl, statt deren Freigabe zu überschreiben.
+    const { data, error } = phone
+      ? await supabase
+          .from('user_phone_numbers')
+          .update({ phone_number: normalized, updated_at: new Date().toISOString() })
+          .eq('user_id', user.id)
+          .select('phone_number, share_with_friends')
+          .maybeSingle()
+      : await supabase
+          .from('user_phone_numbers')
+          .insert({ user_id: user.id, phone_number: normalized })
+          .select('phone_number, share_with_friends')
+          .maybeSingle()
     setPhoneSaving(false)
 
-    if (error) {
+    if (error || !data) {
       setPhoneError('Telefonnummer konnte nicht gespeichert werden.')
+      // Tatsächlichen Stand neu laden (z. B. Zeile existierte bereits).
+      loadPhone()
       return
     }
-    setPhone(next)
+    setPhone(data)
     setEditingPhone(false)
   }
 
@@ -300,12 +331,24 @@ export function ProfilePage() {
           <div className="min-w-0">
             <div className="text-sm font-medium">Telefonnummer</div>
             <div className="mt-1 text-xs leading-relaxed text-sft-gray">
-              {phone
+              {phoneState === 'loading'
+                ? 'Wird geladen…'
+                : phoneState === 'error'
+                  ? 'Telefonnummer konnte nicht geladen werden.'
+                  : phone
                 ? formatPhoneNumber(phone.phone_number)
                 : 'Optional — nur für deine Freunde sichtbar, z. B. um nach einer Ausfahrt in Kontakt zu bleiben.'}
             </div>
           </div>
-          {!editingPhone && (
+          {phoneState === 'error' && (
+            <button
+              onClick={loadPhone}
+              className="tap-scale flex-none rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium"
+            >
+              Erneut laden
+            </button>
+          )}
+          {phoneState === 'ready' && !editingPhone && (
             <button
               onClick={() => {
                 setPhoneInput(phone?.phone_number ?? '')

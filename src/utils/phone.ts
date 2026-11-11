@@ -13,14 +13,22 @@ const E164 = /^\+[1-9][0-9]{6,14}$/
  */
 export function normalizePhoneNumber(input: string): string | null {
   const trimmed = input.trim()
-  const digits = trimmed.replace(/\D/g, '')
+  const international = trimmed.startsWith('+') || trimmed.startsWith('00')
+  // Gängige Schreibweise "+49 (0)171 …": die eingeklammerte 0 ist die nur
+  // national gewählte Verkehrsausscheidungsziffer und gehört nicht in E.164.
+  const cleaned = international ? trimmed.replace(/\(\s*0\s*\)/, '') : trimmed
+  const digits = cleaned.replace(/\D/g, '')
   if (!digits) return null
 
   let normalized: string
-  if (trimmed.startsWith('+')) normalized = `+${digits}`
+  if (cleaned.startsWith('+')) normalized = `+${digits}`
   else if (digits.startsWith('00')) normalized = `+${digits.slice(2)}`
   else if (digits.startsWith('0')) normalized = `+49${digits.slice(1)}`
   else return null
+
+  // "+49 0171 …" ohne Klammern: deutsche Nummern beginnen nach der
+  // Landesvorwahl nie mit 0 — sonst würde eine falsche Nummer gespeichert.
+  if (normalized.startsWith('+490')) normalized = `+49${normalized.slice(4)}`
 
   return E164.test(normalized) ? normalized : null
 }
