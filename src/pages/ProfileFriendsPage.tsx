@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import { rpcErrorMessage } from '@/types/tour'
 import type { Friendship, UserSearchResult } from '@/types/friend'
+import { formatPhoneNumber, saveContact, telUrl, whatsappUrl } from '@/utils/phone'
 
 function initials(name: string): string {
   return name.replace('@', '').slice(0, 2).toUpperCase()
 }
+
+const contactAction =
+  'tap-scale flex-1 rounded-[10px] border border-white/12 bg-[#131316] px-1 py-2 text-center text-[11px] font-medium'
 
 const fieldInput =
   'w-full rounded-xl border border-white/12 bg-sft-card px-3.5 py-3.5 text-[15px] text-sft-white outline-none focus:border-sft-red/60'
@@ -28,6 +32,7 @@ export function ProfileFriendsPage() {
   const [searching, setSearching] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -111,6 +116,17 @@ export function ProfileFriendsPage() {
       return
     }
     load()
+  }
+
+  async function copyNumber(friendshipId: string, phoneNumber: string) {
+    setActionError(null)
+    try {
+      await navigator.clipboard.writeText(phoneNumber)
+      setCopiedId(friendshipId)
+      setTimeout(() => setCopiedId((id) => (id === friendshipId ? null : id)), 2000)
+    } catch {
+      setActionError('Nummer konnte nicht kopiert werden.')
+    }
   }
 
   if (loading) return <PageLoading />
@@ -234,36 +250,81 @@ export function ProfileFriendsPage() {
         <p className="px-[18px] text-sm text-sft-gray">Noch keine Freunde.</p>
       ) : (
         friends.map((f) => (
-          <div key={f.friendship_id} className="flex items-center gap-2.5 border-t border-white/7 px-[18px] py-3">
-            <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-white/7 font-mono text-xs font-bold text-[#c9c9ce]">
-              {initials(f.other_username)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">
-                {f.other_first_name && f.other_last_name
-                  ? `${f.other_first_name} ${f.other_last_name}`
-                  : f.other_username}
+          <div key={f.friendship_id} className="border-t border-white/7 px-[18px] py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-white/7 font-mono text-xs font-bold text-[#c9c9ce]">
+                {initials(f.other_username)}
               </div>
-              {f.other_first_name && (
-                <div className="mt-0.5 truncate font-mono text-[11px] text-sft-gray">
-                  {f.other_username}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">
+                  {f.other_first_name && f.other_last_name
+                    ? `${f.other_first_name} ${f.other_last_name}`
+                    : f.other_username}
                 </div>
-              )}
+                {f.other_first_name && (
+                  <div className="mt-0.5 truncate font-mono text-[11px] text-sft-gray">
+                    {f.other_username}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => endFriendship(f.friendship_id)}
+                disabled={pendingId === f.friendship_id}
+                className="flex-none font-mono text-[9px] tracking-[0.1em] text-sft-red disabled:opacity-60"
+              >
+                BEENDEN
+              </button>
             </div>
-            <button
-              onClick={() => endFriendship(f.friendship_id)}
-              disabled={pendingId === f.friendship_id}
-              className="flex-none font-mono text-[9px] tracking-[0.1em] text-sft-red disabled:opacity-60"
-            >
-              BEENDEN
-            </button>
+            {f.other_phone_number && (
+              <div className="mt-2.5 pl-[46px]">
+                <div className="font-mono text-[13px] text-[#c9c9ce]">
+                  {formatPhoneNumber(f.other_phone_number)}
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  <a href={telUrl(f.other_phone_number)} className={contactAction}>
+                    Anrufen
+                  </a>
+                  <a
+                    href={whatsappUrl(f.other_phone_number)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={contactAction}
+                  >
+                    WhatsApp
+                  </a>
+                  <button
+                    onClick={() => copyNumber(f.friendship_id, f.other_phone_number!)}
+                    className={contactAction}
+                  >
+                    {copiedId === f.friendship_id ? 'Kopiert' : 'Kopieren'}
+                  </button>
+                  <button
+                    onClick={() =>
+                      saveContact({
+                        firstName: f.other_first_name,
+                        lastName: f.other_last_name,
+                        username: f.other_username,
+                        phoneNumber: f.other_phone_number!,
+                      })
+                    }
+                    className={contactAction}
+                  >
+                    Kontakt
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))
       )}
 
       <div className="mx-3.5 mt-[18px] rounded-2xl border border-dashed border-white/14 px-[15px] py-[13px] text-xs leading-relaxed text-[#8e8e96]">
         Klarnamen werden erst nach bestätigter Freundschaft gegenseitig sichtbar. In der Teilnehmerliste
-        einer Tour siehst du bei Freunden dann zusätzlich zum Username den vollen Namen. Kennzeichen und
+        einer Tour siehst du bei Freunden dann zusätzlich zum Username den vollen Namen. Wer im{' '}
+        <Link to="/profile" className="underline">
+          Profil
+        </Link>{' '}
+        eine Telefonnummer hinterlegt, teilt sie ausschließlich mit seinen Freunden. Kennzeichen und
         Personenzahl bleiben immer privat.
       </div>
     </div>
