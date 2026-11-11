@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { PENDING_VEHICLE_STORAGE_KEY } from '@/features/auth/pendingVehicle'
+import { sanitizeReturnTo } from '@/utils/returnTo'
 
 const fieldLabel = 'font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim'
 const fieldInput =
@@ -21,7 +22,7 @@ const fieldInput =
 export function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const returnTo = searchParams.get('returnTo') ?? '/'
+  const returnTo = sanitizeReturnTo(searchParams.get('returnTo'))
 
   const [step, setStep] = useState(1)
 

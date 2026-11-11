@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { sanitizeReturnTo } from '@/utils/returnTo'
 
 const fieldLabel = 'font-mono text-[9px] font-medium tracking-[0.2em] text-sft-gray-dim'
 const fieldInput =
@@ -9,7 +10,7 @@ const fieldInput =
 export function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const returnTo = searchParams.get('returnTo') ?? '/'
+  const returnTo = sanitizeReturnTo(searchParams.get('returnTo'))
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

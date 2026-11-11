@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useNotifications } from '@/features/notifications/useNotifications'
 import { PageLoading } from '@/components/PageLoading'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
+import { BottomSheet } from '@/components/BottomSheet'
 import { RegionNotificationPreferences } from '@/features/notifications/RegionNotificationPreferences'
 import type { AppNotification } from '@/types/notification'
 
@@ -25,15 +26,31 @@ export function NotificationsPage() {
   const { notifications, loading, reload } = useNotifications()
   const navigate = useNavigate()
   const [showRegionSettings, setShowRegionSettings] = useState(false)
+  // Statt beim Antippen sofort zu target_path zu navigieren, wird die
+  // Mitteilung zunächst vollständig in einem Sheet angezeigt -- gerade bei
+  // längeren Texten soll man sie erst lesen können, bevor man (falls
+  // gewünscht) über den eigenen Button darin weiternavigiert.
+  const [openNotification, setOpenNotification] = useState<AppNotification | null>(null)
 
   async function open(notification: AppNotification) {
     if (!notification.read_at) {
       await supabase.rpc('mark_notification_read', { p_id: notification.id })
       reload()
     }
-    if (notification.target_path) {
-      navigate(notification.target_path)
+    setOpenNotification(notification)
+  }
+
+  function goToTarget() {
+    if (openNotification?.target_path) {
+      // { replace: true } ersetzt den von BottomSheet gepushten History-
+      // Eintrag direkt durch das Ziel, statt einen weiteren draufzulegen --
+      // sonst bleibt beim Schließen des (bereits unmounteten) Sheets dessen
+      // sftSheet-Eintrag als Karteileiche zwischen Ursprungsseite und Ziel
+      // stehen, und ein Zurück-Tap vom Ziel aus landet zunächst dort statt
+      // auf der Ursprungsseite (PR-Review).
+      navigate(openNotification.target_path, { replace: true })
     }
+    setOpenNotification(null)
   }
 
   async function remove(id: string) {
@@ -106,7 +123,9 @@ export function NotificationsPage() {
               />
               <div className="min-w-0 flex-1">
                 <div className="text-[14px] font-semibold leading-tight">{n.title}</div>
-                <div className="mt-1.5 text-pretty text-[13px] leading-relaxed text-sft-gray">{n.body}</div>
+                <div className="mt-1.5 line-clamp-2 text-pretty text-[13px] leading-relaxed text-sft-gray">
+                  {n.body}
+                </div>
                 <div className="mt-1.5 font-mono text-[10px] tracking-[0.1em] text-[#8a8a92]">
                   {formatNotificationTimestamp(n.created_at)}
                 </div>
@@ -114,6 +133,24 @@ export function NotificationsPage() {
             </button>
           </SwipeToDelete>
         ))
+      )}
+
+      {openNotification && (
+        <BottomSheet
+          title={openNotification.title}
+          subtitle={formatNotificationTimestamp(openNotification.created_at)}
+          onClose={() => setOpenNotification(null)}
+        >
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-sft-white">{openNotification.body}</p>
+          {openNotification.target_path && (
+            <button
+              onClick={goToTarget}
+              className="tap-scale mt-5 w-full rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-[15px] text-[15px] font-semibold text-white"
+            >
+              Öffnen
+            </button>
+          )}
+        </BottomSheet>
       )}
     </div>
   )

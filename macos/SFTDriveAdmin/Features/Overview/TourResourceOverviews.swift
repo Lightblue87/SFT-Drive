@@ -1,0 +1,341 @@
+import SwiftUI
+
+/// Tourübergreifende Kontrollansicht (§3 Redesign-Zielzustand): Teilnehmer-,
+/// Hotel- und Restaurantstatus über alle Touren hinweg. "Teilnahme & To-dos"
+/// ist bewusst kein eigener Tab mehr hier -- das ist exakt der bereits
+/// existierende, jetzt eigenständige "Dashboard"-Bereich; ihn hier zusätzlich
+/// einzubetten würde eine zweite DashboardModel-Instanz und damit doppelten
+/// Traffic erzeugen (§6/§24).
+struct GlobalPlanningView: View {
+    let services: AppServices
+    var body: some View {
+        TabView {
+            GlobalParticipantMatrixView(services: services).tabItem { Label("Teilnehmermatrix", systemImage: "tablecells") }
+            HotelsOverviewView(services: services).tabItem { Label("Übernachtungen", systemImage: "bed.double") }
+            RestaurantsOverviewView(services: services).tabItem { Label("Restaurants", systemImage: "fork.knife") }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Planung")
+    }
+}
+
+@MainActor final class GlobalMatrixModel: ScreenModel {
+    @Published var tours: [Tour] = []
+    @Published var rows: [DataRow] = []
+    @Published var query = ""
+    func load(_ services: AppServices) async { await perform { tours = try await services.tours.upcoming(); rows = try await services.planning.participantMatrix(tours.map(\.id)) } }
+}
+struct GlobalParticipantMatrixView: View {
+    let services: AppServices
+    @StateObject private var model = GlobalMatrixModel()
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                TextField("Teilnehmer, Fahrzeug oder Tour", text: $model.query).textFieldStyle(.roundedBorder)
+                Button("Aktualisieren") { Task { await model.load(services) } }.buttonStyle(SFTSecondaryButtonStyle())
+            }
+            ErrorBanner(message: model.error)
+            Table(model.rows.filter { row in model.query.isEmpty || "\(row.values.text("username")) \(row.values.text("vehicle")) \(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? "")".localizedCaseInsensitiveContains(model.query) }) {
+                TableColumn("Tour") { row in Text(model.tours.first { $0.id == row.values.text("tour_id") }?.title ?? row.values.text("tour_id")) }
+                TableColumn("Teilnehmer") { Text($0.values.text("username")) }
+                TableColumn("Fahrzeug") { Text($0.values.text("vehicle")) }
+                TableColumn("Status") { row in SFTStatusPill(text: Labels.status(row.values.text("status")), tone: .forStatus(row.values.text("status"))) }
+                TableColumn("Personen") { Text("\($0.values.integer("persons"))") }.width(65)
+                TableColumn("Hotel") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "accommodation", state: "confirmed") == 0 ? "Vollständig" : "\(openCount(row, key: "accommodation", state: "confirmed")) offen") : "–") }
+                TableColumn("Essen") { row in Text(row.values.text("status") == "confirmed" ? (openCount(row, key: "restaurants", state: "ordered") == 0 ? "Vollständig" : "\(openCount(row, key: "restaurants", state: "ordered")) offen") : "–") }
+                TableColumn("Check-in") { Text($0.values.text("status") == "confirmed" ? ($0.values.text("checked_in_at").isEmpty ? "Offen" : "Ja") : "–") }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SFT.canvas)
+            RefreshFooter(time: model.refreshedAt, busy: model.busy)
+        }
+        .padding()
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .task { await model.load(services) }
+    }
+    private func openCount(_ row: DataRow, key: String, state: String) -> Int { guard case .array(let values) = row.values[key] else { return 0 }; return values.filter { value in guard case .object(let item) = value else { return false }; return !item.boolean(state) }.count }
+}
+
+@MainActor final class TourResourceOverviewModel: ScreenModel {
+    @Published var tours: [Tour] = []
+    @Published var summaries: [String: PlanningSummary] = [:]
+    @Published var restaurantStops: [String: [DataRow]] = [:]
+    @Published var selection: String?
+    let toursRepository: ToursRepository
+    let planning: PlanningRepository
+    let content: ContentRepository
+    init(toursRepository: ToursRepository, planning: PlanningRepository, content: ContentRepository) {
+        self.toursRepository = toursRepository; self.planning = planning; self.content = content
+    }
+    func load() async {
+        await perform {
+            tours = try await toursRepository.upcoming()
+            let tourIDs = tours.map(\.id)
+            async let summariesTask = planning.summaries(tourIDs)
+            // Restaurant membership must not depend on admin_get_tour_planning_summary's
+            // ordering_enabled filter (Codex review on #18) -- a newly created restaurant
+            // stop needs to show up here precisely so it can be configured.
+            async let stopsTask = content.restaurantStops(tourIDs)
+            let (rows, stops) = try await (summariesTask, stopsTask)
+            summaries = Dictionary(uniqueKeysWithValues: rows.compactMap { row in row.summary.map { (row.tour_id, $0) } })
+            restaurantStops = Dictionary(grouping: stops, by: { $0.values.text("tour_id") })
+            // A failed summary must not silently read as "no hotels/restaurants here"
+            // (PR #18 review) -- surface which tours it affects.
+            let failed = rows.filter { $0.summary == nil }
+            if !failed.isEmpty {
+                let titles = failed.compactMap { row in tours.first { $0.id == row.tour_id }?.title ?? row.tour_id }.joined(separator: ", ")
+                error = "Planungsdaten konnten nicht geladen werden für: \(titles)."
+            }
+        }
+    }
+}
+
+struct HotelsOverviewView: View {
+    let services: AppServices
+    @StateObject private var model: TourResourceOverviewModel
+    init(services: AppServices) {
+        self.services = services
+        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
+    }
+    private var multiDay: [Tour] { model.tours.filter { $0.end_date > $0.start_date } }
+    private var selected: Tour? { multiDay.first { $0.id == model.selection } }
+    var body: some View {
+        VStack(spacing: 0) {
+            ErrorBanner(message: model.error)
+            HSplitView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Hotels").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                        Spacer()
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
+                    }.padding()
+                    if multiDay.isEmpty && !model.busy {
+                        ContentUnavailableView("Keine Mehrtagestouren", systemImage: "bed.double", description: Text("Übernachtungen gelten nur für Touren mit mehreren Tagen."))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(multiDay, selection: $model.selection) { tour in
+                            let summary = model.summaries[tour.id]
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                                if let summary {
+                                    if let complete = summary.all_nights_confirmed {
+                                        SFTStatusPill(
+                                            text: "\(complete) / \(summary.confirmed_vehicles) Nächte vollständig",
+                                            tone: complete == summary.confirmed_vehicles && summary.confirmed_vehicles > 0 ? .confirmed : .open
+                                        )
+                                    }
+                                    ForEach(summary.nights) { night in
+                                        Text("\(night.night_date): \(night.confirmed) / \(summary.confirmed_vehicles) bestätigt").font(SFT.ui(11)).foregroundStyle(SFT.inkTertiary)
+                                    }
+                                }
+                            }.tag(tour.id).padding(.vertical, 6)
+                        }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
+                    }
+                }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                if let selected {
+                    ScrollView { AccommodationView(services: services, tour: selected).padding() }
+                        .id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else { ContentUnavailableView("Tour auswählen", systemImage: "bed.double").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
+            }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Hotels")
+        .task { await model.load() }
+    }
+}
+
+/// Tourübergreifender Einstieg in die bereits bestehende, echte KI-Import-Funktion
+/// (ExtractionReviewView, bisher nur über Tourenverwaltung → Tour → "KI-Assistenz"
+/// erreichbar) -- gleiches Tour-Wähler-Muster wie Hotels/Restaurant, damit "Import"
+/// auch als eigener Sidebar-Bereich eine konkrete Tour braucht, bevor ein
+/// Hotelvorschlag bzw. Restaurant-Stopp daraus abgeleitet werden kann.
+struct ImportOverviewView: View {
+    let services: AppServices
+    @StateObject private var model: TourResourceOverviewModel
+    init(services: AppServices) {
+        self.services = services
+        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
+    }
+    private var selected: Tour? { model.tours.first { $0.id == model.selection } }
+    var body: some View {
+        VStack(spacing: 0) {
+            ErrorBanner(message: model.error)
+            HSplitView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Import").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                        Spacer()
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
+                    }.padding()
+                    if model.tours.isEmpty && !model.busy {
+                        ContentUnavailableView("Keine Touren", systemImage: "tray.and.arrow.down", description: Text("Es gibt aktuell keine anstehende Tour, für die Angebote importiert werden könnten."))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(model.tours, selection: $model.selection) { tour in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text("\(tour.start_date) – \(tour.end_date) · \(tour.region)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                            }.tag(tour.id).padding(.vertical, 6)
+                        }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
+                    }
+                }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                if let selected {
+                    ScrollView { ExtractionReviewView(services: services, tour: selected).padding() }
+                        .id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else { ContentUnavailableView("Tour auswählen", systemImage: "tray.and.arrow.down").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
+            }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Import")
+        .task { await model.load() }
+    }
+}
+
+struct RestaurantsOverviewView: View {
+    let services: AppServices
+    @StateObject private var model: TourResourceOverviewModel
+    @State private var openStop: DataRow?
+    @State private var creating = false
+    @State private var deleting: DataRow?
+    init(services: AppServices) {
+        self.services = services
+        _model = StateObject(wrappedValue: TourResourceOverviewModel(toursRepository: services.tours, planning: services.planning, content: services.content))
+    }
+    private var withRestaurants: [Tour] { model.tours.filter { !(model.restaurantStops[$0.id]?.isEmpty ?? true) } }
+    private var selected: Tour? { withRestaurants.first { $0.id == model.selection } }
+    var body: some View {
+        VStack(spacing: 0) {
+            ErrorBanner(message: model.error)
+            HSplitView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Restaurant").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+                        Spacer()
+                        Button("Neuer Restaurant-Stopp", systemImage: "plus") { creating = true }
+                            .buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy || model.tours.isEmpty)
+                        Button("Aktualisieren", systemImage: "arrow.clockwise") { Task { await model.load() } }
+                            .buttonStyle(SFTSecondaryButtonStyle()).disabled(model.busy)
+                    }.padding()
+                    if withRestaurants.isEmpty && !model.busy {
+                        ContentUnavailableView("Keine Restaurant-Stopps", systemImage: "fork.knife", description: Text("Über „Neuer Restaurant-Stopp“ oben oder je Tour unter Tourenverwaltung → Stopps anlegen."))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(withRestaurants, selection: $model.selection) { tour in
+                            let restaurants = model.summaries[tour.id]?.restaurants ?? []
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(tour.title).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                Text("\(tour.start_date) · \(tour.region)").font(SFT.mono(10)).foregroundStyle(SFT.inkTertiary)
+                                Text("\(restaurants.reduce(0) { $0 + $1.orders }) Bestellungen · \(restaurants.reduce(0) { $0 + $1.dishes }) Gerichte").font(SFT.ui(11)).foregroundStyle(SFT.inkSecondary)
+                            }.tag(tour.id).padding(.vertical, 6)
+                        }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
+                    }
+                }.frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                if let selected {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(selected.title).font(SFT.ui(18, .bold)).foregroundStyle(SFT.ink)
+                        Text("Restaurant-Stopps dieser Tour").font(SFT.ui(12)).foregroundStyle(SFT.inkTertiary)
+                        List(model.restaurantStops[selected.id] ?? []) { stop in
+                            let counts = model.summaries[selected.id]?.restaurants.first { $0.id == stop.id }
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(stop.values.text("title")).font(SFT.ui(13, .semibold)).foregroundStyle(SFT.ink)
+                                    if let counts {
+                                        SFTStatusPill(text: "\(counts.orders) Bestellungen · \(counts.dishes) Gerichte", tone: counts.orders > 0 ? .confirmed : .neutral)
+                                    } else {
+                                        SFTStatusPill(text: "Bestellung noch nicht aktiviert", tone: .inactive)
+                                    }
+                                }
+                                Spacer()
+                                Button("Öffnen") { openStop = stop }.buttonStyle(SFTSecondaryButtonStyle())
+                                Button("Löschen", role: .destructive) { deleting = stop }.buttonStyle(SFTDestructiveOutlineButtonStyle())
+                            }
+                        }
+                        .scrollContentBackground(.hidden)
+                        .background(SFT.canvas)
+                        Text("Neue Restaurant-Stopps: Tourenverwaltung → Tour → Stopps → Hinzufügen (Typ „Restaurant“), danach hier oder dort „Speisekarte & Bestellungen“ öffnen.")
+                            .font(SFT.ui(11)).foregroundStyle(SFT.inkTertiary)
+                    }.padding().id(selected.id).frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else { ContentUnavailableView("Tour auswählen", systemImage: "fork.knife").frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity) }
+            }
+        }
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .navigationTitle("Restaurant")
+        .task { await model.load() }
+        .sheet(item: $openStop) { stop in
+            if let tour = selected { RestaurantView(services: services, tour: tour, stop: stop) { openStop = nil; Task { await model.load() } } }
+        }
+        .confirmationDialog("Restaurant-Stopp endgültig löschen? Bereits eingereichte Bestellungen verhindern das Löschen -- diese müssten zuerst storniert werden.", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button("Löschen", role: .destructive) {
+                guard let stop = deleting, let tour = selected else { return }; deleting = nil
+                Task { await model.perform { try await services.content.remove(.stops, id: stop.id, parentID: tour.id, expected: stop.values) }; await model.load() }
+            }
+        }
+        .sheet(isPresented: $creating) {
+            NewRestaurantStopSheet(services: services, tours: model.tours) { newTourID in
+                creating = false
+                if let newTourID { model.selection = newTourID; Task { await model.load() } }
+            }
+        }
+    }
+}
+
+/// Erlaubt das Anlegen eines neuen Restaurant-Stopps direkt aus der
+/// tourübergreifenden Restaurant-Übersicht heraus (statt nur über
+/// Tourenverwaltung → Tour → Stopps), inklusive Auswahl der Zieltour --
+/// erzeugt lediglich den Stopp (Typ "restaurant"); Bestellfenster und
+/// Speisekarte werden wie bisher danach über "Öffnen" gepflegt.
+@MainActor final class NewRestaurantStopModel: ScreenModel {
+    @Published var tourID = ""
+    @Published var title = ""
+}
+struct NewRestaurantStopSheet: View {
+    let services: AppServices
+    let tours: [Tour]
+    let close: (String?) -> Void
+    @StateObject private var model = NewRestaurantStopModel()
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Neuer Restaurant-Stopp").font(SFT.ui(16, .bold)).foregroundStyle(SFT.ink)
+            ErrorBanner(message: model.error)
+            Form {
+                Picker("Tour", selection: $model.tourID) {
+                    Text("Auswählen").tag("")
+                    ForEach(tours) { Text("\($0.title) · \($0.start_date)").tag($0.id) }
+                }
+                TextField("Bezeichnung", text: $model.title)
+            }.formStyle(.grouped)
+            HStack {
+                Button("Abbrechen") { close(nil) }.buttonStyle(SFTSecondaryButtonStyle())
+                Spacer()
+                Button("Anlegen") {
+                    Task { await model.perform {
+                        let name = model.title.trimmingCharacters(in: .whitespaces)
+                        guard !model.tourID.isEmpty, !name.isEmpty else { throw AppError("Bitte Tour und Bezeichnung wählen.") }
+                        let id = UUID().uuidString.lowercased()
+                        let payload: Payload = ["title": .string(name), "type": .string("restaurant"), "sort_order": .number(0)]
+                        try await services.content.save(.stops, id: id, parentID: model.tourID, expected: nil, values: payload)
+                        close(model.tourID)
+                    } }
+                }.buttonStyle(SFTPrimaryButtonStyle()).disabled(model.busy)
+            }
+        }
+        .padding()
+        .background(SFT.canvas)
+        .foregroundStyle(SFT.ink)
+        .frame(width: 420, height: 240)
+    }
+}

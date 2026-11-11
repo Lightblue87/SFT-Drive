@@ -193,6 +193,12 @@ export function AdminToursPage() {
                     </span>
                   )}
                   <Link
+                    to={`/admin/notifications?tour=${tour.id}`}
+                    className="tap-scale col-span-2 bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-[#c9c9ce]"
+                  >
+                    Nachrichten
+                  </Link>
+                  <Link
                     to={`/admin/tours/new?duplicate=${tour.id}`}
                     className="tap-scale col-span-2 bg-sft-card px-2 py-2.5 text-center text-[11px] font-medium text-[#c9c9ce]"
                   >

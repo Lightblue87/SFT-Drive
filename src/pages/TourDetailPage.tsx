@@ -18,7 +18,9 @@ import { MealOrderForm } from '@/features/tours/MealOrderForm'
 import { CheckInButton } from '@/features/tours/CheckInButton'
 import { TourInterestButton } from '@/features/tours/TourInterestButton'
 import { AccommodationSection } from '@/features/tours/AccommodationSection'
+import { ConfirmedVehiclesList } from '@/features/tours/ConfirmedVehiclesList'
 import { YouTubeVideo } from '@/features/tours/YouTubeVideo'
+import { shareOrCopyText } from '@/utils/share'
 import { useEffect, useState } from 'react'
 
 const STATUS_MESSAGE: Record<string, string> = {
@@ -47,6 +49,7 @@ export function TourDetailPage() {
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null)
   const [regSheetOpen, setRegSheetOpen] = useState(false)
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
 
   useEffect(() => {
     if (data?.ownRegistration?.status !== 'waitlisted') {
@@ -122,6 +125,16 @@ export function TourDetailPage() {
     reload()
   }
 
+  async function handleShare() {
+    setShareStatus(null)
+    const url = `${window.location.origin}/tours/${tour.slug}`
+    const text = `${tour.region} · ${formatDateRange(tour.start_date, tour.end_date)}`
+    const result = await shareOrCopyText(tour.title, text, url)
+    setShareStatus(
+      result === 'copied' ? 'Link kopiert.' : result === 'failed' ? 'Teilen nicht möglich.' : null,
+    )
+  }
+
   return (
     <div className="pb-8">
       <div className="relative h-[220px] bg-[repeating-linear-gradient(115deg,#1e1e23_0_10px,#15151a_10px_20px)]">
@@ -129,6 +142,23 @@ export function TourDetailPage() {
           <img src={tour.cover_image_url} alt="" className="h-full w-full object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/10 to-sft-black" />
+        <button
+          type="button"
+          onClick={handleShare}
+          aria-label="Tour teilen"
+          className="tap-scale absolute right-3.5 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur"
+          style={{ top: 'calc(0.875rem + env(safe-area-inset-top))' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 16V4m0 0 4 4m-4-4-4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"
+              stroke="#fff"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
         <div className="absolute inset-x-0 bottom-0 px-[18px] pb-3.5">
           <div className="mb-2.5 flex flex-wrap gap-1.5">
             <span
@@ -159,6 +189,7 @@ export function TourDetailPage() {
       </div>
 
       <div className="mx-3.5">
+        {shareStatus && <p className="mt-3 text-center text-xs text-sft-gray">{shareStatus}</p>}
         <div className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/9 bg-white/6">
           <div className="bg-sft-card px-3.5 py-3">
             <div className={factLabel}>DATUM</div>
@@ -396,45 +427,7 @@ export function TourDetailPage() {
               </div>
             )}
 
-            {confirmedVehicles.length > 0 && (
-              <div className={card}>
-                <div className="flex items-baseline justify-between px-4 pb-2.5 pt-3.5">
-                  <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
-                    BESTÄTIGTE FAHRZEUGE
-                  </div>
-                  <div className="font-mono text-[11px] text-sft-gray">
-                    {stats ? `${stats.confirmed_vehicles}/${stats.max_vehicles}` : confirmedVehicles.length}
-                  </div>
-                </div>
-                {confirmedVehicles.map((v) => (
-                  <div
-                    key={v.registration_id}
-                    className={`flex items-center gap-2.5 border-t border-white/6 px-4 py-2.5 ${
-                      v.is_self ? 'bg-sft-red/7' : ''
-                    }`}
-                  >
-                    <div
-                      className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg font-mono text-[11px] font-bold ${
-                        v.is_self ? 'bg-sft-red text-white' : 'bg-white/6 text-[#c9c9ce]'
-                      }`}
-                    >
-                      {initials(v.first_name ?? v.username)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-[13px] font-semibold ${v.is_self ? 'text-white' : 'text-sft-white'}`}>
-                        {v.first_name && v.last_name
-                          ? `${v.first_name} ${v.last_name} · ${v.username}`
-                          : v.username}
-                      </div>
-                      <div className="mt-0.5 font-mono text-[11px] text-sft-gray">
-                        {v.vehicle_manufacturer} {v.vehicle_model} · {v.vehicle_power_ps} PS
-                      </div>
-                    </div>
-                    {v.is_self && <span className="font-mono text-[9px] tracking-[0.12em] text-sft-red">DU</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+            <ConfirmedVehiclesList vehicles={confirmedVehicles} maxVehicles={stats?.max_vehicles} />
 
             <div className="mt-3.5 rounded-2xl border border-white/9 bg-sft-card px-4 py-3.5">
               <div className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">DEINE ANMELDUNG</div>
@@ -551,8 +544,4 @@ function requirements(tour: {
   if (tour.min_driver_age != null) list.push(`Mindestalter ${tour.min_driver_age} Jahre`)
   if (tour.license_plate_required) list.push('Kennzeichen bei Anmeldung erforderlich')
   return list
-}
-
-function initials(name: string): string {
-  return name.replace('@', '').slice(0, 2).toUpperCase()
 }

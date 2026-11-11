@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.env
+Config.local.*
+*.p12
+*.key
+*.mobileprovision
+node_modules/

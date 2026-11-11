@@ -7,6 +7,7 @@ import type { RegistrationStatus, RegistrationResult } from '@/types/tour'
 import { rpcErrorMessage } from '@/types/tour'
 import { downloadCsv } from '@/utils/csv'
 import { shareOrCopyText } from '@/utils/share'
+import { formatDateRange } from '@/utils/date'
 
 interface AdminRegistrationRow {
   id: string
@@ -79,6 +80,7 @@ function PassengerCountEditor({
 export function AdminTourRegistrationsPage() {
   const { id } = useParams<{ id: string }>()
   const [tourTitle, setTourTitle] = useState('')
+  const [tourDates, setTourDates] = useState<{ start_date: string; end_date: string } | null>(null)
   const [rows, setRows] = useState<AdminRegistrationRow[]>([])
   const [interestCount, setInterestCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -93,10 +95,13 @@ export function AdminTourRegistrationsPage() {
 
     supabase
       .from('tours')
-      .select('title')
+      .select('title, start_date, end_date')
       .eq('id', id)
       .single()
-      .then(({ data }) => setTourTitle(data?.title ?? ''))
+      .then(({ data }) => {
+        setTourTitle(data?.title ?? '')
+        setTourDates(data ? { start_date: data.start_date, end_date: data.end_date } : null)
+      })
 
     supabase
       .from('tour_interests')
@@ -198,16 +203,21 @@ export function AdminTourRegistrationsPage() {
     setShareStatus(null)
     const lines = [
       `${tourTitle} — Teilnehmer`,
+      ...(tourDates ? [formatDateRange(tourDates.start_date, tourDates.end_date)] : []),
       `${confirmedCount} bestätigte Fahrzeuge · ${confirmedPersons} Personen`,
       '',
-      ...confirmedRows.map(
-        (r) =>
-          `${r.profiles?.username ?? '—'} · ${r.vehicle_manufacturer} ${r.vehicle_model} · ${r.vehicle_power_ps} PS · ${1 + r.passenger_count} Person${1 + r.passenger_count === 1 ? '' : 'en'}`,
-      ),
+      ...confirmedRows.map((r) => {
+        const name = includePrivateExportFields
+          ? [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(' ')
+          : ''
+        const who = name ? `${name} · ${r.profiles?.username ?? '—'}` : (r.profiles?.username ?? '—')
+        const plate = includePrivateExportFields && r.license_plate ? ` · ${r.license_plate}` : ''
+        return `${who} · ${r.vehicle_manufacturer} ${r.vehicle_model} · ${r.vehicle_power_ps} PS · ${1 + r.passenger_count} Person${1 + r.passenger_count === 1 ? '' : 'en'}${plate}`
+      }),
     ]
     const result = await shareOrCopyText(`${tourTitle} — Teilnehmer`, lines.join('\n'))
     setShareStatus(
-      result === 'shared'
+      result === 'shared' || result === 'cancelled'
         ? null
         : result === 'copied'
           ? 'In die Zwischenablage kopiert.'
@@ -466,7 +476,7 @@ export function AdminTourRegistrationsPage() {
       </div>
 
       <Link
-        to="/admin/notifications"
+        to={`/admin/notifications?tour=${id}`}
         className="tap-scale mt-3.5 block rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] py-3.5 text-center text-[15px] font-semibold text-white"
       >
         Mitteilung an diese Tour

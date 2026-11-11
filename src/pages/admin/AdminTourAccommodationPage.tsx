@@ -6,6 +6,7 @@ import { formatDate } from '@/utils/date'
 import { rpcErrorMessage } from '@/types/tour'
 import type { RegistrationResult } from '@/types/tour'
 import type { HotelSuggestion, AccommodationConfirmation } from '@/types/accommodation'
+import { hotelSuggestionCoversNight } from '@/types/accommodation'
 
 /** `start_date`/`end_date` sind reine DATE-Werte — nie über UTC-Mitternacht
  * parsen, sonst verschiebt sich der Tag (§19). */
@@ -35,7 +36,24 @@ function formatNight(night: string): string {
   return `${pad(from.getDate())}.${pad(from.getMonth() + 1)}.–${pad(to.getDate())}.${pad(to.getMonth() + 1)}.${to.getFullYear()}`
 }
 
-const EMPTY_SUGGESTION_FORM = { name: '', url: '', address: '', note: '', booking_deadline: '' }
+const EMPTY_SUGGESTION_FORM = {
+  name: '',
+  url: '',
+  address: '',
+  note: '',
+  booking_deadline: '',
+  night_date_end: '',
+  price_per_night: '',
+  price_unit: '€ / Zimmer / Nacht',
+  hotel_url: '',
+  booking_url: '',
+  room_type: '',
+  breakfast_details: '',
+  parking_details: '',
+  cancellation_terms: '',
+  allotment_details: '',
+  contact: '',
+}
 
 type OverallStatus = 'all' | 'partial' | 'none'
 
@@ -63,9 +81,7 @@ export function AdminTourAccommodationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reminderStatus, setReminderStatus] = useState<Record<string, string>>({})
-  const [newForm, setNewForm] = useState<
-    Record<string, { name: string; url: string; address: string; note: string; booking_deadline: string }>
-  >({})
+  const [newForm, setNewForm] = useState<Record<string, typeof EMPTY_SUGGESTION_FORM>>({})
   // Auswahl der Empfänger je Nacht (§36.10: einzelne oder mehrere offene
   // Teilnehmer gezielt ansprechen). Leere Auswahl = alle offenen.
   const [selectedRecipients, setSelectedRecipients] = useState<Record<string, string[]>>({})
@@ -126,9 +142,38 @@ export function AdminTourAccommodationPage() {
     const form = newForm[night] ?? EMPTY_SUGGESTION_FORM
     if (!form.name.trim()) return
 
+    // "Übernachtung bis": deckt der Vorschlag mehrere aufeinander folgende
+    // Nächte ab, muss der Eintrag nicht für jede Nacht wiederholt werden
+    // (§36.2/§36.5). Muss eine gültige, spätere oder gleiche Tournacht sein.
+    const endNight = form.night_date_end || null
+    if (endNight && (endNight < night || !nights.includes(endNight))) {
+      setError('„Übernachtung bis" muss eine gültige, nicht vor der Startnacht liegende Tournacht sein.')
+      return
+    }
+    const price = form.price_per_night.trim() ? Number(form.price_per_night) : null
+    if (price !== null && (!Number.isFinite(price) || price < 0)) {
+      setError('Preis pro Nacht muss eine positive Zahl sein.')
+      return
+    }
+
     const { error: dbError } = await supabase.from('tour_hotel_suggestions').insert({
       tour_id: id,
       night_date: night,
+      night_date_end: endNight,
+      price_per_night: price,
+      // Ein Preis ohne Einheit würde unten mit einer erfundenen Einheit ("€ / Nacht")
+      // angezeigt, die tatsächlich auch pro Zimmer oder pro Person gemeint sein könnte
+      // (Codex-Review auf #19) -- Einheit deshalb explizit auf denselben Standard setzen,
+      // statt sie leer zu lassen, sobald ein Preis angegeben ist.
+      price_unit: price == null ? null : (form.price_unit.trim() || '€ / Nacht'),
+      hotel_url: form.hotel_url.trim() || null,
+      booking_url: form.booking_url.trim() || null,
+      room_type: form.room_type.trim() || null,
+      breakfast_details: form.breakfast_details.trim() || null,
+      parking_details: form.parking_details.trim() || null,
+      cancellation_terms: form.cancellation_terms.trim() || null,
+      allotment_details: form.allotment_details.trim() || null,
+      contact: form.contact.trim() || null,
       name: form.name.trim(),
       url: form.url.trim() || null,
       address: form.address.trim() || null,
@@ -235,7 +280,7 @@ export function AdminTourAccommodationPage() {
         </div>
       )}
       {nights.map((night, i) => {
-        const nightSuggestions = suggestions.filter((s) => s.night_date === night)
+        const nightSuggestions = suggestions.filter((s) => hotelSuggestionCoversNight(s, night))
         const confirmedUserIds = new Set(
           confirmations.filter((c) => c.night_date === night).map((c) => c.user_id),
         )
@@ -266,6 +311,14 @@ export function AdminTourAccommodationPage() {
                     ENTFERNEN
                   </button>
                 </div>
+                {s.night_date_end && s.night_date_end !== s.night_date && (
+                  <div className="mt-0.5 font-mono text-[10px] text-sft-gray-dim">
+                    GILT {formatDate(s.night_date).toUpperCase()} BIS {formatDate(s.night_date_end).toUpperCase()}
+                  </div>
+                )}
+                {s.price_per_night != null && (
+                  <div className="mt-0.5 text-[13px] text-sft-gray">{s.price_per_night.toFixed(2)} {s.price_unit || '€ / Nacht'}</div>
+                )}
                 {(s.address || s.note) && (
                   <div className="mt-1 font-mono text-[11px] leading-relaxed text-sft-gray">
                     {s.address}
@@ -273,11 +326,9 @@ export function AdminTourAccommodationPage() {
                     {s.note}
                   </div>
                 )}
-                {s.url && (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-block text-[13px] font-medium text-sft-red underline">
-                    Hotel öffnen
-                  </a>
-                )}
+                {[s.room_type && `Zimmer: ${s.room_type}`, s.breakfast_details && `Frühstück: ${s.breakfast_details}`, s.parking_details && `Parkplatz: ${s.parking_details}`, s.cancellation_terms && `Stornierung: ${s.cancellation_terms}`, s.allotment_details && `Kontingent: ${s.allotment_details}`, s.contact && `Kontakt: ${s.contact}`].filter((line): line is string => Boolean(line)).map((line) => <div key={line} className="mt-0.5 text-[12px] text-sft-gray">{line}</div>)}
+                {(s.hotel_url || s.url) && <a href={s.hotel_url || s.url || undefined} target="_blank" rel="noopener noreferrer" className="mr-3 mt-1 inline-block text-xs text-sft-red underline">Hotel öffnen</a>}
+                {s.booking_url && <a href={s.booking_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-sft-red underline">Buchungsseite</a>}
                 {s.booking_deadline && (
                   <div className="mt-1 font-mono text-[10px] text-sft-gray-dim">
                     BUCHUNG BIS {formatDate(s.booking_deadline).toUpperCase()}
@@ -294,12 +345,6 @@ export function AdminTourAccommodationPage() {
                 className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
               />
               <input
-                value={form.url}
-                onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, url: e.target.value } }))}
-                placeholder="Link (optional)"
-                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 font-mono text-[13px] text-sft-white"
-              />
-              <input
                 value={form.address}
                 onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, address: e.target.value } }))}
                 placeholder="Adresse (optional)"
@@ -311,6 +356,36 @@ export function AdminTourAccommodationPage() {
                 placeholder="Hinweis (optional)"
                 className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
               />
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={form.price_per_night}
+                onChange={(e) =>
+                  setNewForm((prev) => ({ ...prev, [night]: { ...form, price_per_night: e.target.value } }))
+                }
+                placeholder="Preis pro Nacht in € (optional)"
+                className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white"
+              />
+              <input value={form.price_unit} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, price_unit: e.target.value } }))} placeholder="Preiseinheit, z. B. € / Zimmer / Nacht" className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />
+              <input value={form.hotel_url} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, hotel_url: e.target.value } }))} placeholder="Hotel-URL" className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />
+              <input value={form.booking_url} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, booking_url: e.target.value } }))} placeholder="Direkter Buchungslink" className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />
+              {(['room_type','breakfast_details','parking_details','cancellation_terms','allotment_details','contact'] as const).map((key) => <input key={key} value={form[key]} onChange={(e) => setNewForm((prev) => ({ ...prev, [night]: { ...form, [key]: e.target.value } }))} placeholder={({room_type:'Zimmerart',breakfast_details:'Frühstück',parking_details:'Parkplatz',cancellation_terms:'Stornierungsbedingungen',allotment_details:'Kontingent',contact:'Kontakt'} as const)[key]} className="rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 text-[15px] text-sft-white" />)}
+              <label className="block min-w-0">
+                <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
+                  ÜBERNACHTUNG BIS (OPTIONAL, FÜR MEHRERE NÄCHTE)
+                </span>
+                <input
+                  type="date"
+                  min={night}
+                  value={form.night_date_end}
+                  onChange={(e) =>
+                    setNewForm((prev) => ({ ...prev, [night]: { ...form, night_date_end: e.target.value } }))
+                  }
+                  className="mt-2 w-full min-w-0 rounded-xl border border-white/12 bg-[#0f0f12] px-3.5 py-3 font-mono text-[15px] text-sft-white"
+                />
+              </label>
               <label className="block min-w-0">
                 <span className="font-mono text-[9px] tracking-[0.2em] text-sft-gray-dim">
                   BUCHUNGSDEADLINE / ABRUFKONTINGENT (OPTIONAL)
@@ -344,6 +419,8 @@ export function AdminTourAccommodationPage() {
                   {shownParticipants.map((p) => {
                     const done = confirmedUserIds.has(p.userId)
                     const selected = selection.includes(p.userId)
+                    const confirmation = confirmations.find((c) => c.night_date === night && c.user_id === p.userId)
+                    const chosenHotel = nightSuggestions.find((s) => s.id === confirmation?.hotel_suggestion_id)
                     return (
                       <button
                         key={p.userId}
@@ -378,7 +455,7 @@ export function AdminTourAccommodationPage() {
                         </span>
                         <span className="min-w-0 flex-1 truncate font-medium">{p.username}</span>
                         <span className={done ? 'flex-none text-[#5fd3b4]' : 'flex-none text-sft-gray'}>
-                          {done ? '✓ bestätigt' : 'Übernachtung noch nicht bestätigt'}
+                          {done ? `✓ ${chosenHotel?.name ?? (confirmation?.accommodation_choice === 'other_accommodation' ? 'andere Unterkunft' : 'bestätigt')}` : 'Übernachtung noch nicht bestätigt'}
                         </span>
                       </button>
                     )

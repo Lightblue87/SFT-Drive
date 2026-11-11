@@ -202,6 +202,16 @@ Stattdessen:
 
 Free-Tier-Limits können sich ändern. Harte Limits deshalb nicht als dauerhafte technische Annahme behandeln.
 
+Für Dashboard-, Planungs- und Matrixansichten gilt zusätzlich verbindlich:
+
+- keine N+1-Abfragen pro Tour, Teilnehmer, Nacht, Restaurant oder Menüpunkt erzeugen,
+- zusammengehörige Kennzahlen und Statusdaten bevorzugt mit gebündelten,
+  zweckgebundenen Read-RPCs oder vergleichbaren Übersichtsabfragen laden,
+- Drilldowns dürfen Details nachladen, sollen aber nicht bereits für eine
+  globale Übersicht jede Detailzeile einzeln abrufen,
+- neue RPCs bleiben schmal, serverseitig autorisiert und dürfen keine
+  generischen Admin-Bypässe schaffen.
+
 ---
 
 ## 5. Benutzerrollen
@@ -1010,6 +1020,27 @@ die Migration selbst fehlerfrei durchläuft (siehe `admin_list_users()`,
 `RETURNS TABLE` auf Spalten aus `auth.users` oder anderen nicht selbst definierten
 Tabellen deshalb vorsorglich explizit casten.
 
+**Praxis-Falle: `service_role` braucht trotz `BYPASSRLS` explizite Tabellen-GRANTs.**
+Edge Functions, die sich mit dem Service-Role-Key authentifizieren und dann per
+`adminClient.from(...)` (PostgREST) **direkt** auf eine Tabelle zugreifen — statt über
+eine `SECURITY DEFINER`-RPC, deren Owner-Rechte davon unberührt bleiben —, brauchen dafür
+ein eigenes `grant ... to service_role`. Die `BYPASSRLS`-Eigenschaft der Rolle umgeht nur
+RLS-*Policies*, nicht die normale PostgreSQL-Tabellenberechtigungsprüfung; ohne GRANT
+schlägt der Zugriff mit `permission denied for table ...` fehl. Alle bisherigen
+Migrationen haben konsequent nur `authenticated`/`anon` berechtigt, nie `service_role` —
+dadurch lieferten die direkten Abfragen in `send-push` (`tour_registrations`,
+`push_subscriptions`), `restaurant-order-notifications`
+(`restaurant_stop_settings`, `tour_registrations`, `meal_orders`, `notifications`,
+`tour_stops`, `tours`) und `tour-interest-notifications` (`tour_interests`, `tours`,
+`notifications`, `push_subscriptions`) seit jeher leere Ergebnisse bzw. Fehler, ohne dass
+dies auffiel: §27.16 verlangt ausdrücklich, dass ein Push-Fehlschlag die App-Nutzung
+nicht blockiert, wodurch der Fehler bis zur gezielten Fehlersuche am 23.09.2026 nirgends
+sichtbar gemeldet wurde (behoben in Migration
+`20260923000000_grant_service_role_notification_tables.sql`, mit den jeweils
+tatsächlich genutzten Operationen je Tabelle statt eines generischen Vollzugriffs, §8.12).
+Bei jeder neuen Edge Function mit direktem `service_role`-Tabellenzugriff dieses GRANT von
+Anfang an in derselben Migration mit ergänzen.
+
 ---
 
 ## 9. Tour-Anmeldung, Freigabe, Warteliste und Kapazität
@@ -1399,6 +1430,33 @@ Paarbeziehung, RPCs `search_users_by_username`, `send_friend_request`,
 `respond_friend_request`, `cancel_friend_request`, `end_friendship`,
 `list_my_friendships`, sowie die Phase-12-Ausnahme in
 `get_confirmed_tour_vehicles` (§8.9) und die UI unter `/profile/friends`.
+
+#### Umsetzung: Freundschaftsanfrage direkt aus der Teilnehmerliste einer Tour
+
+Bislang war eine Freundschaftsanfrage nur über die separate Username-Suche
+unter `/profile/friends` möglich, obwohl bestätigte Teilnehmer sich in der
+Fahrzeugliste einer gemeinsamen Tour (§11, `get_confirmed_tour_vehicles`)
+bereits gegenseitig sehen. Migration
+`20260923050000_confirmed_vehicles_friend_request.sql` ergänzt die Funktion
+um `user_id` (Ziel für `send_friend_request`) und `friendship_status`
+(`self` | `none` | `pending_outgoing` | `pending_incoming` | `accepted`).
+Beides sind keine zusätzlichen privaten Daten im Sinne von §8.9 — `user_id`
+ist eine bloße Kennung, `friendship_status` war für den Caller über
+`list_my_friendships()` ohnehin bereits einsehbar.
+
+UI (`src/features/tours/ConfirmedVehiclesList.tsx`, in `TourDetailPage`
+eingebunden): ein Tap auf eine fremde Zeile öffnet zunächst nur ein
+Bottom-Sheet mit den Details; erst ein zweiter, expliziter Tap auf
+„Freundschaftsanfrage senden" darin löst `send_friend_request` aus. Dieser
+zweistufige Ablauf ist bewusst gewählt, damit beim Scrollen der Liste nie
+versehentlich eine Anfrage ausgelöst wird — ein Scroll-Swipe unterbricht den
+nativen Touch/Click-Zyklus bereits vor dem ersten Tap, und selbst ein
+unbeabsichtigtes Antippen einer Zeile sendet noch nichts, sondern öffnet nur
+das informative Sheet (identisches Muster wie bei Mitteilungen,
+`NotificationsPage`). Die eigene Zeile bleibt nicht antippbar. Bei bereits
+bestehender Beziehung zeigt das Sheet den passenden Status (bereits
+befreundet, Anfrage bereits gesendet, eingehende Anfrage mit Link zu
+„Freunde") statt eines erneuten Sendebuttons.
 
 ---
 
@@ -1987,6 +2045,23 @@ Standardansicht:
 
 Vergangene Touren werden nicht zwischen zukünftigen Touren dargestellt.
 
+#### Umsetzung: Kalender filtert die Liste nicht nach Monat
+
+„Geplante Ausfahrten" zeigt immer den vollständigen Bestand aller noch
+bevorstehenden (bzw. laufenden) Touren, unabhängig davon, welcher Monat
+gerade im Kalender angezeigt wird. Der Kalender dient dabei nur als:
+
+- **Filter** über die explizite Tagesauswahl (§13.8) — tippt der User einen
+  Tag an, wird die Liste tatsächlich eingeschränkt,
+- **Übersicht**, in welchem Monat wie viele Touren liegen (Badge neben dem
+  Monatsnamen sowie die Eventpunkte/Zeitraum-Balken im Kalender selbst).
+
+Reines Blättern zu einem anderen Monat blendet also keine Touren aus der
+Liste aus. Andernfalls verschwinden Ausfahrten aus späteren Monaten für den
+Betrachter vollständig aus dem Blick, sobald er zufällig einen anderen Monat
+im Kalender offen hat — das widerspricht dem primären UX-Ziel aus §13 ("App
+öffnen → nächste Ausfahrten sofort erkennen").
+
 ---
 
 ### 13.17 Vergangene Touren
@@ -2070,6 +2145,17 @@ Laufende Mehrtagestour:
 17.–21.06.2027
 Läuft aktuell · Tag 3 von 5
 ```
+
+#### Umsetzung: Tour per Link teilen
+
+Oben rechts auf dem Tourbild sitzt ein Teilen-Button, für jeden Betrachter sichtbar
+(Visitor eingeschlossen — es wird ausschließlich die bereits öffentliche
+`/tours/:slug`-URL geteilt, keine geschützten Inhalte). Verwendet die bestehende
+`shareOrCopyText()`-Infrastruktur aus §35.1 (Web Share API mit
+Zwischenablage-Fallback), dort um einen optionalen `url`-Parameter ergänzt, damit
+Zielapps (z. B. Nachrichten) den Link als eigenes, anklickbares Feld statt nur als
+Teil des Texts erhalten. Keine zweite Share-Implementierung (§23 „keine parallele
+zweite Architektur für dieselbe Funktion").
 
 ---
 
@@ -3684,7 +3770,11 @@ rekonstruiert werden muss.
   zusätzlich drei projektweite Edge-Function-Secrets gesetzt:
   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Der öffentliche
   VAPID-Schlüssel liegt zusätzlich als `VITE_VAPID_PUBLIC_KEY` in den
-  Cloudflare-Pages-Umgebungsvariablen (Production und Preview). Für
+  Cloudflare-Pages-Umgebungsvariablen (Production und Preview). `send-push`
+  kann zusätzlich optional per `BREVO_API_KEY`/`BREVO_SENDER_EMAIL`/
+  `BREVO_SENDER_NAME` E-Mails versenden (§27.22) — ohne diese drei Secrets
+  bleibt der E-Mail-Kanal deaktiviert, der bestehende Push-Versand ist davon
+  unabhängig. Für
   `restaurant-order-notifications` und `tour-interest-notifications` ist
   zusätzlich je ein per `pg_cron`/`pg_net`/Supabase Vault eingerichteter
   15-Minuten-Job nötig (Setup-Anleitung als Kommentar am Anfang der jeweiligen
@@ -3794,8 +3884,11 @@ updated_at TIMESTAMPTZ
 
 Regeln:
 
+- Reservierungsdaten gehören zum Restaurant-Stopp und umfassen mindestens
+  Restaurantname, Adresse/Ort, Reservierungsdatum und -zeit, geplante
+  Personenzahl, optionalen Kontakt, Reservierungsstatus/-hinweis und Notiz,
 - Essensbestellung pro Restaurant-Stopp aktivierbar
-- Bestellfrist durch Admin
+- Bestellfenster mit Start und Frist durch Admin
 - nach Fristende keine Änderung mehr durch normale User
 - Admin darf weiterhin organisatorische Korrekturen vornehmen
 
@@ -3828,7 +3921,12 @@ Regeln:
 - Preis optional
 - Beschreibung optional
 - Allergene optional
+- vegetarisch und vegan als getrennte, sichtbare Merkmale pflegen
 - Menüpositionen sortierbar
+- Gerichte in der Admin-App mit möglichst wenig Eingabeschritten anlegen und
+  duplizieren können; beim Duplizieren entsteht eine eigenständige
+  Menüposition, deren Name, Preis und Merkmale vor dem Speichern angepasst
+  werden können
 - bereits bestellte Menüpositionen nicht unkontrolliert löschen
 
 ### 27.5 Bestellung pro Touranmeldung
@@ -3937,6 +4035,14 @@ Danach:
 ```text
 Bestellung geschlossen
 ```
+
+Die PWA zeigt die Speisekarte als schnell bedienbare Auswahlliste. Pro
+Gericht sind Name, optional Beschreibung, Allergene, vegetarisch/vegan und
+der Einzelpreis sichtbar. Der Teilnehmer ändert die Menge direkt in der
+Liste; pro Position werden Menge und Zwischensumme, für die gesamte
+Bestellung die Gesamtsumme angezeigt. Fehlt ein Preis, darf keine erfundene
+Summe erscheinen; die UI kennzeichnet stattdessen, dass die Gesamtsumme nur
+die bepreisten Positionen umfasst oder nicht vollständig berechenbar ist.
 
 ### 27.9 Admin-Auswertung
 
@@ -4353,6 +4459,276 @@ Mitteilungen
 Nutzer
 Impressum & Datenschutz
 ```
+
+#### Umsetzung: Aktive, einmalige Aufforderung zur Push-Aktivierung
+
+Push-Mitteilungen waren zuvor ausschließlich über einen manuellen Schalter in
+`/profile` aktivierbar — ohne dass die App je aktiv darauf hinwies. Nutzer, die
+diesen Schalter nicht von sich aus finden, verpassten dadurch Tourabsagen,
+Treffpunktänderungen und Restaurant-Bestellfenster vollständig.
+
+`PushPermissionBanner` (`src/components/PushPermissionBanner.tsx`, in
+`AppLayout` eingebunden) zeigt deshalb für jeden eingeloggten User mit noch
+unentschiedener Browser-Berechtigung (`Notification.permission === 'default'`)
+einmalig einen dismissbaren Hinweis mit Nutzenerklärung und den Optionen
+„Aktivieren“ / „Später“. Ein Klick auf „Später“ merkt sich die Ablehnung
+per `localStorage` (geräte-/browserbezogen, analog zur Push-Subscription
+selbst) und blendet den Hinweis auf diesem Gerät dauerhaft aus — Push bleibt
+danach weiterhin jederzeit manuell im Profil aktivierbar. Derselbe Mechanismus
+deckt sowohl frisch registrierte als auch bereits bestehende Bestandsuser ab,
+ohne zwei getrennte Codepfade zu benötigen. §27.16 bleibt dabei vollständig
+gewahrt: keine Abfrage beim reinen App-Start (der Banner erscheint nur nach
+Login, wenn `user` vorhanden ist), Nutzen wird vor der eigentlichen
+Browser-Berechtigungsabfrage erklärt, Ablehnung bleibt jederzeit möglich, App
+bleibt vollständig nutzbar.
+
+### 27.22 E-Mail als zusätzlicher Benachrichtigungskanal
+
+Push erreicht nur Teilnehmer, die eine Subscription aktiviert haben (§27.16
+verbietet ausdrücklich eine erzwungene Aktivierung). Damit wichtige
+Tour-Mitteilungen auch Teilnehmer ohne Push erreichen, kann `send-push`
+optional zusätzlich eine E-Mail verschicken — über
+[Brevo](https://www.brevo.com), da dessen kostenloses Free-Tier eine
+Single-Sender-Verifizierung der bereits für die Registrierungsbestätigung
+genutzten Absenderadresse ohne eigene Domain erlaubt (im Unterschied zu
+Anbietern wie Resend, die eine per DNS verifizierte eigene Domain
+voraussetzen).
+
+Umsetzung:
+
+- Neue, rein optionale Secrets in `send-push`: `BREVO_API_KEY`,
+  `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` (Default `"SFT Drive"`, falls
+  nicht gesetzt). Fehlen sie, bleibt der E-Mail-Kanal deaktiviert
+  (fail-soft, analog zu fehlenden VAPID-Secrets) — der bestehende
+  Push-Versand ist davon vollständig unabhängig.
+- E-Mail-Versand ist bewusst nur für die `tour_id`-Fälle vorgesehen (die
+  Empfängerliste ergibt sich dort ohnehin bereits serverseitig aus
+  `tour_registrations`, unabhängig von einer vorhandenen Push-Subscription),
+  **nicht** für `broadcast`: dort gibt es aktuell keine von
+  Push-Subscriptions unabhängige Empfängerliste, und "an wirklich alle
+  Nutzer" wäre eine gesonderte, hier bewusst nicht getroffene Entscheidung.
+- E-Mail-Adressen werden serverseitig über die Supabase-Auth-Admin-API
+  (`adminClient.auth.admin.getUserById()`) aufgelöst — dieselbe
+  `service_role`-Berechtigungsgrenze wie beim bestehenden Push-Versand,
+  niemals eine vom Client mitgelieferte Adresse.
+- Der E-Mail-Inhalt wird sowohl als `htmlContent` als auch als `textContent`
+  (Fallback für Clients ohne HTML-Rendering) an Brevo übergeben. Das
+  HTML-Layout (`renderEmailHtml()`) ist bewusst optisch an das bestehende
+  Supabase-Auth-Template "Confirm signup" angelehnt (dunkler Header mit
+  SFT-DRIVE-Branding, weiße Karte, roter CTA-Button zur App) — dieselbe
+  Farb-/Formsprache wie in der App und der Registrierungsbestätigung (§17),
+  nachträglich ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. Titel und
+  Text stammen aus freier Admin-Eingabe und werden vor dem Einsetzen ins
+  HTML per `escapeHtml()` escaped (gespeicherte XSS-Lücke im Mailclient des
+  Empfängers sonst möglich). Der Header bindet zusätzlich das Tacho-Icon als
+  `<img>` ein, geladen von der bereits öffentlich erreichbaren PWA-Adresse
+  `https://sft-drive.pages.dev/icons/icon-192.png` — kein separater Upload
+  oder Storage-Bucket nötig, da dieses Icon ohnehin schon Teil des
+  ausgelieferten Production-Builds ist.
+- Fehlerhafte Einzelversände (`email_failed`) blockieren weder den
+  Push-Versand noch die übrigen E-Mails — dieselbe Fail-soft-Logik wie beim
+  bestehenden Push-Versand pro Subscription.
+- Die Antwort von `send-push` enthält zusätzlich zu `sent`/`failed` (Push)
+  nun `email_sent`/`email_failed`.
+
+Noch offen, bevor der Kanal produktiv nutzbar ist: Brevo-Account anlegen,
+Single-Sender-Verifizierung der Gmail-Absenderadresse durchführen, die drei
+Secrets im Supabase Dashboard hinterlegen. Ohne diesen manuellen Schritt
+bleibt der Code inaktiv (§26 "das Repository allein sagt nichts darüber
+aus, was tatsächlich läuft").
+
+**Praxis-Fallen bei der Brevo-Einrichtung (23.09.2026):**
+
+- `BREVO_API_KEY` muss der **REST-API-Key** aus Brevo → SMTP & API →
+  „API Keys" sein, nicht der separate SMTP-Schlüssel aus dem Bereich
+  „SMTP" (beide sehen ähnlich aus, sind aber unterschiedliche Secrets).
+  Ein SMTP-Schlüssel führt zu `401 { "code": "unauthorized", "message":
+  "Key not found" }`, weil unser Code die v3-REST-API
+  (`api.brevo.com/v3/smtp/email`) mit dem Header `api-key` aufruft.
+- Brevo beschränkt API-Zugriffe standardmäßig auf bekannte IP-Adressen.
+  Da Supabase Edge Functions ohne feste ausgehende IP laufen, muss unter
+  https://app.brevo.com/security/authorised_ips die IP-Beschränkung für
+  API-Keys deaktiviert werden — sonst `401 { "code": "unauthorized",
+  "message": "We have detected you are using an unrecognised IP
+  address ..." }`.
+- `send-push` loggt einen fehlgeschlagenen E-Mail-Versand (Status + Body
+  der Brevo-Antwort, ohne Empfängeradresse) über `console.log`, sichtbar
+  im Supabase-Dashboard unter Edge Functions → `send-push` → **Logs**
+  (nicht „Invocations" — dort stehen nur Status/Dauer, keine
+  `console.log`-Ausgaben). Bei „X gesendet, Y fehlgeschlagen" ohne
+  erkennbaren Grund ist das der erste Anlaufpunkt.
+
+### 27.23 E-Mail-Design-Richtlinie (verbindliche Vorlage für künftige HTML-Mails)
+
+SFT Drive verschickt HTML-E-Mails aus zwei unabhängigen Quellen, die beide
+dasselbe visuelle Design verwenden (nachträglich vereinheitlicht am
+23.09.2026, auf ausdrücklichen Wunsch):
+
+```text
+Supabase Auth Email Templates (Dashboard → Authentication → Email Templates)
+  → Confirm signup, Reset password, Magic Link, Change Email usw.
+  → liegen außerhalb des Repositories, rein manuell im Supabase Dashboard
+    gepflegt — kein Code, keine Versionierung, kein automatischer Abgleich.
+
+send-push (supabase/functions/send-push/index.ts, renderEmailHtml())
+  → Admin-Mitteilungen (§27.10-§27.22) über Brevo.
+```
+
+Beide folgen demselben Aufbau, damit E-Mails erkennbar zu SFT Drive gehören
+(konsistent mit dem App-Branding aus §17):
+
+```text
+┌─────────────────────────────┐
+│  dunkler Header (#0a0a0c)    │  ← abgerundete obere Ecken (16px)
+│  Logo (48×48, siehe unten)   │
+│  "SFT DRIVE" (weiß/rot)      │
+│  "Sportfahrer Treff" (grau)  │
+├─────────────────────────────┤
+│  weiße Karte (#ffffff)       │  ← abgerundete untere Ecken (16px)
+│  Überschrift (h1, #0a0a0c)   │
+│  Fließtext (#4a4a52)         │
+│  roter CTA-Button (#e10600)  │  ← abgerundet (14px), weißer Text
+│  Kleingedrucktes (#8a8a92)   │
+└─────────────────────────────┘
+```
+
+Verbindliche Eckwerte für jede neue Vorlage:
+
+- **Logo:** `<img src='https://sft-drive.pages.dev/icons/icon-192.png' width='48' height='48' alt='SFT Drive'>` —
+  lädt vom bereits öffentlich ausgelieferten PWA-Icon, kein separater Upload
+  oder Storage-Bucket nötig. Zentriert im Header, `border-radius:12px`.
+- **Farben:** Header-Hintergrund `#0a0a0c`, Karten-Hintergrund `#ffffff`,
+  Akzent-/Button-Farbe `#e10600` (SFT-Rot), Fließtext `#4a4a52`,
+  Kleingedrucktes/Dachmarke `#8a8a92` — dieselben Werte wie die
+  Tailwind-Klassen `sft-black`/`sft-red`/`sft-gray*` in der App, nicht
+  eigenständig neu gewählt.
+- **Schrift:** Systemschriftstapel
+  `-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif`
+  (kein Web-Font-Import in E-Mails — unzuverlässige Unterstützung in
+  Mailclients, zusätzliche externe Anfrage ohne echten Nutzen).
+- **Struktur:** `<table role='presentation'>`-Layout mit `max-width:480px`,
+  keine CSS-Klassen oder `<style>`-Blöcke (Mailclients filtern beides oft
+  heraus) — ausschließlich Inline-`style`-Attribute, wie im bestehenden
+  `renderEmailHtml()` bzw. dem Auth-Template vorgemacht.
+- **CTA-Button:** immer als verschachtelte `<table>` mit farbiger `<td>`
+  und `<a>` darin (robuster in Outlook als ein direkt gestyltes `<a>`).
+- **Freier Admin-/Nutzertext:** vor dem Einsetzen ins HTML immer escapen
+  (siehe `escapeHtml()` in `send-push`) — gilt für jede künftige Vorlage,
+  die nutzergenerierten oder admin-generierten Text enthält.
+
+Bei einer neuen Supabase-Auth-Vorlage (z. B. „Reset password") den
+Grundaufbau aus dem bestehenden „Confirm signup"-Template 1:1 übernehmen
+und nur Überschrift, Fließtext, Button-Beschriftung und Variable
+(`{{ .ConfirmationURL }}` bzw. die für den jeweiligen Vorlagentyp passende
+Supabase-Variable) austauschen. Bei einem neuen `send-push`-E-Mail-Inhalt
+`renderEmailHtml()` erweitern statt eine zweite, abweichende Funktion zu
+bauen (§23 „keine parallele zweite Architektur für dieselbe Funktion").
+
+### 27.24 Lesebestätigung für Admin-Mitteilungen
+
+Ergänzt am 23.09.2026 auf ausdrücklichen Wunsch. `notifications` legt bereits
+pro Empfänger eine eigene Zeile mit `read_at` an (§27.14) — die Rohdaten für
+eine Lesequote existierten also schon, es fehlte nur eine zuverlässige
+Gruppierung der Zeilen **eines** Admin-Versands (mehrere Mitteilungen an
+dieselbe Tour oder mehrere Broadcasts wären über `tour_id`/`title`/`body`/
+`created_at` nur heuristisch unterscheidbar gewesen).
+
+Migration `20260923020000_notification_read_receipts.sql`:
+
+- `notifications.batch_id uuid not null default gen_random_uuid()`. Der
+  Spaltendefault sorgt dafür, dass jede bereits bestehende automatische
+  Einzel-Mitteilung (Tourabsage, Regionsbenachrichtigung, Restaurant-/
+  Übernachtungserinnerung usw.) automatisch ihre eigene, isolierte
+  `batch_id` bekommt — an diesen Stellen war keine Änderung nötig.
+- `admin_send_tour_notification()` und `admin_send_broadcast_notification()`
+  erzeugen jetzt bewusst **eine** `batch_id` pro Aufruf und setzen sie für
+  alle Empfängerzeilen dieses einen Versands explizit gleich.
+- `admin_list_notification_batches(p_tour_id uuid default null)`: gebündelte
+  Übersicht bereits versendeter Admin-Mitteilungen (`type = 'ADMIN_MESSAGE'`)
+  je Ziel (Tour oder Broadcast bei `p_tour_id = null`) samt
+  `recipient_count`/`read_count` — eine aggregierende Abfrage statt einer
+  Einzelabfrage pro Versand (§4 „keine N+1-Abfragen").
+- `admin_get_notification_batch_recipients(p_batch_id uuid)`: Detailliste je
+  Versand, wer gelesen hat und wer nicht — nur `username` und `read_at`,
+  keine Klarnamen oder sonstigen privaten Profildaten (dieselbe
+  Datensparsamkeit wie in §8.9 für die Teilnehmer-Fahrzeugliste).
+
+UI in `/admin/notifications` (`AdminNotificationsPage`): unterhalb des
+Sende-Formulars ein „Verlauf"-Bereich mit den letzten Versänden an das
+aktuell gewählte Ziel (Tour bzw. Broadcast), je Zeile „X / Y gelesen". Tippen
+öffnet ein Sheet mit dem vollständigen Text sowie der Empfängerliste
+(gelesen mit Zeitpunkt, ungelesen hervorgehoben). Da jeder Versand seine
+eigene `batch_id` besitzt, bleiben mehrere Mitteilungen an dieselbe Tour
+sauber getrennt auswertbar, statt sich zu einer einzigen Gesamtquote zu
+vermischen.
+
+Zugang direkt aus der Tourenverwaltung: Jede Tourzeile in `/admin/tours`
+besitzt einen Button „Nachrichten“ neben „Teilnehmer“/„Stopps“ (analog zu
+„Tagesrouten verwalten“/„Hotels verwalten“, siehe §12 "Umsetzung: Archivierte
+Touren standardmäßig ausgeblendet"), der zu
+`/admin/notifications?tour=<id>` verlinkt. Keine eigene zweite Seite/Route
+nötig: `AdminNotificationsPage` unterstützt dieses `?tour=`-Preselect bereits
+(ursprünglich für den Link aus der Teilnehmerverwaltung gebaut) und zeigt für
+die vorausgewählte Tour direkt deren eigenen „Verlauf“ — Titel/Text erneut
+aufrufen und sehen, wer die jeweilige Mitteilung bekommen und gelesen hat,
+ohne die Tour manuell aus dem Dropdown wählen zu müssen.
+
+**Nachtrag/Bugfix 23.09.2026 (Migration
+`20260923030000_fix_notification_batch_backfill.sql`):** `batch_id` wurde
+oben mit `default gen_random_uuid()` ergänzt. `gen_random_uuid()` ist
+VOLATILE — Postgres nutzt den schnellen "Fast Default"-Pfad für
+`ADD COLUMN ... DEFAULT` nur bei konstanten Defaults; bei einem volatilen
+Default erfolgt stattdessen ein vollständiger Table-Rewrite, bei dem der
+Default für **jede** bestehende Zeile einzeln neu ausgewertet wird. Jede vor
+dieser Migration bereits versendete Admin-Mitteilung bekam dadurch pro
+Empfängerzeile eine eigene, unterschiedliche `batch_id` — im Verlauf
+erschien ein ursprünglich an mehrere Teilnehmer gesendeter Versand seither
+als mehrere einzelne „1/1 gelesen“-Einträge statt als ein gemeinsamer
+Eintrag. Die Korrekturmigration führt betroffene historische Zeilen anhand
+von `(type, tour_id, title, body, created_at)` wieder zusammen — alle
+Empfängerzeilen eines `admin_send_*`-Aufrufs teilen sich denselben
+Anweisungszeitpunkt (`created_at default now()`, innerhalb einer
+`INSERT…SELECT`-Anweisung konstant), das identifiziert zuverlässig, welche
+Zeilen ursprünglich zusammengehörten. Reine einmalige Datenkorrektur für
+Altbestand — künftige Versände sind davon nicht betroffen, da
+`admin_send_tour_notification()`/`admin_send_broadcast_notification()`
+bereits seit der ersten Migration `batch_id` explizit pro Aufruf setzen
+(nicht über den Spaltendefault).
+
+**Nachtrag/Review-Fixes 23.09.2026 (Migration
+`20260923040000_notification_receipt_review_fixes.sql`), aus einem
+automatisierten PR-Review zu PR #29:**
+
+- `delete_notification()` löschte die eigene Empfängerzeile bisher physisch
+  — dadurch verschwand ein Empfänger beim Swipe-to-delete rückwirkend sowohl
+  aus dem Nenner als auch aus der Lesequote in `admin_list_notification_batches()`,
+  was eine ungelesene, gelöschte Mitteilung fälschlich als vollständig
+  gelesen erscheinen ließ. Fix: neues `notifications.deleted_at`, `delete_notification()`
+  setzt nur noch dieses Feld statt zu löschen; `useNotifications.ts` filtert
+  zusätzlich `deleted_at is null`. Die Empfängerzeile bleibt damit für die
+  Admin-Statistik korrekt erhalten.
+- `notifications.tour_id` verwendet `on delete set null`; `admin_delete_tour()`
+  (§37.3) löscht eine Tour, behält aber bewusst deren Mitteilungen — eine
+  Admin-Mitteilung an eine später gelöschte Tour hatte danach `tour_id = null`,
+  exakt wie eine echte Broadcast-Mitteilung, und erschien deshalb fälschlich
+  unter „An alle Nutzer“. Fix: neues, beim Versand explizit gesetztes und von
+  einer späteren Tour-Löschung unberührtes `notifications.is_broadcast`;
+  `admin_list_notification_batches()` filtert jetzt darüber statt über
+  `tour_id is null`.
+- Race Condition in `AdminNotificationsPage`: schnelles Wechseln zwischen
+  Tour/Broadcast bzw. zwei Touren konnte dazu führen, dass eine langsamere,
+  aber später eintreffende Antwort für ein bereits verlassenes Ziel den
+  Verlauf des inzwischen aktuell gewählten Ziels überschreibt. Fix: einfache
+  Request-Zähler-Refs (`batchesRequestRef`/`recipientsRequestRef`), die
+  veraltete Antworten verwerfen.
+- `NotificationsPage.goToTarget()`: `navigate()` pushte bisher einen neuen
+  History-Eintrag, während `BottomSheet` seinen eigenen `sftSheet`-Eintrag
+  beim Unmount nur entfernt, wenn er noch der aktuell oberste ist — nach dem
+  Navigieren war das nicht mehr der Fall, wodurch der Sheet-Eintrag als
+  Karteileiche zwischen Ursprungsseite und Ziel stehen blieb und ein
+  Zurück-Tap vom Ziel aus zunächst dorthin statt zur Ursprungsseite führte.
+  Fix: `navigate(target_path, { replace: true })` ersetzt den Sheet-Eintrag
+  direkt, statt einen weiteren obendrauf zu legen.
 
 ---
 
@@ -5222,10 +5598,17 @@ Hotel-/Unterkunftsvorschläge hinterlegen.
 Ein Vorschlag kann mindestens enthalten:
 
 - Hotel-/Unterkunftsname
-- externe URL
 - optionale Adresse
+- optionale Hotel-URL
+- optionaler direkter Buchungslink
+- optionaler Preis und eine eindeutige Preiseinheit, z. B. pro Zimmer/Nacht
+  oder pro Person/Aufenthalt
+- optionale Zimmerart
+- optionale Angaben zu Frühstück und Parkplatz
+- optionale Stornierungsbedingungen
+- optionales Kontingent und eine Buchungsdeadline
+- optionale Kontaktdaten
 - optionale organisatorische Notiz
-- optionale Buchungsdeadline / Hinweis auf ein Abrufkontingent
 - Sortierreihenfolge
 
 Beispiel:
@@ -5256,8 +5639,10 @@ noopener/noreferrer beachten.
 
 ### 36.3 Teilnehmer muss kein vorgeschlagenes Hotel wählen
 
-Ein bestätigter Teilnehmer muss SFT Drive NICHT mitteilen, welches Hotel
-oder welche Unterkunft er tatsächlich gebucht hat.
+Ein bestätigter Teilnehmer bestätigt pro Nacht, dass seine Unterkunft
+organisiert ist. Dabei kann er optional einen der für diese Nacht
+vorgeschlagenen Anbieter auswählen oder bewusst `andere Unterkunft` angeben.
+Die Auswahl dient ausschließlich der organisatorischen Übersicht.
 
 Er darf:
 - einen vorgeschlagenen Anbieter verwenden,
@@ -5266,23 +5651,24 @@ Er darf:
 - privat übernachten,
 - eine andere geeignete Unterkunft organisieren.
 
-SFT Drive speichert ausschließlich den organisatorischen Status:
+SFT Drive darf damit speichern:
 
 ```text
 "Übernachtung gebucht / organisiert"
+optional: ausgewählter Hotelvorschlag oder "andere Unterkunft"
 ```
 
-Dadurch werden keine unnötigen privaten Reise- oder Buchungsdaten erfasst.
+Preise gehören zum jeweiligen administrativen Hotelvorschlag und dürfen
+gespeichert und dem Teilnehmer angezeigt werden. Sie sind keine Aussage über
+den vom Teilnehmer tatsächlich gezahlten Betrag.
 
 Insbesondere NICHT speichern:
 
 - Buchungsnummer
 - Reservierungsnummer
-- Preis
 - Zahlungsinformationen
 - Kreditkartendaten
 - Zimmernummer
-- Zimmerkategorie
 - Buchungsplattform
 - sonstige unnötige Buchungsdetails
 
@@ -5300,9 +5686,11 @@ Beispiel:
 
 Hotelvorschläge:
 Hotel Alpenblick
+[Preis und Preiseinheit, sofern hinterlegt]
 [ Hotel öffnen ]
 
-[ ✓ Übernachtung gebucht ]
+[ Hotel Alpenblick ausgewählt ] [ andere Unterkunft ]
+[ ✓ Unterkunft organisiert ]
 ```
 
 Nach Bestätigung:
@@ -5333,6 +5721,9 @@ Nacht organisiert ist."
 ```
 
 Sie ist kein Beleg dafür, dass tatsächlich eine Buchung besteht.
+Die optionale Auswahl eines Vorschlags ist ebenfalls keine Reservierung und
+darf jederzeit zusammen mit der Bestätigung korrigiert oder zurückgenommen
+werden.
 
 ### 36.5 Mögliches Datenmodell
 
@@ -5347,10 +5738,19 @@ id UUID PRIMARY KEY
 tour_id UUID REFERENCES tours(id)
 night_date DATE NOT NULL
 name TEXT NOT NULL
-url TEXT NULL
 address TEXT NULL
+hotel_url TEXT NULL
+booking_url TEXT NULL
+price NUMERIC NULL
+price_unit TEXT NULL
+room_type TEXT NULL
+breakfast_details TEXT NULL
+parking_details TEXT NULL
+cancellation_terms TEXT NULL
+allotment_details TEXT NULL
 note TEXT NULL
 booking_deadline DATE NULL
+contact TEXT NULL
 sort_order INTEGER DEFAULT 0
 created_at TIMESTAMPTZ
 updated_at TIMESTAMPTZ
@@ -5367,9 +5767,19 @@ id UUID PRIMARY KEY
 tour_id UUID REFERENCES tours(id)
 user_id UUID REFERENCES auth.users(id)
 night_date DATE NOT NULL
+accommodation_choice TEXT NOT NULL
+hotel_suggestion_id UUID NULL REFERENCES tour_hotel_suggestions(id)
 confirmed_at TIMESTAMPTZ NOT NULL
 UNIQUE(tour_id, user_id, night_date)
 ```
+
+`accommodation_choice` unterscheidet mindestens `suggested_hotel` und
+`other_accommodation`. Bei `suggested_hotel` muss der Vorschlag zur selben
+Tour und Nacht gehören; bei `other_accommodation` bleibt
+`hotel_suggestion_id` leer. Das bisherige Feld `url` bestehender
+Hotelvorschläge darf bei einer späteren Migration nicht rückwirkend entfernt
+werden, sondern wird kompatibel als Hotel-URL übernommen bzw. als Fallback
+weitergelesen.
 
 Bei Umsetzung das tatsächliche bestehende Schema zuerst prüfen und die
 bestehenden Namens-/FK-/Timestamp-Konventionen des Projekts übernehmen.
@@ -5406,6 +5816,8 @@ Serverseitig mindestens prüfen:
 7. Bei Bestätigung wird confirmed_at ausschließlich serverseitig gesetzt.
 8. Doppelbestätigungen dürfen nicht zu doppelten Datensätzen führen.
 9. Der User darf ausschließlich seinen eigenen Status ändern.
+10. Ein optional gewählter Hotelvorschlag gehört zur selben Tour und Nacht.
+11. Es werden keine Buchungsnummern oder Zahlungsdaten entgegengenommen.
 
 pending, waitlisted, rejected oder cancelled dürfen keine
 Übernachtungsbestätigung setzen.
@@ -5455,6 +5867,13 @@ S4shadow · Audi S4
 RS3Tom · Audi RS3
 TurboMike · Porsche 911
 ```
+
+Zusätzlich ist eine Hotelmatrix erforderlich: Zeilen sind die aktuell
+bestätigten Teilnehmer, Spalten die aus dem Tourzeitraum abgeleiteten
+Übernachtungsnächte. Jede Zelle zeigt `noch nicht bestätigt`, den optional
+gewählten Hotelvorschlag oder `andere Unterkunft`. Filter auf offene Zellen
+und Mehrfachauswahl für gezielte Erinnerungen müssen direkt aus dieser Matrix
+möglich sein.
 
 WICHTIGE BEZEICHNUNG:
 
@@ -5576,6 +5995,8 @@ mitgelöscht werden.
 
 - keine Zahlungsdaten speichern
 - keine Reservierungs-/Buchungsnummern speichern
+- Preise nur als Eigenschaft eines Hotelvorschlags speichern, niemals als
+  tatsächlichen Zahlungs- oder Buchungsdatensatz des Teilnehmers
 - keine unnötigen Reisedaten speichern
 - kein service_role im Client
 - keine zusätzlichen laufenden Kosten
@@ -5609,12 +6030,38 @@ Mindestens testen:
 - Datumsspannenänderungen führen nicht zu falschen offenen Nächten
 - Kennzeichen, Buchungsdaten oder sonstige nicht benötigte private Daten
   werden nicht an andere Teilnehmer ausgegeben
+- optional ausgewählter Vorschlag gehört zur richtigen Tour und Nacht
+- `andere Unterkunft` funktioniert ohne Freitext zu privaten Buchungsdetails
+- Preis und Preiseinheit eines Vorschlags werden gemeinsam validiert und
+  verständlich dargestellt
 
 ### 36.14 Umsetzungsstand
 
 **Umsetzungsstand:** implementiert (Migration `20260908120000_accommodation.sql`,
 lokal gegen eine echte, nicht-privilegierte Postgres-Rolle auf RLS und die
 serverseitigen Vorbedingungen aus §36.6 getestet, nicht nur als Superuser).
+
+Die in dieser Fassung ergänzten Detailfelder für Hotelvorschläge, die
+optionale Auswahl eines Vorschlags/`andere Unterkunft` und die Hotelmatrix
+sind verbindlicher Zielzustand, aber gegenüber dem nachfolgend beschriebenen
+produktiven Stand noch nicht vollständig umgesetzt. Sie sind additiv per
+neuer Migration und ohne Umschreiben der bestehenden Migration einzuführen.
+
+**Nachtrag 11.09.2026 (Migration `20260911050000_hotel_price_and_night_range.sql`,
+umgesetzt):** `tour_hotel_suggestions` um `night_date_end date null` und
+`price_per_night numeric(8,2) null` ergänzt. `night_date_end` (NULL =
+"deckt nur `night_date` ab") erlaubt, dass ein Hotelvorschlag mehrere
+aufeinanderfolgende Übernachtungen abdeckt, ohne den Eintrag mit allen
+Details für jede Nacht zu wiederholen — Teilnehmer- und Admin-UI (PWA
+`AccommodationSection`/`AdminTourAccommodationPage`, Mac-App
+`ResourceListView`/`admin_save_tour_resource`) ordnen einen Vorschlag über
+`night_date <= Nacht <= coalesce(night_date_end, night_date)` jeder
+betroffenen Nacht zu, statt exakter Gleichheit. `price_per_night` ist
+ausdrücklich die vom Hotel genannte organisatorische Preisangabe zum
+Vorschlag selbst (wie Name/Adresse/Buchungsfrist) — **keine** Abweichung von
+§36.3/§36.12 ("keine Zahlungsinformationen/Buchungsnummern"), die weiterhin
+für persönliche Teilnehmer-Zahlungsdaten gelten, welche SFT Drive nach wie
+vor nicht erfasst.
 
 - `tour_hotel_suggestions` (Hotelvorschläge, Participant-Inhalt, gleiches
   RLS-Muster wie `tour_stops`/`tour_stages`: bestätigte Teilnehmer und Admins
@@ -5853,9 +6300,12 @@ macOS-App mit nativen Fenstern, Tabellen, Sidebars, Tastaturbedienung,
 Drag & Drop, macOS Keychain usw.
 
 Die Desktop-App arbeitet mit dem gleichen Supabase-Projekt und damit
-demselben Datenbestand wie SFT Drive. Eine in der PWA vorgenommene
-Änderung ist anschließend unmittelbar auch in der Mac-App sichtbar und
-umgekehrt.
+demselben Datenbestand wie SFT Drive. Änderungen werden nach erfolgreichem
+Speichern und erneutem Laden im jeweils anderen Client sichtbar. Derselbe
+Datenbestand allein garantiert keine Echtzeit-Synchronisation: beim Öffnen,
+Reaktivieren und nach Schreibaktionen aktualisieren; optional gezielte
+Realtime-Abonnements für sichtbare Daten, mit erneutem Laden nach Reconnect.
+Letzten Aktualisierungszeitpunkt und veraltete Daten sichtbar kennzeichnen.
 
 Wichtig: „Direkter Datenbankzugriff" bedeutet dabei **nicht**, dass
 Datenbankpasswort oder Supabase-Service-Role-Key in die App eingebaut
@@ -5901,6 +6351,13 @@ Berechtigung für die Mac-App.
 Sessions und Zugangsdaten werden ausschließlich sicher im macOS Keychain
 gespeichert.
 
+Der eigene Login ist eine eigene Oberfläche, kein zweites Auth-System und
+keine eigene Registrierung. Supabase kann normale Nutzer authentifizieren;
+erst die anschließende Rollenprüfung verweigert ihnen die Mac-App. Jede
+administrative Datenoperation bleibt zusätzlich serverseitig geschützt
+(§40.6). Passwörter nicht speichern; nur Session-/Refresh-Tokens und explizit
+eingegebene Provider-Credentials im Keychain ablegen.
+
 ### 38.3 Desktop-optimiertes Design
 
 Das Design soll eindeutig zu SFT Drive gehören und sich an der
@@ -5938,6 +6395,23 @@ größere Planungsübersichten
 Damit können beispielsweise Teilnehmerliste und ausgewählter Teilnehmer
 gleichzeitig dargestellt werden.
 
+Für die erste Desktop-Version verbindlich:
+
+- Native Sidebar, Tabelle und Inspector mit sichtbarer Tour-/Auswahlzuordnung;
+  Filter, Sortierung und Spaltenbreiten dürfen lokal erhalten bleiben.
+- Tastaturbedienung, sichtbarer Fokus, VoiceOver-Beschriftungen, ausreichende
+  Kontraste und reduzierte Bewegung; Status nie ausschließlich farblich anzeigen.
+- Ungespeicherte Änderungen beim Fenster-/Tourwechsel behandeln; Speichern,
+  Verwerfen und Abbrechen klar unterscheiden. Offline zunächst keine
+  Schreibwarteschlange und keine automatische spätere Übernahme anbieten.
+- Mehrfachaktionen zeigen Zielmenge und Folgen vor Ausführung sowie Ergebnis
+  je Datensatz. Teilerfolge nicht als Gesamterfolg darstellen; Löschaktionen
+  gemäß §37.3 bestätigen, kein unbelegtes Rückgängig-Versprechen.
+- Laden, leere Liste, fehlende Berechtigung, Verbindungsfehler und veraltete
+  Daten getrennt anzeigen. Lange Abfragen/KI-Analysen müssen abbrechbar sein.
+- Export über nativen Speicherdialog/Teilen; Datensparsamkeit aus §35.1 und
+  Schutz vor CSV-Formelausführung auch im Mac-Export berücksichtigen.
+
 ### 38.4 Administrativer Gesamtumfang
 
 Langfristig soll die Mac-App alle administrativen Funktionen der PWA
@@ -5974,8 +6448,38 @@ dazugehörigen Planungs- und Organisationsinformationen.
 ### 38.5 Planungs- und Analysebereich
 
 Die Mac-App soll einen größeren Planungsschwerpunkt bekommen als die PWA.
+Ihr Dashboard ist verbindlich die globale To-do- und Planungszentrale, nicht
+nur eine Sammlung von Statistiken. Es beantwortet zuerst, wo aktuell
+Handlungsbedarf besteht.
 
-Beispielsweise kann eine Tour auf einem Bildschirm zusammengeführt werden:
+Mindestens als Problemkategorien darstellen:
+
+- offene Teilnahmebestätigungen,
+- Warteliste und frei werdende Kapazitäten,
+- fehlende Unterkunftsbestätigungen,
+- fehlende Essensvorbestellungen,
+- bevorstehende oder abgelaufene Anmelde-, Bestell-, Hotelkontingent- und
+  sonstige Planungsfristen,
+- offene beziehungsweise fehlende Check-ins,
+- weitere unvollständige Planungsdaten einer Tour.
+
+Jede Kategorie folgt demselben Drilldown:
+
+```text
+Problemkategorie
+  → betroffene Tour(en)
+    → konkreter Teilnehmer oder konkretes Planungsobjekt
+      → passende Aktion
+```
+
+Eine passende Aktion ist beispielsweise Teilnahme bestätigen/ablehnen,
+Warteliste bearbeiten, Teilnehmer oder Hotelnacht öffnen, Speisekarte
+vervollständigen, Frist korrigieren, Check-in administrativ setzen oder eine
+gezielte Erinnerung senden. Der Drilldown behält Kategorie und Filter bei,
+damit der Admin nach einer Aktion mit dem nächsten offenen Fall fortfahren
+kann.
+
+Zusätzlich kann eine Tour auf einem Bildschirm zusammengefasst werden:
 
 ```text
 20 Fahrzeuge bestätigt
@@ -5988,11 +6492,171 @@ Beispielsweise kann eine Tour auf einem Bildschirm zusammengeführt werden:
 2 offene Admin-Aufgaben
 ```
 
+Die Zahlen sind beispielhaft. Übernachtungsbestätigungen pro gültiger Nacht,
+eingereichte Essensbestellungen pro Restaurant-Stopp und Check-ins jeweils
+gegen aktuell bestätigte Registrierungen zählen; Fahrzeuge, Personen und
+Gerichte getrennt beschriften. Eine Gesamt-Hotelquote muss ausdrücklich
+„alle Nächte bestätigt“ bedeuten, nicht beliebige Einzelbestätigungen.
+„Offene Admin-Aufgaben“ zunächst nur aus definierten, nachvollziehbaren
+Planungshinweisen ableiten; es existiert dafür keine eigene Aufgabenverwaltung.
+
 Dazu kommen Filter und Auswertungen nach Fahrzeug, Personen, Status,
 Übernachtung, Restaurant, Check-in usw.
 
 Das soll dem Organisator ermöglichen, Unstimmigkeiten früh zu erkennen,
 ohne mehrere mobile Ansichten durchsuchen zu müssen.
+
+### 38.6 Tour als zentrales Arbeitsobjekt
+
+Die **Tour ist das zentrale Arbeitsobjekt der gesamten Mac-App**. Hotel,
+Restaurant, Teilnehmer, Tagesrouten, Kommunikation und Medien sind keine
+isolierten Hauptwelten, sondern Bestandteile der jeweiligen Tour.
+
+Beim Öffnen einer Tour erscheint ein zusammenhängender Tour-Workspace mit
+mindestens diesen Tabs beziehungsweise Abschnitten:
+
+```text
+Übersicht
+Tourdaten
+Tagesplanung
+Teilnehmer
+Restaurants
+Übernachtungen
+Kommunikation
+Medien
+```
+
+Der Workspace behält Tourkontext, Auswahl und offene Änderungen beim Wechsel
+zwischen den Abschnitten. Seine Übersicht zeigt Status, Vollständigkeit,
+Fristen und nächste Aktionen dieser einen Tour. Ein globaler Drilldown aus
+Dashboard oder Planung öffnet direkt den passenden Abschnitt und, soweit
+möglich, bereits den betroffenen Teilnehmer oder das betroffene Objekt.
+
+### 38.7 Geführter Flow für Anlegen und Duplizieren
+
+Neue Tour und `Tour duplizieren` verwenden denselben durchgängigen,
+schrittweisen Flow. Der Admin kann vor- und zurückgehen, zwischenspeichern
+und später am letzten vollständigen Schritt fortsetzen.
+
+Mindestens folgende Schritte sind vorzusehen:
+
+```text
+1. Grundlagen
+2. Zeitraum und Treffpunkt
+3. Teilnahmebedingungen und Anmeldung
+4. Tagesplanung
+5. Übernachtungen
+6. Restaurants und Essen
+7. Kommunikation und Medien
+8. Prüfen und Veröffentlichen
+```
+
+Beim Duplizieren werden wiederverwendbare Stammdaten und Inhalte als
+editierbare Ausgangsbasis angeboten, zum Beispiel Beschreibungen,
+Teilnahmebedingungen, Fahrzeuganforderungen, Links, Medien sowie optional
+die Struktur von Tagesplanung, Hotelvorschlägen und Restaurants/Speisekarten.
+Der Admin entscheidet vor der Übernahme, welche Bereiche wiederverwendet
+werden.
+
+Bewusst neu festzulegen und vor Veröffentlichung zu bestätigen sind immer:
+
+- Start- und Enddatum,
+- konkrete Uhrzeiten,
+- Anmelde-, Bestell-, Stornierungs- und Kontingentfristen,
+- Restaurant- und Hotelpreise samt Preiseinheit,
+- zeitabhängige Kapazitäten und Verfügbarkeiten.
+
+Diese Werte dürfen nicht unbemerkt aus einer alten Tour fortgeschrieben
+werden. Registrierungen, Bestellungen, Unterkunftsbestätigungen, Check-ins,
+Vormerkungen und bereits versendete Mitteilungen werden niemals kopiert.
+Diese Zielentscheidung erweitert den bestehenden PWA-Duplizierpfad aus
+§37.1 für die Mac-App; sie ändert dessen aktuellen Umsetzungsstand nicht.
+
+### 38.8 Tagesplanung als Rückgrat
+
+Bei Mehrtagestouren ist die Tagesplanung das zeitliche Rückgrat des
+Tour-Workspace. Die aus `start_date` bis `end_date` abgeleiteten Tage
+strukturieren Routenlink, Treff-/Startzeiten, Restaurants, Stopps,
+Übernachtungsübergänge, Kommunikation und offene Aufgaben.
+
+Die Tagesansicht baut kein eigenes Roadbook und dupliziert keine externe
+Detailroute (§34.4). Sie ordnet jedoch alle in SFT Drive verwalteten
+Planungsobjekte eindeutig einem Tag beziehungsweise einer Nacht zu und
+macht zeitliche Konflikte oder fehlende Angaben sichtbar. Eintägige Touren
+verwenden denselben mentalen Flow ohne unnötige Mehrtageskomplexität.
+
+### 38.9 Restaurantplanung im Tour-Workspace
+
+Restaurants werden innerhalb der Tour und, bei Mehrtagestouren, innerhalb
+des betreffenden Tages geplant. Die Maske führt Reservierungsdaten,
+Bestellfenster und Speisekarte zusammen. Es gelten die fachlichen Felder und
+Regeln aus §27.3/§27.4; insbesondere sind Preise, optionale Beschreibungen,
+Allergene sowie vegetarisch/vegan direkt erfassbar.
+
+Die Eingabe einer Speisekarte muss auf wiederholte Dateneingabe optimiert
+sein: Tastaturbedienung, schnelles Hinzufügen und Duplizieren eines Gerichts,
+ohne dafür den Restaurantkontext zu verlassen. Eine Vorschau zeigt, wie die
+PWA-Auswahl mit Mengen, Einzelpreisen, Positionssummen und Gesamtsumme für
+Teilnehmer erscheint.
+
+### 38.10 Übernachtungsplanung und Hotelmatrix
+
+Übernachtungen werden pro automatisch abgeleiteter Nacht organisiert. Pro
+Nacht sind mehrere Vorschläge mit den verbindlichen Feldern aus §36.2
+möglich: Hotelname, Adresse, Hotel-URL, Buchungslink, Preis, Preiseinheit,
+Zimmerart, Frühstück, Parkplatz, Stornierung, Kontingent/Deadline, Kontakt und
+Notiz.
+
+Bestätigte Teilnehmer melden in der PWA pro Nacht `Unterkunft organisiert`
+und können optional einen vorgeschlagenen Anbieter oder `andere Unterkunft`
+auswählen. SFT Drive speichert dabei weiterhin weder Buchungsnummern noch
+Zahlungsdaten (§36.3/§36.12).
+
+Die Mac-App zeigt die Hotelmatrix aus §36.8 pro Nacht und Teilnehmer,
+einschließlich aller offenen Teilnehmer. Von jeder offenen Zelle aus kann
+der Admin den Teilnehmer öffnen oder einzeln beziehungsweise gesammelt eine
+gezielte Erinnerung senden.
+
+### 38.11 Globale Planung und Teilnehmermatrix
+
+Neben Dashboard und Touren gibt es `Planung` als globale Cross-Tour-Ansicht
+für Teilnahme, Hotels, Restaurants, Fristen und Check-in. Hotels und
+Restaurants sind ausdrücklich keine isolierten globalen Hauptbereiche. Die
+globale Planung ist eine Kontrollansicht; Bearbeitung öffnet den passenden
+Tour-Workspace.
+
+Jede Tour besitzt außerdem eine gemeinsame Teilnehmermatrix. Eine Zeile
+entspricht einer Touranmeldung; die Spalten zeigen mindestens:
+
+```text
+Teilnahmestatus
+Username/Fahrzeug
+Personenzahl
+Unterkunft je Nacht
+Essen je Restaurant und Tag
+Check-in
+```
+
+Die Matrix unterstützt Suche, Sortierung und Filter auf offene oder
+widersprüchliche Zustände. Detaildaten werden im Seitenbereich geöffnet,
+ohne den Tabellenkontext zu verlieren. Sichtbarkeit und Datenschutz folgen
+weiterhin den bestehenden Admin-, Participant- und Profildatengrenzen.
+
+### 38.12 Datenzugriff und optionale KI im Arbeitsfluss
+
+Dashboard, globale Planung, Hotelmatrix und Teilnehmermatrix müssen über
+gebündelte Übersichtsabfragen/RPCs geladen werden. N+1-Requests pro Tour,
+Teilnehmer, Nacht, Restaurant oder Status sind wegen Performance und
+Free-Tier-Budget unzulässig (§4). Details dürfen bedarfsgerecht beim
+Drilldown nachgeladen werden.
+
+Der KI-Import aus §39 bleibt vollständig optional, ist aber direkt an diese
+Planungsworkflows anzubinden: Ein erkanntes Hotelangebot öffnet die passende
+Nacht/Hotelmaske, ein erkanntes Restaurantangebot den passenden
+Tag/Restaurantbereich. Nach Schema-Validierung zeigt die App eine Vorschau;
+erst die bewusste Bestätigung des Admins schreibt über den normalen,
+autorisierten Datenpfad. Ein separater KI-Datenbestand oder ein vom
+Tour-Workspace losgelöster Importbereich ist nicht vorgesehen.
 
 ---
 
@@ -6068,6 +6732,20 @@ Eine Restaurant-Mail könnte beispielsweise extrahieren:
 Die Anwendung übersetzt dieses definierte Schema anschließend in die
 entsprechenden SFT-Drive-Felder.
 
+Die Beispiele sind Extraktionsentwürfe, keine Datenbank-Payloads. Im Mailtext
+fehlt das Jahr: `2027` darf nur aus ausdrücklich gewähltem Tourkontext stammen
+und muss als Ergänzung markiert werden; sonst bleibt das Datum ungeklärt.
+Fehlende/mehrdeutige Werte als `null` bzw. offene Rückfrage behandeln, nicht
+erraten. Feldweise Quelltextbelege und abgeleitete Werte in der Vorschau zeigen.
+
+Für `hotel_offer` nur passende Felder aus §36.5 übernehmen: `hotel` → `name`,
+`notes` → geprüfte `note`, `booking_deadline` → Datum; gültige `night_date` aus
+bestätigtem An-/Abreisezeitraum und ausgewählter Tour ableiten. `rooms` bleibt
+eine Angebotsinformation im Entwurf und erzeugt weder Zimmerkontingent noch
+Teilnehmer-Buchungsdaten oder Übernachtungsbestätigungen (§36.3/§36.6).
+Restaurantdaten gezielt auf `tour_stops`, `restaurant_stop_settings` und
+`menu_items` abbilden; keine Tabellen/Felder für KI-Beispiele erfinden.
+
 ### 39.3 KI darf nicht ungeprüft schreiben
 
 Ein wichtiger Architekturpunkt:
@@ -6094,8 +6772,18 @@ normale SFT-Drive-RPC/API
 Datenbank
 ```
 
-Dadurch kann ein Modell weder versehentlich Touren verändern noch Daten
-erfinden und ungeprüft speichern.
+Dadurch schreibt ein Modell nicht selbst in die Datenbank. Es kann trotzdem
+inhaltlich falsche, formal gültige Daten liefern; Schema-Validierung ersetzt
+weder Quellenprüfung durch den Admin noch serverseitige Geschäftsregeln.
+
+Eingefügte E-Mails und Modellantworten sind nicht vertrauenswürdige Daten:
+enthaltene Anweisungen nicht ausführen, keine Tools/SQL/Shell-Aufrufe und
+kein automatisches Öffnen von Links oder Nachladen von Anhängen erlauben.
+Die KI erhält weder Supabase-Tokens noch Datenbank-Credentials. Nur explizit
+zugelassene Felder übernehmen; IDs, Rollen, SQL oder Aktionsnamen aus einer
+Modellantwort dürfen keinen Datenzugriff steuern. Ziel-Tour/-Stopp wählt der
+Admin unabhängig vom Modell. Neben JSON-Typen auch Datumsbereiche (§19),
+Längen, Mengen, Preise und URL-Schemata prüfen; unbekannte Felder ablehnen.
 
 Ideal wäre eine Änderungsansicht wie:
 
@@ -6134,6 +6822,9 @@ Fallback
 Kein administrativer Kernworkflow darf von der Verfügbarkeit eines
 KI-Anbieters abhängig sein.
 
+KI und Fallback sind standardmäßig aus. Analyse startet ausschließlich durch
+eine bewusste Aktion mit dem ausgewählten Text, niemals beim Einfügen allein.
+
 ### 39.5 Provider-Abstraktion
 
 Die Anwendung soll nicht auf einen einzelnen Anbieter fest programmiert
@@ -6162,6 +6853,13 @@ spätere Anbieter
 Damit kann ein Modell ausgetauscht werden, ohne die Planungslogik
 umzubauen.
 
+Provider melden Fähigkeiten (z. B. JSON-Schema-Unterstützung), Ausführungsort
+(lokal/eigener Server/Cloud) und Limits explizit. „OpenAI-kompatibel“ garantiert
+keine identischen Schema-, Fehler- oder Streaming-Funktionen. Adapter liefern
+ein versioniertes, anbieterneutrales Ergebnis mit Modell-/Providerkennung,
+Validierungsfehlern und, soweit verfügbar, Verbrauchsdaten. Timeout, Abbruch,
+Eingabe-/Ausgabegrenzen und normalisierte Fehler gehören zum Vertrag.
+
 ### 39.6 Ollama als bevorzugte kostenlose/lokale Option
 
 Ollama soll ausdrücklich als unterstützte Variante vorgesehen werden.
@@ -6186,6 +6884,26 @@ Modell: <ausgewähltes Modell>
 Damit kann ein Modell lokal auf dem Mac oder auf einem eigenen
 Rechner/Server laufen.
 
+„Ollama“ oder `localhost` allein beweist keine lokale Inferenz: Ollama kann
+Cloud-Modelle verwenden. Für den lokalen Modus lokale Modelle verwenden und
+Cloud-Funktionen deaktivieren (z. B. `OLLAMA_NO_CLOUD=1`, anschließend Neustart);
+unbekannten Ausführungsort nicht als lokal kennzeichnen. Siehe
+[Ollama FAQ](https://docs.ollama.com/faq) und
+[Cloud-Modelle](https://docs.ollama.com/cloud) (geprüft am 10.09.2026).
+
+Unverschlüsseltes HTTP nur für Loopback erlauben. Eigene Netzwerk-Endpunkte
+benötigen HTTPS mit gültiger Zertifikatsprüfung und vorgeschaltete Authentifizierung;
+den standardmäßig unauthentifizierten Ollama-Port nicht öffentlich freigeben.
+Endpoints nur aus Admin-Einstellungen übernehmen, nie aus Mail/Modellantwort;
+Credentials an den konfigurierten Ursprung binden und nicht über Redirects
+an andere Hosts weiterreichen. Keine globale Abschaltung von macOS ATS/TLS.
+
+Lokale Inferenz vermeidet Anbietergebühren, benötigt aber geeigneten RAM,
+Speicherplatz und Rechenleistung/Strom. Modelllizenz, Extraktionsqualität und
+Latenz auf den vorgesehenen Macs prüfen. Modelle nicht ungefragt herunterladen
+oder Ollama automatisch installieren; fehlenden Dienst und fehlendes Modell
+mit verständlicher Einrichtungshilfe anzeigen.
+
 ### 39.7 Flexible Modellauswahl und Fallback
 
 Mehrere Modelle können konfiguriert werden.
@@ -6207,6 +6925,14 @@ an einen externen Dienst übertragen würden.
 
 Ein solcher Cloud-Fallback muss vom Admin ausdrücklich erlaubt sein.
 
+Pro Analyse höchstens ein Versuch je freigegebenem Modell, mit gemeinsamer
+Zeit-/Verbrauchsgrenze; keine zyklischen Wiederholungen. Nur Verfügbarkeits-
+und vorübergehende Limitfehler erlauben Fallback. Abbruch, Authentifizierungs-,
+Datenschutz-, Budget- oder Validierungsfehler beenden die Kette. Ein Timeout
+kann bereits Kosten verursacht haben. Jeder neue Cloud-Empfänger benötigt
+vor Versand dieser Analyse eine Freigabe mit Zielanbieter, Modell und Payload;
+Ablehnen beendet den Wechsel und erhält die manuelle Bearbeitung.
+
 ### 39.8 Datenschutz und Secrets
 
 Gerade E-Mail-Kommunikation kann Namen, E-Mail-Adressen,
@@ -6215,12 +6941,22 @@ Buchungsinformationen und andere personenbezogene Inhalte enthalten.
 Daher:
 
 ```text
-lokale KI:  Daten verlassen das eigene System nicht
-Cloud-KI:   vor Verarbeitung klare Kennzeichnung
+lokale Inferenz ohne Cloud-Weiterleitung: Analyse bleibt auf dem Mac
+eigener Server: Analyse verlässt den Mac, Ziel ausdrücklich anzeigen
+Cloud-KI: vor Versand Empfänger und tatsächlich gesendeten Text anzeigen
 ```
 
 Es sollen nur die für die Planung notwendigen Daten an das Modell
 geschickt werden.
+
+Signaturen, fremde Mailverläufe, Buchungsnummern und unnötige personenbezogene
+Angaben vor Versand entfernen; keine vollständigen Teilnehmerlisten mitsenden.
+Rohmails und Modellantworten standardmäßig nur im Arbeitsspeicher halten und
+beim Verwerfen/Logout entfernen. Keine Inhalte, Tokens oder Keys in Logs,
+Crashreports oder Telemetrie. Persistente Entwürfe nur nach eigener Entscheidung
+mit festgelegter Aufbewahrung und geschützter Speicherung. Für Cloudbetrieb
+vor Freigabe Datenverarbeitung, Aufbewahrung und Vertragsbedingungen des
+konkreten Anbieters prüfen; eine UI-Bestätigung allein klärt diese Fragen nicht.
 
 **Verbindliche Korrektur/Präzisierung gegenüber einer früheren
 Gesprächsformulierung:** API-Keys werden **niemals fest in die App
@@ -6255,6 +6991,13 @@ KI aktiviert/deaktiviert
 ```
 
 Credentials/API-Schlüssel dagegen ausschließlich im Keychain (§39.8).
+
+Cloudbetrieb bleibt gemäß §4 eine gesonderte Kostenentscheidung. Vor M8
+Budget pro Analyse/Zeitraum, Eingabe-/Ausgabelimits und Kostenanzeige festlegen;
+bei unbekannter Preisgrundlage keine behauptete Kostengarantie. Lokale Zähler
+decken andere Geräte/Anwendungen desselben API-Keys nicht ab; verfügbare
+anbieterweite Limits zusätzlich nutzen. Keine neue gemeinsame Proxy- oder
+Billing-Infrastruktur allein für diese optionale Funktion einführen.
 
 ### 39.10 Langfristiges Ziel
 
@@ -6294,23 +7037,22 @@ Wie dort gilt: **geplant, noch nicht umgesetzt.** Er wird durch
 `Umsetzungsstand`-Ergänzungen fortgeschrieben, sobald einzelne Phasen
 tatsächlich gebaut sind — analog zu §26/§34/§35/§37.
 
-### 40.1 Neues Repository statt Mono-Repo
+### 40.1 Mac-App im bestehenden Repository (Entscheidung 10.09.2026)
 
-Die Mac-App ist ein eigenständiges Xcode-Projekt in einem **eigenen
-Repository** (z. B. `sft-drive-mac`), nicht Teil von `SFT-Drive`. Gründe:
+Auf ausdrücklichen Wunsch des Projektinhabers liegt die native App unter
+`macos/` auf `main` im bestehenden Repository `Lightblue87/SFT-Drive`.
+Dies ersetzt die frühere organisatorische Entscheidung für ein separates
+Repository. Vite/PWA und Xcode behalten getrennte Build-Prozesse;
+`CLAUDE.md` bleibt die einzige zentrale Produktspezifikation.
 
-- Ein Vite/React-Repo und ein Xcode-Projekt teilen sich kein Tooling
-  (kein gemeinsames `package.json`, kein gemeinsamer CI-Lauf sinnvoll).
-- Cloudflare Pages baut aus `SFT-Drive` automatisch bei jedem Push auf
-  `main` — ein zusätzliches `.xcodeproj` im selben Repo würde diesen Build
-  nicht stören, aber auch keinerlei Nutzen stiften.
-- `CLAUDE.md` bleibt trotzdem die **eine** Produktspezifikation für beide
-  Anwendungen (§23.15) — das neue Repository bekommt keine eigene,
-  konkurrierende Spezifikationsdatei, sondern verweist in seiner README auf
-  diesen Abschnitt.
+Backend-Migrationen und Edge Functions bleiben unter `supabase/`.
+Die Mindestversion ist ausdrücklich **macOS 15**. Verteilung ausschließlich
+manuell, ohne Developer-ID und ohne Notarisierung (§40.9).
+Die erste KI-Version verwendet ausdrücklich **nur Ollama**, kein OpenAI
+oder anderer Cloudanbieter. Phase M8 wird erst nach neuer Entscheidung verfolgt.
 
-Gemeinsam genutzt werden ausschließlich die Supabase-Projekt-ID, die
-Datenbank/RLS/RPCs und die Auth-Nutzerkonten — nicht der Code selbst.
+Entwicklung und Tests verwenden synthetische Daten. Die Veröffentlichung
+von Code wendet keine Migration automatisch in Supabase an.
 
 ### 40.2 Projektstruktur
 
@@ -6324,7 +7066,7 @@ SFTDriveAdmin/
 │   │   ├── AuthManager.swift             (Login, Session, admin-Check)
 │   │   └── KeychainStore.swift           (Session + KI-Credentials)
 │   ├── Data/
-│   │   ├── SupabaseClient.swift          (zentraler Client, ein Singleton)
+│   │   ├── SupabaseClient.swift          (zentral erzeugt, injizierbar)
 │   │   ├── Models/                       (Codable-Structs je Tabelle/RPC)
 │   │   └── Repositories/                 (ein Repository je fachlichem Bereich:
 │   │                                       ToursRepository, RegistrationsRepository,
@@ -6332,9 +7074,11 @@ SFTDriveAdmin/
 │   │                                       AccommodationRepository, …)
 │   ├── Features/
 │   │   ├── Dashboard/
-│   │   ├── Tours/                        (Liste, Editor, Duplizieren)
-│   │   ├── Registrations/                (Confirmed/Pending/Waitlist/…)
-│   │   ├── PlanningBoard/                (§38.5 Gesamtübersicht je Tour)
+│   │   ├── Tours/                        (Liste, geführter Flow, Tour-Workspace)
+│   │   ├── Registrations/                (Teilnehmermatrix und Details)
+│   │   ├── PlanningBoard/                (globale Cross-Tour-Planung)
+│   │   ├── Restaurants/                  (Reservierung, Menü, Bestellungen)
+│   │   ├── Accommodation/                (Nächte, Vorschläge, Hotelmatrix)
 │   │   ├── Users/
 │   │   └── Settings/                     (inkl. KI-Einstellungen, §39.4)
 │   ├── AI/
@@ -6350,8 +7094,11 @@ SFTDriveAdmin/
 Architekturmuster: **MVVM**, ein `ObservableObject`-ViewModel pro Feature-
 Screen, das über sein Repository lädt/schreibt. Repositories kapseln jeden
 Supabase-Zugriff — eine View ruft nie direkt den Supabase-Client auf,
-analog dazu, wie die PWA jeden Zugriff über `src/features/*` bzw. RPCs
-kapselt statt direkter Tabellenzugriffe verstreut über Components.
+damit Repositories unabhängig testbar bleiben. Die PWA enthält derzeit auch
+direkte Zugriffe in `src/pages/admin/*`; die Repository-Schicht ist eine
+Vorgabe für die Mac-App und keine Behauptung über vorhandene PWA-Kapselung.
+Client und Provider injizieren, UI-Zustand auf dem Main Actor verwalten und
+laufende Tasks beim Kontextwechsel abbrechen; keine Netzwerkarbeit im UI-Thread.
 
 ### 40.3 Supabase-Anbindung
 
@@ -6365,8 +7112,12 @@ kapselt statt direkter Tabellenzugriffe verstreut über Components.
 - Authentifizierung läuft über `supabase.auth.signIn(email:password:)`; die
   zurückgegebene Session wird nicht in `UserDefaults`, sondern ausschließlich
   im **macOS Keychain** gespeichert (`KeychainStore`, §38.2).
-- Adminprüfung nach Login: Aufruf einer vorhandenen oder neu zu ergänzenden
-  RPC, die `is_admin()` serverseitig auswertet (siehe §40.6) — niemals nur
+- SDK-Version festlegen und dessen Auth-Storage ausdrücklich auf den Keychain
+  konfigurieren; eine nachträgliche Kopie der Session reicht nicht. Refresh,
+  Rotation und Löschen müssen denselben Speicher nutzen. Einträge nach
+  Supabase-Projekt/Account bzw. Provider/Endpoint trennen, ohne iCloud-Sync.
+- Adminprüfung nach Login: Aufruf der bereits vorhandenen RPC
+  `is_admin()` (siehe §40.6) — niemals nur
   `user_metadata` oder ein lokal zwischengespeichertes Flag prüfen.
 - Datenzugriff ausschließlich über bestehende RLS-Policies und die bereits
   in `supabase/migrations/` definierten Admin-RPCs (`admin_list_users`,
@@ -6376,6 +7127,31 @@ kapselt statt direkter Tabellenzugriffe verstreut über Components.
   mit weiteren Rechten**, sondern Wiederverwendung derselben serverseitigen
   Logik wie die PWA (§8.12: „keine generischen Admin-Bypass-Funktionen
   bauen").
+
+Zum vorhandenen Zugriff gehören auch RLS-geschütztes CRUD (z. B.
+`tour_hotel_suggestions`), Supabase Storage für Coverbilder und die
+benutzerautorisierten Edge Functions `admin-manage-user` und `send-push`.
+Auth-Admin-API und Cron-Functions niemals direkt vom Mac mit privilegierten
+Schlüsseln aufrufen. Push-Versand an PWA-Geräte wiederverwenden; der Empfang
+nativer Mac-Pushes wäre ein eigener, bislang nicht geplanter Integrationsumfang.
+
+Vor M3 jeden Schreibworkflow gegen den Bestand abgleichen: Kapazitätsänderung
+über `admin_update_max_vehicles`, Absage über `admin_cancel_tour`, Löschen über
+`admin_delete_tour`; direkte Tabellenrechte ersetzen diese Regeln nicht.
+`AdminTourFormPage` schreibt aktuell mehrere Tabellen in getrennten Requests
+und erzeugt Slugs clientseitig (Präzisierung zu §8.3, siehe §37.1). Das ist
+keine atomare Backend-Speicheroperation und kein automatisch sicherer
+Konfliktschutz für einen zweiten Client.
+
+Für zusammengehörige Änderungen vor Freigabe des betreffenden Mac-Schreibpfads
+eine minimale gemeinsame Transaktions-/RPC-Lösung vorsehen, die alle Eingaben
+vor dem Schreiben prüft und bei Fehler vollständig zurückrollt. Keine breite
+PWA-Neuimplementierung. Gleichzeitige PWA-/Mac-Änderungen durch serverseitige
+Versionsprüfung und verständliche Konfliktvorschau absichern; `updated_at`
+nur nutzen, wenn es bei sämtlichen Schreibwegen zuverlässig serverseitig
+fortgeschrieben wird. Erneutes Laden vor Speichern allein verhindert kein
+Überschreiben konkurrierender Änderungen. Unklar ausgegangene Schreibrequests
+nicht blind wiederholen: Ergebnis nachladen bzw. Idempotenz absichern.
 
 ### 40.4 Datenmodell-Mapping
 
@@ -6387,12 +7163,17 @@ Typen unter `src/types/*.ts` (z. B. `Tour`, `TourRegistration`,
 `supabase/migrations/` abgeleitet, nicht neu erfunden — beide Clients
 beschreiben denselben Datenbestand.
 
-### 40.5 Planungs-Dashboard (§38.5) — ein zusätzlicher Lesezugriff nötig
+Lesemodelle und erlaubte Schreibfelder trennen. `DATE` als Kalenderdatum ohne
+UTC-Verschiebung, `TIMESTAMPTZ` als Zeitpunkt mit definierter Anzeigezeitzone
+und Geldwerte als Decimal behandeln (§19). Nullable Felder, unbekannte neue
+Enum-Werte und strukturierte RPC-Fehler explizit behandeln. Große Listen
+serverseitig filtern/paginieren, nicht unbegrenzt vollständig laden.
 
-Um die in §38.5 beschriebene Zusammenfassung einer Tour auf einem
-Bildschirm (Fahrzeuge/Personen/Hotel/Essen/Check-in/Warteliste/Vormerkungen
-in einer Ansicht) ohne zahlreiche Einzelabfragen zu ermöglichen, wird eine
-neue, rein lesende RPC ergänzt:
+### 40.5 Gebündelte Lesezugriffe für Dashboard und Planung
+
+Um die Ansichten aus §38.5/§38.10/§38.11 ohne N+1-Abfragen zu laden,
+werden wenige zweckgebundene, rein lesende Admin-RPCs vorgesehen. Mindestens
+die Zusammenfassung einer Tour kann über folgende RPC geladen werden:
 
 ```text
 admin_get_tour_planning_summary(p_tour_id uuid)
@@ -6407,24 +7188,49 @@ Einzelabfragen pro Tour braucht. Bei Umsetzung als eigene, neue Migration
 in `supabase/migrations/` anzulegen; `is_admin()`-Prüfung wie bei jeder
 bestehenden Admin-RPC (§8.12).
 
+Die Kennzahlen nach §38.5 getrennt voraggregieren, bevor sie verbunden werden,
+damit mehrere Nächte und Bestellungen keine Join-bedingten Doppelzählungen
+erzeugen. Einen konsistenten Snapshot samt Berechnungszeitpunkt liefern;
+fehlende/ungenutzte Bereiche von echten Nullwerten unterscheiden. Keine
+Rohprofile oder Kennzeichen in der Summary. `auth.uid()`/`is_admin()` prüfen,
+`EXECUTE` nicht an `PUBLIC`/`anon` vergeben; `SECURITY INVOKER` bevorzugen,
+`SECURITY DEFINER` nur bei begründetem Bedarf mit §8.12-Härtung. Abnahme mit
+Nicht-Admin, fehlender Tour, mehreren Nächten/Stopps und stornierten Teilnehmern.
+
+Ergänzend sind gebündelte Abfragen für die globale To-do-Liste und die
+Teilnehmer-/Hotelmatrix zulässig. Eine globale Abfrage liefert zunächst
+Kategorien, Zähler und betroffene Touren; konkrete Teilnehmer-/Objektdetails
+werden je Drilldown gebündelt nachgeladen. Die genaue Anzahl und Signatur
+werden vor Implementierung anhand des dann aktuellen Schemas festgelegt.
+Nicht zulässig sind eine universelle `admin_select_anything`-RPC oder ein
+Client-Loop mit Einzelabfragen pro Zeile.
+
 ### 40.6 Auth-/Rollenprüfung im Detail
 
 ```text
 1. Login (E-Mail/Passwort) über supabase-swift
 2. Session im Keychain sichern
-3. RPC-Aufruf, der is_admin() serverseitig prüft
-   → z. B. Wiederverwendung von is_admin() selbst über eine minimale
-     Wrapper-RPC "am_i_admin()" (SECURITY DEFINER, gibt nur ein boolean
-     zurück, keine weiteren Daten) - analog zu is_username_available()
-     als Muster für eine schmale, zweckgebundene RPC
+3. Bestehende RPC is_admin() im Kontext der angemeldeten Session aufrufen
+   (bereits von src/features/auth/useIsAdmin.ts genutzt; kein Wrapper nötig)
 4. false  → Meldung „Kein Administrator-Zugriff", signOut(), zurück zum Login
 5. true   → App entsperrt, weitere Admin-Daten laden
 ```
 
-Bei jedem App-Start erneut geprüft (nicht nur einmalig beim Login) — ein
-zwischenzeitlicher Rollenentzug (§38.2) wirkt sich damit spätestens beim
-nächsten Start aus. Optional zusätzlich bei Reaktivierung aus dem
-Hintergrund (`NSApplication.didBecomeActiveNotification`) erneut prüfen.
+Bei App-Start, Sessionwechsel und Reaktivierung erneut prüfen. Bis zum
+Ergebnis keine Admin-Daten laden/anzeigen; Netzwerkfehler sind keine Freigabe.
+Die eigentliche Sicherheitsgrenze bleibt die aktuelle Datenbankprüfung je
+geschütztem Request: nach wirksamem Rollenentzug dürfen neue Admin-Operationen
+nicht bis zum Neustart erlaubt bleiben. Bereits geladene Daten lassen sich
+serverseitig nicht zurückholen. Bei erkanntem Entzug/ungültiger Session App
+sperren, laufende Requests und Abonnements beenden, sensible Ansichten und
+Caches leeren; nachträglich eintreffende Ergebnisse einer alten Session verwerfen.
+Bei Offline-Logout lokale Session auch ohne erfolgreiche Serverantwort löschen.
+
+Für erhöhten Schutz Admin-MFA vor produktiver Distribution entscheiden; eine
+verbindliche MFA-Pflicht müsste auf gemeinsamen Backend-Pfaden (AAL-Prüfung)
+gelten, nicht nur im Mac-Dialog. Kontosperre und Rollenentzug getrennt testen:
+`is_admin()` prüft die Rolle, nicht automatisch den Sperrstatus; noch gültige
+JWTs dürfen nicht mit sofortigem Session-Widerruf gleichgesetzt werden.
 
 ### 40.7 KI-Schicht — konkrete Swift-Architektur
 
@@ -6435,25 +7241,26 @@ protocol AIProvider {
 ```
 
 - `OllamaProvider`: HTTP-Client gegen den in den Einstellungen (§39.9)
-  hinterlegten Endpoint (Default `http://localhost:11434`), kein API-Key
-  nötig (§39.8-Korrektur).
+  hinterlegten Endpoint (Default `http://localhost:11434`); ohne API-Key nur
+  beim lokalen Standarddienst, entfernte Endpunkte gemäß §39.6 absichern.
 - `OpenAIProvider` (und potenziell weitere OpenAI-kompatible Anbieter):
   liest den API-Key ausschließlich aus dem Keychain (`KeychainStore`), nie
   aus Code oder Konfigurationsdatei (§39.8).
 - `AIProviderChain` implementiert die in §39.7 beschriebene Fallback-
-  Reihenfolge; ein Wechsel von einem lokalen auf einen Cloud-Provider löst
-  vor der ersten Anfrage einen expliziten Bestätigungsdialog aus, nicht nur
-  eine einmalige Einstellung — schützt davor, dass eine spätere
-  Konfigurationsänderung unbemerkt zu Cloud-Versand führt.
+  Reihenfolge mit Grenzen aus §39.7; jeder neue Cloud-Empfänger benötigt pro
+  Analyse vor Versand eine Bestätigung. Dieselbe Datenvorschau gilt bei
+  direkt ausgewähltem Cloud-Provider, nicht nur bei einem Fallback.
 - `ExtractionSchema` bildet die JSON-Schemata aus §39.2 (`hotel_offer`,
   `restaurant`, künftige Typen) ab; die Antwort des Modells wird gegen
   dieses Schema validiert, bevor sie der `ExtractionReviewView` (§39.3)
   angezeigt wird — eine Antwort, die nicht dem Schema entspricht, wird
   verworfen und dem Admin als Fehler gemeldet, nie ungeprüft übernommen.
-- Das „Übernehmen" in der Review-Ansicht ruft ausschließlich bestehende
-  bzw. für Admins bereits vorgesehene RPCs auf (z. B. Hotelvorschlag
-  anlegen) — die KI-Schicht selbst besitzt keinen eigenen Schreibpfad zur
-  Datenbank (§39.3).
+- Das „Übernehmen" verwendet ausschließlich den fachlichen Repository-
+  Schreibpfad (§40.3), einschließlich zulässigem RLS-CRUD für Hotelvorschläge.
+  Ziel, Alt-/Neuwert und ausgewählte Felder anzeigen; Validierung nach jeder
+  manuellen Korrektur wiederholen. Mehrtabellen-Übernahmen erst mit atomarem
+  Backend-Pfad freigeben; Doppelübernahme und veraltete Vorschauen absichern.
+  Die KI-Schicht besitzt keinen eigenen Schreibpfad zur Datenbank (§39.3).
 
 ### 40.8 Implementierungsphasen
 
@@ -6469,67 +7276,365 @@ Phase M2 — Read-only Admin-Kern
 
 Phase M3 — Tourenverwaltung (Schreibzugriff)
   Tour erstellen/bearbeiten/duplizieren/veröffentlichen/absagen/
-  archivieren/löschen (§38.4), Formulare als natives SwiftUI-Form
-  statt Web-Formular-Nachbau
+  archivieren/löschen (§38.4), geführter Flow und Tour-Workspace
+  (§38.6/§38.7) als native SwiftUI-Oberfläche
 
 Phase M4 — Teilnehmerverwaltung
   Bestätigen/Ablehnen/Entfernen/administrativ Hinzufügen, Warteliste,
   Fahrzeuglimit-Änderung, Kontextmenüs + Mehrfachauswahl (§38.3)
 
 Phase M5 — Stopps, Restaurant, Hotel, Check-in, Tagesrouten
-  Restliche administrative Bereiche aus §38.4
+  Tagesplanung als Rückgrat, Restaurant-/Hotelplanung und Matrix
+  (§38.8–§38.11), additive Schemaerweiterungen aus §36
 
-Phase M6 — Planungs-Dashboard (§38.5)
-  admin_get_tour_planning_summary() (§40.5), Filter/Auswertung
+Phase M6 — Dashboard und globale Planung (§38.5/§38.11)
+  gebündelte Read-RPCs (§40.5), Drilldowns, Filter/Auswertung
 
 Phase M7 — KI-Grundgerüst (Ollama-only)
   AIProvider-Protokoll, OllamaProvider, ExtractionReviewView,
-  Hotel-/Restaurant-Schema, „Übernehmen" → bestehende RPCs
+  Hotel-/Restaurant-Schema, „Übernehmen" → abgesicherter Repository-Pfad
 
 Phase M8 — KI-Provider-Erweiterung
   OpenAIProvider, AIProviderChain mit Fallback-Bestätigung (§39.7),
   KI-Einstellungen (§39.9)
 
-Phase M9 — Distribution
-  Code-Signing mit Developer-ID, Notarization, Verteilung außerhalb
-  des Mac App Store direkt an die Administratoren (kein Store-Review
-  nötig, kein zusätzliches Apple-Developer-Programm zwingend, sofern
-  ausschließlich als selbst notariziertes Direkt-Distributable
-  ausgeliefert wird — siehe §40.9 zu offenen Punkten)
+Phase M9 — Manuelle Distribution
+  Lokaler Release-Build, bei Bedarf Ad-hoc-Signierung ohne Entwicklerkonto,
+  Übergabe als .app im ZIP/DMG ausschließlich an benötigte Administratoren;
+  kein App Store, keine Developer-ID-Signierung und keine Notarisierung.
+  Erstinstallation und manuelles Update auf Ziel-Macs prüfen (§40.9).
 ```
 
 Jede Phase soll für sich lauffähig und in sich abgeschlossen sein, analog
 zur bisherigen additiven Vorgehensweise bei der PWA (§23).
 
+Abnahme passend zur jeweiligen Phase: M1/M2 mit normalem Nutzer, Admin,
+Rollenentzug in laufender Session, Token-Refresh und Offline-Start prüfen;
+M3–M6 mit parallelen Clients, Kapazitätsgrenzen, Konflikten und Teilausfällen.
+M7/M8 mit synthetischen Mails fehlende Jahresangaben, Prompt-Injection,
+ungültiges JSON, Schemaabweichungen, Abbruch, nicht erreichbares Ollama,
+Cloud-Ablehnung, Budgetgrenzen und Doppelübernahme testen. Lokaler Modus
+darf dabei keine Cloud-Anfragen auslösen. Bestehende PWA-Regressionen bewahren;
+Mac-Build/Tests auf unterstütztem macOS ausführen, bevor eine Phase als fertig gilt.
+
 ### 40.9 Offene Entscheidungen
 
-Bewusst noch nicht entschieden, vor Beginn von Phase M1 zu klären:
+Der Verteilungsweg ist durch den Projektinhaber festgelegt; die übrigen
+technischen Entscheidungen vor Beginn von Phase M1 klären:
 
-- **Verteilungsweg:** direkter Download (signiert + notarisiert) reicht für
-  einen kleinen, bekannten Administratorenkreis aus und vermeidet
-  Store-Gebühren/-Review; ein Mac-App-Store-Eintrag ist nicht zwingend
-  erforderlich und würde zusätzliche Kosten/Prozesse bedeuten (§4
-  Kostenregel gilt sinngemäß auch hier).
-- **Apple Developer Program** (99 $/Jahr) wird für Code-Signing/Notarization
-  ohnehin benötigt, unabhängig vom Store — das ist keine SFT-Drive-
-  spezifische Zusatzkosten-Entscheidung, sondern Voraussetzung für jede
-  vertrauenswürdig verteilte native Mac-App.
-- **Mindest-macOS-Version** (z. B. aktuelle plus eine Vorversion) noch
-  festzulegen.
+- **Verteilungsweg (entschieden):** ausschließlich manuelle Weitergabe an
+  die benötigten Personen, keine Veröffentlichung im Mac App Store.
+  Release-Build als `.app` in ZIP/DMG über einen vertrauenswürdigen privaten
+  Übergabeweg verteilen; Updates ebenfalls manuell.
+- **Kein Entwicklerkonto erforderlich:** für diesen Verteilungsweg sind
+  weder ein Apple-Developer-Konto noch eine kostenpflichtige Mitgliedschaft
+  vorgesehen. Lokal bauen und bei Bedarf ad hoc signieren; keine
+  Developer-ID-Signierung, Notarisierung oder Stapling voraussetzen.
+  Ad-hoc-Signierung bestätigt keine von Apple geprüfte Entwickleridentität.
+  Developer-ID/Notarisierung wäre nur nach einer späteren ausdrücklichen
+  Änderung dieser Entscheidung relevant und würde eine geeignete
+  Mitgliedschaft erfordern ([Apple Developer ID](https://developer.apple.com/help/glossary/developer-id-certificate/)).
+- **Erstinstallation:** macOS kann eine manuell übertragene, nicht notarisierte
+  App über Gatekeeper blockieren. Die gezielte Freigabe dieser bekannten App
+  unter „Datenschutz & Sicherheit“ dokumentieren, soweit die macOS-Version
+  und Geräteverwaltung dies erlauben; keine globale Abschaltung von Gatekeeper
+  oder SIP verlangen. Siehe [Apple: Apps sicher öffnen](https://support.apple.com/en-ie/102445)
+  (geprüft am 10.09.2026).
+- **Release-Prüfung:** stabile Bundle-ID, minimale Entitlements und passende
+  Zielarchitektur festlegen. Das tatsächlich übertragene Paket auf einem
+  zweiten Mac ohne Entwicklungsumgebung testen, einschließlich Gatekeeper,
+  Keychain-Zugriff, Login und manuellem Update. Keychain-Zugriff über
+  Ad-hoc-Build-Wechsel nicht als automatisch unverändert voraussetzen;
+  erforderlichenfalls erneuten Login bzw. erneute Credential-Eingabe vorsehen.
+  Versionsnummer, Prüfsumme und unterstützte macOS-Versionen mitliefern.
+- **Mindest-macOS-Version (entschieden): macOS 15** oder neuer.
 - **Ollama-Erreichbarkeit**: rein lokal auf demselben Mac, oder auch ein
   im lokalen Netzwerk erreichbarer separater Rechner/Server — beides laut
   §39.6 vorgesehen, UI muss also einen frei editierbaren Endpoint statt nur
   „localhost" anbieten.
-- **`admin_get_tour_planning_summary()`** (§40.5) ist die einzige geplante
-  neue Migration für dieses Konzept — bei Umsetzung wie gewohnt einzeln
-  versioniert, lokal gegen eine echte `authenticated`-Rolle getestet, und
-  erst nach Migration im Supabase SQL Editor produktiv nutzbar.
+- **Backend-Ergänzungen:** `admin_get_tour_planning_summary()` (§40.5) ist
+  inzwischen im Repository umgesetzt (§40.10). Weitere gebündelte
+  Planungs-RPCs, additive Hotel-Felder sowie minimale Migrationen für die
+  konkret benötigten atomaren Schreib-/Konfliktprüfungen (§40.3) erst nach
+  Bestandsabgleich festlegen. Keine pauschale Zusage „nur eine Migration“.
+  Änderungen einzeln versionieren, als echte `authenticated`-Rolle mit und
+  ohne Adminrecht testen und den tatsächlich eingespielten Stand prüfen (§26).
+  Die vorliegende Spezifikation allein verändert weder Datenbank noch
+  produktive App.
+
+
+### 40.10 Implementierung im Ordner `macos/` (10.09.2026)
+
+Der native Quellcode und das Xcode-Projekt sind in `macos/` auf `main` implementiert.
+Die älteren Formulierungen „geplant, noch nicht umgesetzt“ in §38–40
+beschreiben die ursprüngliche Planungsphase. Dieser Abschnitt unterscheidet
+Implementierung, automatisierte Prüfung und produktive Bereitstellung.
+
+- M1–M6: SwiftUI-Shell, Keychain-Auth, serverseitige Adminprüfung,
+  Touren-/Teilnehmerverwaltung, organisatorische Masken, Nutzerverwaltung,
+  Mitteilungen, CSV-Export und Planungsübersicht sind im Quellcode angelegt.
+- M7: optionale Ollama-Analyse mit Quellenprüfung und editierbarer Vorschau.
+  Keine Cloudanbieter. Eingefügte Rohtexte werden nicht dauerhaft gespeichert.
+- M8: auf ausdrücklichen Wunsch zurückgestellt (zunächst ausschließlich Ollama).
+- M9: lokaler Universal-Release-Build mit Ad-hoc-Signatur und ZIP/Prüfsumme;
+  keine Developer-ID, Notarisierung oder Veröffentlichung in einem App Store.
+- Neue gemeinsame Backend-RPCs: `admin_get_tour_planning_summary`,
+  `admin_save_tour`, `admin_save_tour_resource`, `admin_delete_tour_resource`,
+  `admin_replace_meal_order` und `admin_create_restaurant`.
+  Die Schreibpfade verwenden weiterhin bestehende RLS und prüfen vollständige
+  gelesene Zeilenstände, statt unzuverlässige Client-Zeitstempel vorauszusetzen.
+- Automatisierte Prüfung am 10.09.2026: 47 PostgreSQL-Vertrags-/RLS-Prüfungen
+  mit synthetischen Daten und echter `authenticated`-Rolle erfolgreich.
+  Alle Migrationen werden unverändert in einer isolierten Testdatenbank geladen.
+  12 Swift-Tests, nativer Debug-Build und Universal-Release-Build (arm64/x86_64)
+  bestehen auf dem macOS-15-Runner mit Xcode 16.4. Die Ad-hoc-Signatur wird
+  geprüft; ZIP, SHA-256-Prüfsumme und Versionshinweis sind als Workflow-Artefakt
+  `SFTDriveAdmin-macOS15` verfügbar (Aufbewahrung: sieben Tage).
+  Testlauf: https://github.com/Lightblue87/SFT-Drive/actions/runs/34521285203
+- **Abnahme noch nicht als abgeschlossen markieren:** tatsächliche
+  Backend-Bereitstellung, manuelle UI-/Login-/Offline-Prüfung
+  und Installation auf einem zweiten Mac separat dokumentieren. Ein
+  Repository-Commit ist kein Nachweis für produktiv eingespielte Migrationen.
+
+### 40.11 Erweiterung in PR #19 (11.09.2026)
+
+PR #19 setzt die verbindlichen Produktentscheidungen aus §36 und §38 als
+zusammenhängenden Planungs-Workflow um. Bis zum Merge und zur gesonderten
+Produktivmigration ist dies **Repository-Stand, nicht Produktivstand**:
+
+- Dashboard-To-dos mit Drilldown Kategorie → Tour → Teilnehmer/Objekt und
+  Aktionen für Teilnahme, Warteliste, Unterkunft, Essen, Check-in und
+  gebündelt geladene Tour-, Hotel- und Restaurantfristen.
+- Tour-Workspace mit Übersicht, Tourdaten, Tagesplanung, Teilnehmermatrix,
+  Restaurants, Übernachtungen, Kommunikation, Medien und angebundener
+  optionaler KI-Assistenz; Hotels und Restaurants bleiben tourbezogen und
+  werden zusätzlich unter „Planung“ tourübergreifend kontrolliert.
+- Achtstufiger, zwischenspeichernder Flow für neue, bestehende und duplizierte
+  Touren. Beim Duplizieren sind Tagesplanung, Hotelvorschläge sowie
+  Restaurants/Speisekarten einzeln wählbar. Datum, Uhrzeit, Fristen und Preise
+  werden bewusst nicht blind übernommen.
+- Vollständige Hotelvorschlagsdaten einschließlich Preis/Preiseinheit und
+  externer Links sowie Teilnehmerwahl „vorgeschlagenes Hotel“ oder „andere
+  Unterkunft“. Persönliche Buchungsnummern und Zahlungsdaten bleiben verboten.
+- Hotelmatrix pro Nacht, Teilnehmermatrix je Tour und tourübergreifend,
+  gezielte Unterkunftserinnerung sowie Restaurant-Vorbestellung mit
+  Gerichtsduplikat, Mengen, Einzelpreisen und Gesamtsumme.
+- Neue gebündelte Admin-Abfragen für Registrierungen, Teilnehmermatrix und
+  Fristen vermeiden N+1-Aufrufe bei den globalen Übersichten.
+
+Vor der produktiven Abnahme bleiben die SQL-Migrationen in Reihenfolge
+einzuspielen und die reale macOS-/PWA-Oberfläche mit Ein- und Mehrtagestour,
+ungültigem Zeitraum, geänderten Tourdaten und Legacy-Datensätzen manuell zu
+prüfen. Diese Betriebs- und Geräteprüfung kann nicht durch den PR allein als
+erledigt gelten.
+
+### 40.12 Verbindlicher Zielzustand macOS Admin UI (PR #20)
+
+Das Redesign ist **kein Preview-Projekt mehr**. Das neue SFT-Drive-Admin-Design
+(`macos/SFTDriveAdmin/Features/Redesign/`) ist die **produktive** Oberfläche der
+Mac-App -- `RootView` zeigt ausschließlich `LiveRedesignShellView`. Die frühere
+`AdminShell`/`NavigationSplitView`-Hauptoberfläche wurde entfernt, nicht nur
+stillgelegt.
+
+Verbindlich:
+
+- Alle produktiv benötigten Admin-Funktionen sind innerhalb des neuen Designs
+  erreichbar und vollständig funktionsfähig.
+- Die vorhandenen Backend-/Repository-/RPC-/ViewModel-Implementierungen aus
+  PR #18/#19 werden weiterverwendet, nicht zweimal gebaut.
+- Keine zweite parallele Fach-Logik, kein Mockup mit Sample-Daten in einem
+  produktiven Navigationspfad.
+- Ein Bildschirm zeigt entweder eine echte, mit Repositories verbundene
+  Ansicht, oder er existiert (noch) nicht in der Navigation.
+
+Architekturentscheidung (bewusst, nach Praxis-Review): statt für jeden
+Bereich eine zweite, rein optische Kopie einer bereits funktionierenden
+Ansicht zu bauen (das wäre exakt die in §2/§18 verbotene "zweite parallele
+Admin-Welt" und dupliziert Fachlogik), wurde die neue Sidebar/Optik direkt vor
+die **bestehenden, produktiven** Bildschirme (`DashboardView`, `ToursView`
+samt `TourWorkspace`/`TourEditorView`, `GlobalPlanningView`,
+`HotelsOverviewView`/`AccommodationView`, `RestaurantsOverviewView`/
+`RestaurantView`, `ImportOverviewView`/`ExtractionReviewView`, `UsersView`,
+`NotificationsView`, `LegalSettingsView`, `LoginView`, `ConnectionView`,
+`AISettingsView`) gesetzt. Deren ViewModels/Repository-Aufrufe blieben dabei
+unverändert; nur die visuelle Schicht wurde screen-für-screen auf die
+`SFTRedesignTheme`-Design-Tokens umgestellt (`SFTCard`, `SFTStatusPill`,
+`SFTMetricTile`, `SFTPrimaryButtonStyle`/`SFTSecondaryButtonStyle`/
+`SFTDestructiveOutlineButtonStyle`, `SFT.ui`/`SFT.mono`). Dabei bewusst
+**nicht** angetastet: native, bereits funktionierende Steuerelemente wie
+`Table` (Sortierung, Spalten), `Form`/`Section` (gruppierte Formulare) und
+`DisclosureGroup` (Konfliktvergleich) -- deren Zeilen/Zellen/Buttons sind
+SFT-gestylt, das Kontrollelement selbst blieb nativ, um ohne lokalen Compiler
+kein funktionierendes Verhalten durch einen Nachbau zu riskieren. Einzige
+gezielte Ausnahme: der Bereichswähler im Tour-Workspace war ein
+Standard-`Picker` und wurde durch `SFTSegmented` in einer horizontal
+scrollbaren Leiste ersetzt (explizite Vorgabe: kein Standard-Picker als
+Hauptnavigation). `SFTStatusTone.forStatus(_:)` bündelt seither die
+Status-Farblogik (Touren-, Registrierungs-, Bestellungs-, Sperrstatus) an
+einer Stelle statt als Ad-hoc-Zuordnung je Bildschirm.
+
+Die früheren, rein kosmetischen Mockup-Dateien mit `SFTRedesignSample`-
+Platzhalterdaten (`DashboardRedesignView`, `ToursRedesignView`,
+`TourWizardRedesignView`, `TourEditorRedesignView`, `HotelMatrixRedesignView`,
+`MealPlanningRedesignView`, `OfferImportRedesignView`, `RedesignModels`,
+`RedesignSampleData`) wurden entfernt, nicht nur aus der Navigation
+genommen -- sie hätten sonst dauerhaft als zweite, ungenutzte Fach-Welt im
+Repository gelegen.
+
+Sidebar (produktiv, `RedesignSection`):
+
+```text
+Dashboard
+Touren
+Planung
+Hotelplanung
+Essensplanung
+Import
+
+Nutzer
+Mitteilungen
+Impressum & Datenschutz
+```
+
+`Planung` ist die tourübergreifende Kontrollansicht (Teilnehmermatrix, Hotels,
+Restaurants; `GlobalPlanningView`) -- eigenständig neben `Dashboard`, ohne
+dessen `DashboardModel` ein zweites Mal zu instanziieren.
+
+Gemeinsamer Datenstore statt doppeltem Traffic: `LiveRedesignShellView` hält
+die einzige `DashboardModel`-Instanz der Sitzung und lädt sie einmal beim
+Start; `RedesignShellView` liest daraus sowohl den Dashboard-Bildschirm als
+auch die Sidebar-Zähler ("Touren"/"Hotelplanung"/"Essensplanung" -- dieselbe
+Formel wie `DashboardMetric.count()`, keine zweite, abweichende Berechnung
+mehr). Ein früherer separater `RedesignLiveDataLoader` (eigener, zusätzlicher
+`upcoming()`/`summaries()`-Request nur für die Sidebar-Badges, mit einer
+fehlerhaften Essen-Kennzahl `confirmedVehicles - max(orders)` statt der
+Summe offener Bestellungen je Restaurant-Stopp) wurde deshalb entfernt.
+
+KI-Import: `ImportOverviewView` macht die bereits bestehende
+`ExtractionReviewView`-Funktion (Text einfügen → Ollama-Analyse mit
+Quellenbelegen → prüfbarer Entwurf → gezieltes Speichern über
+`ContentRepository`/`admin_save_tour_resource`/`createRestaurant`)
+tourübergreifend erreichbar, zusätzlich zum bestehenden Zugang über
+Tourenverwaltung → Tour → "KI-Assistenz". `AIConfiguration` unterstützt
+zusätzlich zu lokalem Ollama ein Ollama-Cloud-Modell mit eigenem, separatem
+Zustimmungsschalter (`cloudConfirmed`, getrennt von
+`localInferenceConfirmed`) und Zugangsschlüssel im Keychain -- kein stiller
+Wechsel lokal → Cloud, Empfänger/Modell/kompletter Sendetext werden vor jeder
+einzelnen Analyse angezeigt (§39.8).
+
+`LocalTextExtraction` (`AI/ExtractionReviewView.swift`) ergänzt den bisherigen
+"Text einfügen"-Weg um PDF- und Foto-Import: PDFKit liest den Text aus jeder
+Seite eines PDFs, Vision/`VNRecognizeTextRequest` erkennt Text aus Fotos
+(PNG/JPG/HEIC), beides ausschließlich lokal auf dem Mac -- das Original
+verlässt den Rechner nie und wird nirgendwo hochgeladen (§39.8). Auswahl über
+nativen `fileImporter` oder Drag & Drop auf das Textfeld; der erkannte Text
+landet nur im ohnehin editierbaren Textfeld, das der Admin vor jeder Analyse
+sieht und vor einer fehlgeschlagenen/unvollständigen Erkennung manuell
+korrigieren kann (keine automatische Analyse direkt nach dem Import).
+
+Typografie: Archivo (Omnibus-Type) und JetBrains Mono (JetBrains) liegen als
+echte TTF-Ressourcen unter `macos/SFTDriveAdmin/Fonts/` bei (beide SIL OFL 1.1,
+Lizenztexte als `LICENSE-*-OFL.txt` daneben -- die OFL erlaubt das Einbetten
+in Software ausdrücklich, solange die Schrift nicht separat verkauft wird und
+der Lizenztext beiliegt). `Info.plist` registriert sie über
+`ATSApplicationFontsPath = "Fonts"` beim Start automatisch, ohne
+zusätzlichen Code; `SFT.ui`/`SFT.mono` matchen weiterhin per Familienname und
+fallen automatisch auf die System-Schrift zurück, sollte eine Ressource
+fehlen.
+
+Damit ist die screen-für-screen-Migration auf `SFTRedesignTheme` über alle in
+der Sidebar erreichbaren Bereiche (inklusive Login und Einstellungsfenster)
+sowie die zuvor offenen KI-Import- und Typografie-Punkte umgesetzt. Ehrlich
+offen bleiben:
+
+- **Manuelles Gegenprüfen auf einem echten Mac** (Login, Offline-Start,
+  Fenstergrößen 1380×880/1100×720, Drag & Drop, Tastaturzugriff,
+  VoiceOver) -- in dieser Umgebung ohne physisches/simuliertes macOS-Gerät
+  nicht möglich; verifiziert ist ausschließlich der CI-Build
+  (`swift test` + `xcodebuild build` + Release-Build) sowie die 96
+  Backend-Vertrags-/RLS-Tests.
+- Native Kontrollelemente (`Table`, `Form`, `Picker` außerhalb des
+  Tour-Workspace-Bereichswählers, `DisclosureGroup`) wurden bewusst nicht
+  durch vollständig selbstgebaute SFT-Äquivalente ersetzt (siehe
+  Architekturentscheidung oben) -- ihre Zeilen/Zellen/Buttons sind
+  SFT-gestylt, das Element selbst bleibt nativ.
+- Die globale Zähler-Invalidierung (`RedesignShellView.onChange(of: section)`)
+  lädt `DashboardModel` beim Wechsel auf Dashboard/Hotelplanung/
+  Essensplanung neu -- deckt den häufigsten Fall (Bereichswechsel nach einer
+  Aktion) ab, ist aber keine sofortige Invalidierung nach jeder einzelnen
+  mutierenden Aktion auf jedem Bildschirm (das hätte `DashboardModel` durch
+  praktisch jeden Editor durchreichen müssen).
+
+Dieser Abschnitt gilt als **umgesetzt** für den in dieser Umgebung
+verifizierbaren Umfang (Build, Tests, Code-Review); die manuelle Geräteprüfung
+oben bleibt ein gesondert auszuweisender, noch offener Schritt vor einem
+produktiven Rollout an Administratoren.
+
+**Nachtrag 15.10.2026 — Backend-Migrationen produktiv bestätigt:** Der
+Projektinhaber hat im Supabase SQL Editor des produktiven Projekts geprüft,
+dass alle für die Mac-App benötigten `SECURITY DEFINER`-RPCs aus den
+Migrationen `20260910010000` bis `20260911080000` (u. a.
+`admin_get_tour_planning_summary`, `admin_save_tour`,
+`admin_save_tour_resource`, `admin_replace_meal_order`,
+`admin_create_restaurant`) tatsächlich vorhanden sind (`pg_proc`-Abfrage,
+Ergebnis: alle Funktionen existieren). Die in `macos/README.md` genannten
+additiven Migrationen sind damit bestätigt produktiv eingespielt — die in
+§26 beschriebene Unsicherheit ("Repository allein sagt nichts darüber aus,
+was tatsächlich läuft") ist für diesen Stand aufgelöst. Die manuelle
+Geräteprüfung (Login, Offline-Start, UI auf echtem Mac) bleibt davon
+unberührt weiterhin offen.
+
+### 40.13 Update-Hinweis in der Mac-App
+
+Ergänzt am 15.10.2026, auf ausdrücklichen Wunsch: Eine bereits installierte
+Mac-App-Version erfuhr bisher nie von einem neuen Release — der einzige Weg,
+eine neue Version zu bemerken, war ein zufälliger Blick auf die
+GitHub-Releases-Seite.
+
+Bewusst **kein** Sparkle bzw. kein automatischer Download/Ersatz des
+laufenden App-Bundles: Die App ist weiterhin nur ad-hoc signiert, nicht mit
+Developer-ID signiert und nicht notarisiert (§40.9). Ein echter
+Auto-Updater bräuchte dafür eine eigene signierte Appcast-Infrastruktur
+(EdDSA-Schlüsselpaar, Schlüsselverwaltung) — unverhältnismäßiger Aufwand für
+ein kleines Community-Projekt (§32) und ein zusätzliches Sicherheitsrisiko,
+wenn nicht sauber umgesetzt.
+
+Stattdessen eine reine, dismissbare Benachrichtigung:
+
+- `Shared/UpdateChecker.swift` fragt beim App-Start (und danach höchstens
+  einmal pro Tag, auch bei Rückkehr aus dem Hintergrund) die öffentliche,
+  unauthentifizierte GitHub-API `GET /repos/Lightblue87/SFT-Drive/releases/latest`
+  ab — kein zusätzliches Secret, kein kostenpflichtiger Dienst (§4).
+- Nur Release-Tags mit dem Präfix `macos-admin-v` zählen (unterscheidet
+  künftige PWA-Releases im selben Repository, falls welche angelegt werden).
+- Ist die gefundene Version neuer als `CFBundleShortVersionString` der
+  laufenden App, erscheint oberhalb des Bildschirminhalts (`RedesignShellView`)
+  ein schmaler Hinweis mit Versionsnummer, einem Link auf die
+  GitHub-Release-Seite (`NSWorkspace.shared.open`, kein In-App-Download) und
+  einem Schließen-Button.
+- Eine einmal weggeklickte Version wird nicht erneut angezeigt (in
+  `UserDefaults` gemerkt); erst eine noch neuere Version löst den Hinweis
+  erneut aus.
+- Fail-soft: Netzwerkfehler, kein Internetzugang oder ein unerwartetes
+  Antwortformat brechen die Prüfung still ab (analog §27.16 für Web Push in
+  der PWA) — die Prüfung ist nie Voraussetzung für die Nutzung der App.
+- Download und Installation bleiben vollständig manuell, wie bei jedem
+  bisherigen Release (§40.9 "ausschließlich manuelle Weitergabe").
+
+Damit dieser Vergleich funktioniert, muss `MARKETING_VERSION` im
+Xcode-Projekt bei jedem neuen Release tatsächlich erhöht und ein
+entsprechender GitHub-Release-Tag `macos-admin-vX.Y.Z` angelegt werden.
+`scripts/release.sh` liest die Version seit diesem Nachtrag direkt aus den
+Xcode-Build-Settings (`xcodebuild -showBuildSettings`) statt sie als
+zweiten, separat zu pflegenden Wert im Skript zu wiederholen — der zuvor
+dort hartcodierte Wert `0.1.0` war nach dem PR-#20-Release bereits veraltet,
+ohne dass es aufgefallen wäre, weil nichts ihn mit dem Projekt abglich.
 
 ---
 
 ## 41. Entwicklungsphase 21 — Optionale Telefonnummer für Freunde
 
-Phase 21 ist umgesetzt (Migration `20260910000000_friend_phone_numbers.sql`).
+Phase 21 ist umgesetzt (Migration `20261111000000_friend_phone_numbers.sql`).
 Sie erweitert die Freundesfunktion aus §34.1 additiv: User können freiwillig
 eine Telefonnummer hinterlegen, um z. B. nach einer Ausfahrt mit Freunden in
 Kontakt zu bleiben.
@@ -6589,7 +7694,7 @@ Nummer, offene Anfrage und pausierte Freigabe liefern `NULL`, direkter
 Tabellenzugriff auf fremde Zeilen liefert nichts, fremde Zeilen lassen sich
 weder anlegen noch ändern, ungültige Formate werden abgelehnt.
 
-Deployment: Migration im Supabase SQL Editor einspielen, **bevor** das
-Frontend deployed wird — das neue Frontend liest `user_phone_numbers`. Der
-umgekehrte Fall ist unkritisch: ein älteres Frontend ignoriert die
-zusätzliche Spalte von `list_my_friendships()`.
+Deployment: Die Migration wurde am 11.11.2026 im Supabase SQL Editor
+eingespielt, vor dem Frontend-Deploy — das neue Frontend liest
+`user_phone_numbers`. Ein älteres Frontend ignoriert die zusätzliche Spalte
+von `list_my_friendships()`.
