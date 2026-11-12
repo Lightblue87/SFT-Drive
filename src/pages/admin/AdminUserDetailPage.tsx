@@ -310,13 +310,21 @@ export function AdminUserDetailPage() {
         <textarea
           value={noteBody}
           onChange={(e) => setNoteBody(e.target.value)}
+          // Während des Speicherns gesperrt: sonst ginge Weitergetipptes beim
+          // Leeren des Formulars nach dem Speichern verloren.
+          disabled={noteSaving}
           maxLength={2000}
           rows={3}
           placeholder="Notiz für die Orga, z. B. nach einer Ausfahrt"
           className={`${fieldInput} resize-y`}
         />
         {userTours.length > 0 && (
-          <select value={noteTourId} onChange={(e) => setNoteTourId(e.target.value)} className={fieldInput}>
+          <select
+            value={noteTourId}
+            onChange={(e) => setNoteTourId(e.target.value)}
+            disabled={noteSaving}
+            className={fieldInput}
+          >
             <option value="">Ohne Tourbezug</option>
             {userTours.map((t) => (
               <option key={t.id} value={t.id}>
