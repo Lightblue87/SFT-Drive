@@ -5011,6 +5011,7 @@ Sicherheitsregeln:
 - Die Ausgabe der Klarnamen erfolgt ausschließlich über kontrollierte RPCs/Views oder durch eine gezielte, sichere Erweiterung bestehender Teilnehmer-RPCs (siehe §8.9 Phase-12-Ausnahme).
 - `first_name`/`last_name` dürfen nur an einen Caller ausgegeben werden, der mit dem betreffenden User eine akzeptierte Freundschaft besitzt, oder an Admins im bereits erlaubten administrativen Kontext.
 - E-Mail, Kennzeichen, Geburtsdatum und sonstige private Daten werden durch die Freundschaft **niemals** freigegeben.
+- Einzige Ausnahme seit Phase 21 (§41): eine vom User **freiwillig** hinterlegte Telefonnummer, solange er die Freigabe nicht pausiert hat.
 
 Teilnehmerliste einer Tour:
 
@@ -7628,3 +7629,72 @@ Xcode-Build-Settings (`xcodebuild -showBuildSettings`) statt sie als
 zweiten, separat zu pflegenden Wert im Skript zu wiederholen — der zuvor
 dort hartcodierte Wert `0.1.0` war nach dem PR-#20-Release bereits veraltet,
 ohne dass es aufgefallen wäre, weil nichts ihn mit dem Projekt abglich.
+
+---
+
+## 41. Entwicklungsphase 21 — Optionale Telefonnummer für Freunde
+
+Phase 21 ist umgesetzt (Migration `20261111000000_friend_phone_numbers.sql`).
+Sie erweitert die Freundesfunktion aus §34.1 additiv: User können freiwillig
+eine Telefonnummer hinterlegen, um z. B. nach einer Ausfahrt mit Freunden in
+Kontakt zu bleiben.
+
+Verbindliche Produktentscheidungen:
+
+- Die Telefonnummer ist **optional**. Sie wird nicht bei der Registrierung
+  abgefragt, sondern ausschließlich im Profil (`/profile`) gepflegt.
+- Sichtbar ist sie für **alle akzeptierten Freunde** des Users — analog zur
+  Klarnamenfreigabe ohne gerichtete Freigabe pro Freund. Zusätzlich gibt es
+  einen Schalter `share_with_friends`, mit dem der User die Freigabe
+  pausieren kann, ohne die Nummer zu löschen.
+- Einseitig: wer eine Nummer hinterlegt, teilt sie; der Freund muss dafür
+  keine eigene Nummer hinterlegt haben.
+- **Admins sehen die Nummer nicht** — weder in `/admin/users` noch in
+  Exporten (§35.1). Zweck ist allein der Kontakt unter Freunden.
+- Angezeigt wird die Nummer **nur in der Freundesliste** (`/profile/friends`).
+  Die Teilnehmer-Fahrzeugliste (`get_confirmed_tour_vehicles`, §8.9) bleibt
+  unverändert und gibt weiterhin keine Kontaktdaten aus.
+- Aktionen an der Nummer eines Freundes: Anrufen (`tel:`), WhatsApp
+  (`wa.me`-Link, keine WhatsApp-API, vgl. §35.2), Kopieren und Kontakt
+  speichern (vCard, über das native Teilen-Sheet mit Download-Fallback).
+- Keine Verifikation der Nummer per SMS o. Ä. — das würde einen
+  kostenpflichtigen Dienst erfordern (§4).
+
+Datenmodell:
+
+```text
+user_phone_numbers
+user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+phone_number TEXT NOT NULL          -- E.164, CHECK ^\+[1-9][0-9]{6,14}$
+share_with_friends BOOLEAN DEFAULT TRUE
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Sicherheitsregeln:
+
+- Die Nummer liegt bewusst **nicht** in `profiles`: dort greift
+  `profiles_select_own_or_admin`, eine zusätzliche Spalte wäre für Admins
+  direkt lesbar (§8 "Sichtbarkeitsstufen physisch trennen").
+- RLS auf `user_phone_numbers`: ausschließlich die eigene Zeile
+  (Self-Service-CRUD analog `vehicles`). Keine Admin-Ausnahme, keine Policy
+  für Freunde.
+- Freunde erhalten die Nummer ausschließlich über `list_my_friendships()`
+  (neue Spalte `other_phone_number`) — nur bei `status = accepted` und
+  `share_with_friends = true`. `pending`/`rejected` geben nichts frei; mit dem
+  Beenden der Freundschaft entfällt die Nummer sofort.
+- Das Format wird serverseitig per CHECK-Constraint erzwungen. Das Frontend
+  normalisiert die Eingabe vorab (`src/utils/phone.ts`: führende `0` →
+  `+49`, `00` → `+`).
+- Bei Kontolöschung wird die Zeile über `ON DELETE CASCADE` an `auth.users`
+  entfernt (wie `vehicles` und `friendships`).
+
+Lokal gegen eine echte `authenticated`-Rolle getestet: Freund sieht die
+Nummer, offene Anfrage und pausierte Freigabe liefern `NULL`, direkter
+Tabellenzugriff auf fremde Zeilen liefert nichts, fremde Zeilen lassen sich
+weder anlegen noch ändern, ungültige Formate werden abgelehnt.
+
+Deployment: Die Migration wurde am 11.11.2026 im Supabase SQL Editor
+eingespielt, vor dem Frontend-Deploy — das neue Frontend liest
+`user_phone_numbers`. Ein älteres Frontend ignoriert die zusätzliche Spalte
+von `list_my_friendships()`.
