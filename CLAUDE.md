@@ -7799,6 +7799,21 @@ ein Wert außerhalb 1–5 und eine leere Notiz werden abgelehnt; der
 Lifecycle-Lauf erzeugt genau eine Mitteilung je Admin und Tour, ein zweiter
 Lauf keine weitere.
 
-Deployment: Migration im Supabase SQL Editor einspielen, **bevor** das
-Frontend deployed wird. Bis dahin ist dies Repository-Stand, nicht
-Produktivstand (§26).
+**Nachtrag 12.11.2026 (Migration
+`20261112000000_admin_review_author_cleanup.sql`, aus dem PR-Review):**
+`created_by`/`rated_by` verwenden `ON DELETE SET NULL`. Dieses von Postgres
+ausgelöste UPDATE lief durch die BEFORE-UPDATE-Trigger: der Notiz-Trigger
+stellte den Verfasser wieder her, der Bewertungs-Trigger prüfte erneut die
+bestätigte Teilnahme. Das Löschen eines Admin-Kontos, das Notizen verfasst
+oder einen inzwischen nicht mehr bestätigten Fahrer bewertet hatte, schlug
+dadurch fehl — nach der vorgelagerten Anonymisierung (`delete-account`,
+`admin-manage-user`) wäre ein Auth-Konto ohne Profil-Daten übrig geblieben.
+Beide Trigger lassen das reine Entfernen des Verfasser-/Bearbeiterbezugs jetzt
+durch; Umschreiben des Verfassers und inhaltliche Änderungen bleiben geprüft.
+Bei künftigen Triggern auf Tabellen mit `ON DELETE SET NULL`-Spalten diesen
+Fall von Anfang an mit testen (Konto des Verfassers löschen).
+
+Deployment: Beide Migrationen wurden bzw. werden im Supabase SQL Editor
+eingespielt (`20261111010000` am 12.11.2026). Ohne die tatsächlich
+eingespielte Korrekturmigration ist der oben beschriebene Löschfehler
+weiterhin vorhanden (§26).
