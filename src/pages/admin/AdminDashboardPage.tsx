@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { PageLoading } from '@/components/PageLoading'
 import { formatDateRange } from '@/utils/date'
 import type { Tour } from '@/types/tour'
+import type { PendingDriverRatingTour } from '@/types/adminReview'
 
 interface TourSummary {
   tour: Tour
@@ -16,6 +17,7 @@ interface TourSummary {
 export function AdminDashboardPage() {
   const [summaries, setSummaries] = useState<TourSummary[]>([])
   const [draftCount, setDraftCount] = useState(0)
+  const [pendingRatings, setPendingRatings] = useState<PendingDriverRatingTour[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -31,6 +33,11 @@ export function AdminDashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'draft')
       setDraftCount(drafts ?? 0)
+
+      // Abgeschlossene Ausfahrten mit noch nicht bewerteten Fahrern (§42) —
+      // eine gebündelte RPC statt einer Abfrage je Tour.
+      const { data: pending } = await supabase.rpc('admin_list_pending_driver_ratings')
+      setPendingRatings((pending as PendingDriverRatingTour[]) ?? [])
 
       const results: TourSummary[] = await Promise.all(
         ((tours ?? []) as Tour[]).map(async (tour) => {
@@ -77,6 +84,30 @@ export function AdminDashboardPage() {
           <div className="mt-1.5 font-mono text-[21px] font-bold leading-none text-sft-amber">{totalPending}</div>
         </div>
       </div>
+
+      {pendingRatings.length > 0 && (
+        <div className="mt-3.5 overflow-hidden rounded-2xl border border-sft-amber/28 bg-sft-amber/[0.06]">
+          <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-sft-amber">
+            BEWERTUNG OFFEN
+          </div>
+          {pendingRatings.map((p) => (
+            <Link
+              key={p.tour_id}
+              to={`/admin/tours/${p.tour_id}/ratings`}
+              className="tap-scale flex items-center gap-3 border-t border-sft-amber/15 px-4 py-3.5 text-left"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-semibold leading-tight">{p.title}</div>
+                <div className="mt-1.5 font-mono text-[10px] leading-relaxed text-[#e6c07a]">
+                  {formatDateRange(p.start_date, p.end_date).toUpperCase()} · {p.rated_count} /{' '}
+                  {p.confirmed_count} FAHRER BEWERTET
+                </div>
+              </div>
+              <span className="flex-none text-xs font-medium text-sft-amber">Bewerten</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="mt-3.5 overflow-hidden rounded-2xl border border-white/9 bg-sft-card">
         <div className="px-4 pb-2.5 pt-3.5 font-mono text-[9px] tracking-[0.2em] text-[#8a8a92]">
