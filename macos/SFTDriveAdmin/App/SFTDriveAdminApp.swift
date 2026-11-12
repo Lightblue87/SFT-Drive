@@ -4,9 +4,10 @@ import AppKit
 @main struct SFTDriveAdminApp: App {
     @NSApplicationDelegateAdaptor(SFTAppDelegate.self) private var appDelegate
     @StateObject private var auth = AuthManager()
+    @StateObject private var updateChecker = UpdateChecker()
     var body: some Scene {
         WindowGroup("SFT Drive Admin") {
-            RootView().environmentObject(auth).tint(.sftRed).preferredColorScheme(.dark)
+            RootView().environmentObject(auth).environmentObject(updateChecker).tint(.sftRed).preferredColorScheme(.dark)
                 .frame(minWidth: 1100, minHeight: 720).background(WindowCloseGuard())
         }
         .defaultSize(width: 1380, height: 880)
@@ -21,6 +22,7 @@ import AppKit
 }
 struct RootView: View {
     @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var updateChecker: UpdateChecker
     @Environment(\.scenePhase) private var scenePhase
     @State private var initialized = false
     var body: some View {
@@ -32,9 +34,17 @@ struct RootView: View {
             else if auth.busy { ProgressView("Zugriffsberechtigung prüfen …") }
             else { LoginView() }
         }
-        .task { guard !initialized else { return }; initialized = true; await auth.configure(.load()) }
+        .task {
+            guard !initialized else { return }; initialized = true
+            await auth.configure(.load())
+            // Nicht blockierend, kein Einfluss auf Login/Autorisierung --
+            // reine Hintergrundprüfung (§UpdateChecker.swift).
+            Task { await updateChecker.checkIfDue() }
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && initialized && auth.authorized { Task { await auth.restore() } }
+            guard phase == .active && initialized else { return }
+            if auth.authorized { Task { await auth.restore() } }
+            Task { await updateChecker.checkIfDue() }
         }
     }
 }

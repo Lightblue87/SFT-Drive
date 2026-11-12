@@ -28,6 +28,7 @@ import { AdminUserDetailPage } from '@/pages/admin/AdminUserDetailPage'
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
 import { AdminTourFormPage } from '@/pages/admin/AdminTourFormPage'
 import { AdminTourRegistrationsPage } from '@/pages/admin/AdminTourRegistrationsPage'
+import { AdminTourRatingsPage } from '@/pages/admin/AdminTourRatingsPage'
 import { AdminTourStopsPage } from '@/pages/admin/AdminTourStopsPage'
 import { AdminTourStagesPage } from '@/pages/admin/AdminTourStagesPage'
 import { AdminTourAccommodationPage } from '@/pages/admin/AdminTourAccommodationPage'
@@ -115,6 +116,7 @@ export const router = createBrowserRouter([
           { path: 'tours/new', element: <AdminTourFormPage /> },
           { path: 'tours/:id/edit', element: <AdminTourFormPage /> },
           { path: 'tours/:id/registrations', element: <AdminTourRegistrationsPage /> },
+          { path: 'tours/:id/ratings', element: <AdminTourRatingsPage /> },
           { path: 'tours/:id/stops', element: <AdminTourStopsPage /> },
           { path: 'tours/:id/stops/:stopId', element: <AdminRestaurantStopPage /> },
           { path: 'tours/:id/stages', element: <AdminTourStagesPage /> },

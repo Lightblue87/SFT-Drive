@@ -3286,6 +3286,7 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
     │   ├── /admin/tours/new
     │   ├── /admin/tours/:id/edit
     │   ├── /admin/tours/:id/registrations
+    │   ├── /admin/tours/:id/ratings               (Fahrerbewertung, §42)
     │   ├── /admin/tours/:id/stops
     │   │   └── /admin/tours/:id/stops/:stopId    (Restaurant-Stopps, §27.20)
     │   └── /admin/tours/:id/stages                (Tagesrouten, nur Mehrtagestouren, §34.4)
@@ -5011,6 +5012,7 @@ Sicherheitsregeln:
 - Die Ausgabe der Klarnamen erfolgt ausschließlich über kontrollierte RPCs/Views oder durch eine gezielte, sichere Erweiterung bestehender Teilnehmer-RPCs (siehe §8.9 Phase-12-Ausnahme).
 - `first_name`/`last_name` dürfen nur an einen Caller ausgegeben werden, der mit dem betreffenden User eine akzeptierte Freundschaft besitzt, oder an Admins im bereits erlaubten administrativen Kontext.
 - E-Mail, Kennzeichen, Geburtsdatum und sonstige private Daten werden durch die Freundschaft **niemals** freigegeben.
+- Einzige Ausnahme seit Phase 21 (§41): eine vom User **freiwillig** hinterlegte Telefonnummer, solange er die Freigabe nicht pausiert hat.
 
 Teilnehmerliste einer Tour:
 
@@ -7568,3 +7570,250 @@ Dieser Abschnitt gilt als **umgesetzt** für den in dieser Umgebung
 verifizierbaren Umfang (Build, Tests, Code-Review); die manuelle Geräteprüfung
 oben bleibt ein gesondert auszuweisender, noch offener Schritt vor einem
 produktiven Rollout an Administratoren.
+
+**Nachtrag 15.10.2026 — Backend-Migrationen produktiv bestätigt:** Der
+Projektinhaber hat im Supabase SQL Editor des produktiven Projekts geprüft,
+dass alle für die Mac-App benötigten `SECURITY DEFINER`-RPCs aus den
+Migrationen `20260910010000` bis `20260911080000` (u. a.
+`admin_get_tour_planning_summary`, `admin_save_tour`,
+`admin_save_tour_resource`, `admin_replace_meal_order`,
+`admin_create_restaurant`) tatsächlich vorhanden sind (`pg_proc`-Abfrage,
+Ergebnis: alle Funktionen existieren). Die in `macos/README.md` genannten
+additiven Migrationen sind damit bestätigt produktiv eingespielt — die in
+§26 beschriebene Unsicherheit ("Repository allein sagt nichts darüber aus,
+was tatsächlich läuft") ist für diesen Stand aufgelöst. Die manuelle
+Geräteprüfung (Login, Offline-Start, UI auf echtem Mac) bleibt davon
+unberührt weiterhin offen.
+
+### 40.13 Update-Hinweis in der Mac-App
+
+Ergänzt am 15.10.2026, auf ausdrücklichen Wunsch: Eine bereits installierte
+Mac-App-Version erfuhr bisher nie von einem neuen Release — der einzige Weg,
+eine neue Version zu bemerken, war ein zufälliger Blick auf die
+GitHub-Releases-Seite.
+
+Bewusst **kein** Sparkle bzw. kein automatischer Download/Ersatz des
+laufenden App-Bundles: Die App ist weiterhin nur ad-hoc signiert, nicht mit
+Developer-ID signiert und nicht notarisiert (§40.9). Ein echter
+Auto-Updater bräuchte dafür eine eigene signierte Appcast-Infrastruktur
+(EdDSA-Schlüsselpaar, Schlüsselverwaltung) — unverhältnismäßiger Aufwand für
+ein kleines Community-Projekt (§32) und ein zusätzliches Sicherheitsrisiko,
+wenn nicht sauber umgesetzt.
+
+Stattdessen eine reine, dismissbare Benachrichtigung:
+
+- `Shared/UpdateChecker.swift` fragt beim App-Start (und danach höchstens
+  einmal pro Tag, auch bei Rückkehr aus dem Hintergrund) die öffentliche,
+  unauthentifizierte GitHub-API `GET /repos/Lightblue87/SFT-Drive/releases/latest`
+  ab — kein zusätzliches Secret, kein kostenpflichtiger Dienst (§4).
+- Nur Release-Tags mit dem Präfix `macos-admin-v` zählen (unterscheidet
+  künftige PWA-Releases im selben Repository, falls welche angelegt werden).
+- Ist die gefundene Version neuer als `CFBundleShortVersionString` der
+  laufenden App, erscheint oberhalb des Bildschirminhalts (`RedesignShellView`)
+  ein schmaler Hinweis mit Versionsnummer, einem Link auf die
+  GitHub-Release-Seite (`NSWorkspace.shared.open`, kein In-App-Download) und
+  einem Schließen-Button.
+- Eine einmal weggeklickte Version wird nicht erneut angezeigt (in
+  `UserDefaults` gemerkt); erst eine noch neuere Version löst den Hinweis
+  erneut aus.
+- Fail-soft: Netzwerkfehler, kein Internetzugang oder ein unerwartetes
+  Antwortformat brechen die Prüfung still ab (analog §27.16 für Web Push in
+  der PWA) — die Prüfung ist nie Voraussetzung für die Nutzung der App.
+- Download und Installation bleiben vollständig manuell, wie bei jedem
+  bisherigen Release (§40.9 "ausschließlich manuelle Weitergabe").
+
+Damit dieser Vergleich funktioniert, muss `MARKETING_VERSION` im
+Xcode-Projekt bei jedem neuen Release tatsächlich erhöht und ein
+entsprechender GitHub-Release-Tag `macos-admin-vX.Y.Z` angelegt werden.
+`scripts/release.sh` liest die Version seit diesem Nachtrag direkt aus den
+Xcode-Build-Settings (`xcodebuild -showBuildSettings`) statt sie als
+zweiten, separat zu pflegenden Wert im Skript zu wiederholen — der zuvor
+dort hartcodierte Wert `0.1.0` war nach dem PR-#20-Release bereits veraltet,
+ohne dass es aufgefallen wäre, weil nichts ihn mit dem Projekt abglich.
+
+---
+
+## 41. Entwicklungsphase 21 — Optionale Telefonnummer für Freunde
+
+Phase 21 ist umgesetzt (Migration `20261111000000_friend_phone_numbers.sql`).
+Sie erweitert die Freundesfunktion aus §34.1 additiv: User können freiwillig
+eine Telefonnummer hinterlegen, um z. B. nach einer Ausfahrt mit Freunden in
+Kontakt zu bleiben.
+
+Verbindliche Produktentscheidungen:
+
+- Die Telefonnummer ist **optional**. Sie wird nicht bei der Registrierung
+  abgefragt, sondern ausschließlich im Profil (`/profile`) gepflegt.
+- Sichtbar ist sie für **alle akzeptierten Freunde** des Users — analog zur
+  Klarnamenfreigabe ohne gerichtete Freigabe pro Freund. Zusätzlich gibt es
+  einen Schalter `share_with_friends`, mit dem der User die Freigabe
+  pausieren kann, ohne die Nummer zu löschen.
+- Einseitig: wer eine Nummer hinterlegt, teilt sie; der Freund muss dafür
+  keine eigene Nummer hinterlegt haben.
+- **Admins sehen die Nummer nicht** — weder in `/admin/users` noch in
+  Exporten (§35.1). Zweck ist allein der Kontakt unter Freunden.
+- Angezeigt wird die Nummer **nur in der Freundesliste** (`/profile/friends`).
+  Die Teilnehmer-Fahrzeugliste (`get_confirmed_tour_vehicles`, §8.9) bleibt
+  unverändert und gibt weiterhin keine Kontaktdaten aus.
+- Aktionen an der Nummer eines Freundes: Anrufen (`tel:`), WhatsApp
+  (`wa.me`-Link, keine WhatsApp-API, vgl. §35.2), Kopieren und Kontakt
+  speichern (vCard, über das native Teilen-Sheet mit Download-Fallback).
+- Keine Verifikation der Nummer per SMS o. Ä. — das würde einen
+  kostenpflichtigen Dienst erfordern (§4).
+
+Datenmodell:
+
+```text
+user_phone_numbers
+user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+phone_number TEXT NOT NULL          -- E.164, CHECK ^\+[1-9][0-9]{6,14}$
+share_with_friends BOOLEAN DEFAULT TRUE
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+```
+
+Sicherheitsregeln:
+
+- Die Nummer liegt bewusst **nicht** in `profiles`: dort greift
+  `profiles_select_own_or_admin`, eine zusätzliche Spalte wäre für Admins
+  direkt lesbar (§8 "Sichtbarkeitsstufen physisch trennen").
+- RLS auf `user_phone_numbers`: ausschließlich die eigene Zeile
+  (Self-Service-CRUD analog `vehicles`). Keine Admin-Ausnahme, keine Policy
+  für Freunde.
+- Freunde erhalten die Nummer ausschließlich über `list_my_friendships()`
+  (neue Spalte `other_phone_number`) — nur bei `status = accepted` und
+  `share_with_friends = true`. `pending`/`rejected` geben nichts frei; mit dem
+  Beenden der Freundschaft entfällt die Nummer sofort.
+- Das Format wird serverseitig per CHECK-Constraint erzwungen. Das Frontend
+  normalisiert die Eingabe vorab (`src/utils/phone.ts`: führende `0` →
+  `+49`, `00` → `+`).
+- Bei Kontolöschung wird die Zeile über `ON DELETE CASCADE` an `auth.users`
+  entfernt (wie `vehicles` und `friendships`).
+
+Lokal gegen eine echte `authenticated`-Rolle getestet: Freund sieht die
+Nummer, offene Anfrage und pausierte Freigabe liefern `NULL`, direkter
+Tabellenzugriff auf fremde Zeilen liefert nichts, fremde Zeilen lassen sich
+weder anlegen noch ändern, ungültige Formate werden abgelehnt.
+
+Deployment: Die Migration wurde am 11.11.2026 im Supabase SQL Editor
+eingespielt, vor dem Frontend-Deploy — das neue Frontend liest
+`user_phone_numbers`. Ein älteres Frontend ignoriert die zusätzliche Spalte
+von `list_my_friendships()`.
+
+---
+
+## 42. Entwicklungsphase 22 — Admin-Notizen und Fahrerbewertung
+
+Phase 22 ist im Repository umgesetzt (Migration
+`20261111010000_admin_notes_and_driver_ratings.sql`). Zwei rein interne
+Orga-Werkzeuge für Admins in der PWA; die Mac-App (§38–§40) zeigt sie bislang
+nicht an.
+
+Verbindliche Produktentscheidungen:
+
+- **Ausschließlich Admins** sehen und pflegen Notizen und Bewertungen. Der
+  betroffene User, andere Teilnehmer und Freunde erhalten keinen Zugriff —
+  auch nicht über die Teilnehmer-Fahrzeugliste, Freundesliste oder Exporte.
+- **Notizen** sind einzelne Einträge mit Datum, Verfasser und optionalem
+  Tourbezug (kein einzelnes fortgeschriebenes Freitextfeld). Jeder Admin kann
+  Einträge anlegen und löschen.
+- **Fahrerbewertung** erfolgt **pro Ausfahrt** mit drei Kriterien von 1
+  (unsicher) bis 5 (souverän): Fahrzeugbeherrschung, Kolonnendisziplin,
+  Regeln & Sicherheit, dazu ein optionaler Kommentar. Im Nutzerprofil stehen
+  der Durchschnitt über alle bewerteten Ausfahrten, der Schnitt je Kriterium
+  und der Verlauf.
+- Je Fahrer und Ausfahrt gibt es **eine gemeinsame Bewertung**, nicht eine je
+  Admin; `rated_by` hält den letzten Bearbeiter fest.
+- Bewertet werden kann nur, wer bei der Ausfahrt `confirmed` war, und erst ab
+  dem letzten Tourtag. Nicht jeder Fahrer muss bewertet werden.
+- Aufforderung zum Ausfüllen: Karte „Bewertung offen“ im Admin-Dashboard und
+  eine In-App-Mitteilung `DRIVER_RATING_DUE` an alle Admins, sobald eine
+  Ausfahrt automatisch auf `completed` wechselt. **Kein Web-Push** für diese
+  Mitteilung: der Statuswechsel läuft als reines SQL in `pg_cron`
+  (`apply_tour_lifecycle()`), Push bräuchte eine zusätzliche Edge Function.
+  Wird eine Tour von Hand auf `completed` gesetzt, entsteht keine Mitteilung;
+  die Dashboard-Karte erscheint trotzdem.
+- Die Dashboard-Karte berücksichtigt nur Ausfahrten, die höchstens 30 Tage
+  zurückliegen. So erscheinen weder alle Alt-Touren als „offen“ noch bleibt
+  eine bewusst unvollständig bewertete Tour dauerhaft stehen. Ältere
+  Bewertungen bleiben über den Verlauf im Nutzerprofil erreichbar.
+
+Datenmodell:
+
+```text
+admin_user_notes
+id UUID PRIMARY KEY
+user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+tour_id UUID NULL REFERENCES tours(id) ON DELETE SET NULL
+body TEXT NOT NULL                 -- 1–2000 Zeichen
+created_by UUID NULL               -- serverseitig auth.uid()
+created_at / updated_at TIMESTAMPTZ
+
+driver_ratings
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id) ON DELETE CASCADE
+user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+vehicle_control / convoy_discipline / rules_safety SMALLINT   -- je 1–5
+comment TEXT NULL                  -- bis 1000 Zeichen
+rated_by UUID NULL                 -- serverseitig auth.uid()
+created_at / updated_at TIMESTAMPTZ
+UNIQUE(tour_id, user_id)
+```
+
+Sicherheitsregeln:
+
+- Eigene Tabellen mit reiner Admin-Policy (`is_admin()` für alle
+  Operationen), bewusst nicht in `profiles` oder `tour_registrations`: beide
+  sind für den User selbst lesbar (§8 "Sichtbarkeitsstufen physisch trennen").
+- Verfasser, Bearbeiter und Zeitstempel setzt ein Trigger serverseitig; ein
+  vom Client mitgegebener Wert wird überschrieben (§8.12).
+- Ein Trigger auf `driver_ratings` prüft die fachlichen Vorbedingungen
+  (`TOUR_NOT_FINISHED`, `NOT_A_CONFIRMED_PARTICIPANT`) und verhindert, dass
+  `tour_id`/`user_id` einer bestehenden Bewertung geändert werden.
+- `admin_list_pending_driver_ratings()` liefert die offenen Ausfahrten fürs
+  Dashboard gebündelt in einer Abfrage (§4), als `SECURITY INVOKER` mit
+  zusätzlicher `is_admin()`-Bedingung.
+- Bei Kontolöschung entfallen Notizen und Bewertungen über
+  `ON DELETE CASCADE` an `auth.users`.
+
+UI:
+
+- `/admin/tours/:id/ratings` (`AdminTourRatingsPage`): alle bestätigten Fahrer
+  der Ausfahrt, je Fahrer drei Kriterien, Kommentar und eigener
+  Speichern-Button.
+- `/admin/users/:id` (`AdminUserDetailPage`): Abschnitte „Fahrerbewertung“
+  (Durchschnitt, Kriterien, Verlauf mit Link zur jeweiligen Bewertungsseite)
+  und „Notizen“ (anlegen, löschen).
+- `/admin` (`AdminDashboardPage`): Karte „Bewertung offen“.
+
+Datenschutz: Die Datenschutzerklärung nennt interne Notizen und die
+Einschätzung des Fahrverhaltens als Datenkategorie samt Zweck. Betroffene
+haben ein Auskunftsrecht über zu ihnen gespeicherte Angaben — Notizen und
+Kommentare deshalb sachlich und auf die Organisation bezogen halten.
+
+Lokal gegen echte `authenticated`-Rollen getestet (Admin und normaler User):
+Admin legt Notiz und Bewertung an, ein zweiter Admin ändert dieselbe
+Bewertung; der betroffene User liest nichts und kann nichts schreiben;
+Bewertung einer noch nicht beendeten Tour, eines nicht bestätigten Fahrers,
+ein Wert außerhalb 1–5 und eine leere Notiz werden abgelehnt; der
+Lifecycle-Lauf erzeugt genau eine Mitteilung je Admin und Tour, ein zweiter
+Lauf keine weitere.
+
+**Nachtrag 12.11.2026 (Migration
+`20261112000000_admin_review_author_cleanup.sql`, aus dem PR-Review):**
+`created_by`/`rated_by` verwenden `ON DELETE SET NULL`. Dieses von Postgres
+ausgelöste UPDATE lief durch die BEFORE-UPDATE-Trigger: der Notiz-Trigger
+stellte den Verfasser wieder her, der Bewertungs-Trigger prüfte erneut die
+bestätigte Teilnahme. Das Löschen eines Admin-Kontos, das Notizen verfasst
+oder einen inzwischen nicht mehr bestätigten Fahrer bewertet hatte, schlug
+dadurch fehl — nach der vorgelagerten Anonymisierung (`delete-account`,
+`admin-manage-user`) wäre ein Auth-Konto ohne Profil-Daten übrig geblieben.
+Beide Trigger lassen das reine Entfernen des Verfasser-/Bearbeiterbezugs jetzt
+durch; Umschreiben des Verfassers und inhaltliche Änderungen bleiben geprüft.
+Bei künftigen Triggern auf Tabellen mit `ON DELETE SET NULL`-Spalten diesen
+Fall von Anfang an mit testen (Konto des Verfassers löschen).
+
+Deployment: Beide Migrationen wurden bzw. werden im Supabase SQL Editor
+eingespielt (`20261111010000` am 12.11.2026). Ohne die tatsächlich
+eingespielte Korrekturmigration ist der oben beschriebene Löschfehler
+weiterhin vorhanden (§26).

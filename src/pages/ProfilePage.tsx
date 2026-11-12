@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useIsAdmin } from '@/features/auth/useIsAdmin'
@@ -7,6 +7,7 @@ import { usePushSubscription } from '@/features/notifications/usePushSubscriptio
 import type { ArchiveEntry } from '@/types/tour'
 import type { Vehicle } from '@/types/vehicle'
 import type { Friendship } from '@/types/friend'
+import { formatPhoneNumber, normalizePhoneNumber } from '@/utils/phone'
 
 interface Profile {
   username: string
@@ -36,6 +37,17 @@ export function ProfilePage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // Optionale Telefonnummer für Freunde (§41).
+  const [phone, setPhone] = useState<{ phone_number: string; share_with_friends: boolean } | null>(null)
+  // 'ready' erst nach erfolgreicher Abfrage: nur dann ist bekannt, ob bereits
+  // eine Zeile (samt evtl. pausierter Freigabe) existiert. Vorher darf nicht
+  // gespeichert werden, sonst könnte eine pausierte Freigabe überschrieben werden.
+  const [phoneState, setPhoneState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [editingPhone, setEditingPhone] = useState(false)
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneSaving, setPhoneSaving] = useState(false)
+  const [phoneError, setPhoneError] = useState<string | null>(null)
 
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -69,7 +81,100 @@ export function ProfilePage() {
       .eq('is_default', true)
       .maybeSingle()
       .then(({ data }) => setDefaultVehicle(data as Vehicle | null))
+
   }, [user])
+
+  const loadPhone = useCallback(async () => {
+    if (!user) return
+    setPhoneState('loading')
+    const { data, error } = await supabase
+      .from('user_phone_numbers')
+      .select('phone_number, share_with_friends')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (error) {
+      setPhoneState('error')
+      return
+    }
+    setPhone(data)
+    setPhoneState('ready')
+  }, [user])
+
+  useEffect(() => {
+    loadPhone()
+  }, [loadPhone])
+
+  async function handlePhoneSave(event: FormEvent) {
+    event.preventDefault()
+    if (!user || phoneState !== 'ready') return
+    setPhoneError(null)
+
+    const normalized = normalizePhoneNumber(phoneInput)
+    if (!normalized) {
+      setPhoneError('Bitte gib eine gültige Nummer ein, z. B. 0171 1234567 oder +43 660 1234567.')
+      return
+    }
+
+    setPhoneSaving(true)
+    // Bestehende Zeile: nur die Nummer ändern, die Freigabe bleibt serverseitig
+    // unangetastet. Neue Zeile: reines Insert — existiert wider Erwarten doch
+    // schon eine, schlägt es fehl, statt deren Freigabe zu überschreiben.
+    const { data, error } = phone
+      ? await supabase
+          .from('user_phone_numbers')
+          .update({ phone_number: normalized, updated_at: new Date().toISOString() })
+          .eq('user_id', user.id)
+          .select('phone_number, share_with_friends')
+          .maybeSingle()
+      : await supabase
+          .from('user_phone_numbers')
+          .insert({ user_id: user.id, phone_number: normalized })
+          .select('phone_number, share_with_friends')
+          .maybeSingle()
+    setPhoneSaving(false)
+
+    if (error || !data) {
+      setPhoneError('Telefonnummer konnte nicht gespeichert werden.')
+      // Tatsächlichen Stand neu laden (z. B. Zeile existierte bereits).
+      loadPhone()
+      return
+    }
+    setPhone(data)
+    setEditingPhone(false)
+  }
+
+  async function handlePhoneShareToggle() {
+    if (!user || !phone) return
+    setPhoneError(null)
+    const share = !phone.share_with_friends
+    setPhoneSaving(true)
+    const { error } = await supabase
+      .from('user_phone_numbers')
+      .update({ share_with_friends: share, updated_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+    setPhoneSaving(false)
+
+    if (error) {
+      setPhoneError('Freigabe konnte nicht geändert werden.')
+      return
+    }
+    setPhone({ ...phone, share_with_friends: share })
+  }
+
+  async function handlePhoneRemove() {
+    if (!user) return
+    setPhoneError(null)
+    setPhoneSaving(true)
+    const { error } = await supabase.from('user_phone_numbers').delete().eq('user_id', user.id)
+    setPhoneSaving(false)
+
+    if (error) {
+      setPhoneError('Telefonnummer konnte nicht entfernt werden.')
+      return
+    }
+    setPhone(null)
+    setEditingPhone(false)
+  }
 
   async function handlePasswordChange(event: FormEvent) {
     event.preventDefault()
@@ -221,6 +326,103 @@ export function ProfilePage() {
         </div>
       )}
 
+      <div className="mx-3.5 mt-4 rounded-2xl border border-white/8 bg-sft-card px-4 py-[14px]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Telefonnummer</div>
+            <div className="mt-1 text-xs leading-relaxed text-sft-gray">
+              {phoneState === 'loading'
+                ? 'Wird geladen…'
+                : phoneState === 'error'
+                  ? 'Telefonnummer konnte nicht geladen werden.'
+                  : phone
+                ? formatPhoneNumber(phone.phone_number)
+                : 'Optional — nur für deine Freunde sichtbar, z. B. um nach einer Ausfahrt in Kontakt zu bleiben.'}
+            </div>
+          </div>
+          {phoneState === 'error' && (
+            <button
+              onClick={loadPhone}
+              className="tap-scale flex-none rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium"
+            >
+              Erneut laden
+            </button>
+          )}
+          {phoneState === 'ready' && !editingPhone && (
+            <button
+              onClick={() => {
+                setPhoneInput(phone?.phone_number ?? '')
+                setPhoneError(null)
+                setEditingPhone(true)
+              }}
+              className="tap-scale flex-none rounded-lg border border-white/13 bg-[#17171b] px-3 py-2 text-xs font-medium"
+            >
+              {phone ? 'Ändern' : 'Hinzufügen'}
+            </button>
+          )}
+        </div>
+
+        {editingPhone && (
+          <form onSubmit={handlePhoneSave} className="mt-3 flex flex-col gap-3 text-sm">
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              required
+              placeholder="0171 1234567"
+              value={phoneInput}
+              onChange={(e) => setPhoneInput(e.target.value)}
+              className={fieldInput}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                disabled={phoneSaving}
+                className="tap-scale rounded-xl bg-gradient-to-b from-[#f01a12] to-[#c00500] px-4 py-2.5 font-medium text-white disabled:opacity-60"
+              >
+                {phoneSaving ? 'Wird gespeichert…' : 'Speichern'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingPhone(false)}
+                className="rounded-xl border border-white/13 px-4 py-2.5 text-sft-gray"
+              >
+                Abbrechen
+              </button>
+              {phone && (
+                <button
+                  type="button"
+                  onClick={handlePhoneRemove}
+                  disabled={phoneSaving}
+                  className="ml-auto px-1 py-2.5 text-sft-red disabled:opacity-60"
+                >
+                  Entfernen
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+
+        {phone && !editingPhone && (
+          <label className="mt-3 flex items-center justify-between gap-3 border-t border-white/7 pt-3 text-xs text-sft-gray">
+            <span>
+              {phone.share_with_friends
+                ? 'Für alle deine Freunde sichtbar'
+                : 'Freigabe pausiert — niemand sieht deine Nummer'}
+            </span>
+            <input
+              type="checkbox"
+              checked={phone.share_with_friends}
+              disabled={phoneSaving}
+              onChange={handlePhoneShareToggle}
+              className="h-5 w-5 flex-none accent-[#e10600]"
+            />
+          </label>
+        )}
+
+        {phoneError && <p className="mt-2 text-xs text-sft-red">{phoneError}</p>}
+      </div>
+
       <div className="mt-6 flex flex-col gap-2 px-3.5">
         {!showPasswordForm ? (
           <button
@@ -298,7 +500,7 @@ export function ProfilePage() {
           <p className="font-medium">Was mit deinen Daten passiert:</p>
           <ul className="list-disc space-y-1 pl-5 text-sft-gray">
             <li>
-              Username, Vor- und Nachname, Geburtsdatum sowie alle deine Touranmeldungen (inkl.
+              Username, Vor- und Nachname, Geburtsdatum, Telefonnummer sowie alle deine Touranmeldungen (inkl.
               Fahrzeugdaten und Kennzeichen, auch aus vergangenen Touren) werden vollständig gelöscht.
             </li>
             <li>

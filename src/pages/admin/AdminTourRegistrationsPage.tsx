@@ -217,7 +217,7 @@ export function AdminTourRegistrationsPage() {
     ]
     const result = await shareOrCopyText(`${tourTitle} — Teilnehmer`, lines.join('\n'))
     setShareStatus(
-      result === 'shared'
+      result === 'shared' || result === 'cancelled'
         ? null
         : result === 'copied'
           ? 'In die Zwischenablage kopiert.'

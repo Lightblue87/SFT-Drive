@@ -34,6 +34,7 @@
 		5CD391C9ED3E1BB182E8024F /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 764C0A8D010FAAB62914867B /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift */; };
 		C553FC7BD78B8063FD806C16 /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5DCBD9804373F84E0DCD85F /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift */; };
 		EF26194495A2E7943CED032C /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13047D008EBA9F7B99CE91A9 /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift */; };
+		D42359B7E8EAACA77B33552E /* SFTDriveAdmin/Shared/UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12AD343291DFC093801466BC /* SFTDriveAdmin/Shared/UpdateChecker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +65,7 @@
 		764C0A8D010FAAB62914867B /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/RedesignShellView.swift; sourceTree = SOURCE_ROOT; };
 		A5DCBD9804373F84E0DCD85F /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift; sourceTree = SOURCE_ROOT; };
 		13047D008EBA9F7B99CE91A9 /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift; sourceTree = SOURCE_ROOT; };
+		12AD343291DFC093801466BC /* SFTDriveAdmin/Shared/UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTDriveAdmin/Shared/UpdateChecker.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,6 +102,7 @@
 				DB22FB42C299EC4904B417DB /* SFTDriveAdmin/Shared/FormSchema.swift */,
 				F53259171738D9FFDE03C275 /* SFTDriveAdmin/Shared/JSONValue.swift */,
 				6FB75F20F5C21D55E2BF8208 /* SFTDriveAdmin/Shared/Views.swift */,
+				12AD343291DFC093801466BC /* SFTDriveAdmin/Shared/UpdateChecker.swift */,
 				D60D7F1399067E1625D64C72 /* SFTDriveAdmin/Assets.xcassets */,
 				37342225F42C40E7947E9FB3 /* SFTDriveAdmin/Fonts */,
 				87BC1D39DD7C2742EBA50869 /* SFTDriveAdmin/Features/Dashboard/DashboardView.swift */,
@@ -214,6 +217,7 @@
 				5CD391C9ED3E1BB182E8024F /* SFTDriveAdmin/Features/Redesign/RedesignShellView.swift in Sources */,
 				C553FC7BD78B8063FD806C16 /* SFTDriveAdmin/Features/Redesign/RedesignLiveData.swift in Sources */,
 				EF26194495A2E7943CED032C /* SFTDriveAdmin/Features/Redesign/SFTRedesignTheme.swift in Sources */,
+				D42359B7E8EAACA77B33552E /* SFTDriveAdmin/Shared/UpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,7 +240,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.sportfahrertreff.sft-drive-admin";
 				PRODUCT_NAME = SFTDriveAdmin;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
@@ -260,7 +264,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.sportfahrertreff.sft-drive-admin";
 				PRODUCT_NAME = SFTDriveAdmin;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;

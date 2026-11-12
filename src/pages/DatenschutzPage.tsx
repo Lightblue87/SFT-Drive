@@ -49,7 +49,12 @@ export function DatenschutzPage() {
           Kennzeichen)
         </li>
         <li>Freundschaftsanfragen und bestehende Freundschaften zu anderen Nutzern</li>
+        <li>Optional: eine Telefonnummer, die du freiwillig für deine Freunde hinterlegst</li>
         <li>Zeitpunkt deines Check-ins am Treffpunkt, sofern eine Tour Check-in nutzt</li>
+        <li>
+          Interne Notizen der Tourleitung zur Organisation sowie eine Einschätzung des Fahrverhaltens
+          nach Ausfahrten, an denen du teilgenommen hast
+        </li>
         <li>Essensvorbestellungen zu Restaurant-Stopps inklusive deiner Anmerkungen</li>
         <li>Bestätigungen, dass du deine Übernachtung für eine Tournacht organisiert hast</li>
         <li>
@@ -75,10 +80,16 @@ export function DatenschutzPage() {
         Mitfahrer einer Tour sehen von dir ausschließlich deinen Username sowie Fahrzeughersteller,
         -modell und Leistung. Nimmst du eine Freundschaftsanfrage eines anderen Nutzers an, geben
         sich beide Seiten damit gegenseitig ihren Vor- und Nachnamen frei; das lässt sich jederzeit
-        durch Beenden der Freundschaft rückgängig machen. Kennzeichen und Personenzahl sind für
+        durch Beenden der Freundschaft rückgängig machen. Hinterlegst du freiwillig eine
+        Telefonnummer, ist sie ausschließlich für deine bestätigten Freunde sichtbar — nicht für
+        andere Teilnehmer und nicht in der Nutzerverwaltung der Tourleitung. Du kannst die Freigabe
+        im Profil jederzeit pausieren oder die Nummer wieder entfernen. Kennzeichen und Personenzahl sind für
         andere Teilnehmer immer unsichtbar, unabhängig von einer Freundschaft. Deine
         Essensvorbestellung, dein Check-in-Zeitpunkt und deine Übernachtungsbestätigungen sind nur
-        für dich selbst und die Tourleitung sichtbar.
+        für dich selbst und die Tourleitung sichtbar. Interne Notizen und die Einschätzung des
+        Fahrverhaltens dienen ausschließlich der sicheren Organisation der Ausfahrten und sind nur
+        für die Tourleitung sichtbar; auf Anfrage erhältst du Auskunft über die zu dir gespeicherten
+        Angaben.
       </p>
 
       <h2 className="mt-6 font-medium">5. Auftragsverarbeiter / Hosting</h2>

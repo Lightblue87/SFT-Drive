@@ -24,6 +24,24 @@ struct ErrorBanner: View {
         if let message { Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.callout).padding().frame(maxWidth: .infinity, alignment: .leading).background(.orange.opacity(0.08)).textSelection(.enabled) }
     }
 }
+/// Dismissbarer Hinweis auf eine neuere Mac-App-Version (siehe
+/// Shared/UpdateChecker.swift). Reiner Link auf die GitHub-Release-Seite --
+/// kein Download/Install aus der App heraus (§40.9).
+struct UpdateBanner: View {
+    let available: UpdateChecker.Available
+    let onDismiss: () -> Void
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle").foregroundStyle(.blue)
+            Text("Version \(available.version) verfügbar").font(.callout.weight(.medium))
+            Spacer()
+            Button("Herunterladen") { NSWorkspace.shared.open(available.url) }.controlSize(.small)
+            Button { onDismiss() } label: { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .background(.blue.opacity(0.08))
+    }
+}
 @MainActor class ScreenModel: ObservableObject {
     @Published var error: String?
     @Published var notice: String?

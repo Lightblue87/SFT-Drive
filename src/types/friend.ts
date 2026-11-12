@@ -12,6 +12,9 @@ export interface Friendship {
   // frei (§34.1).
   other_first_name: string | null
   other_last_name: string | null
+  // Nur bei `accepted` und wenn der Freund eine Nummer hinterlegt und die
+  // Freigabe nicht pausiert hat (§41).
+  other_phone_number: string | null
   status: FriendshipStatus
   direction: FriendshipDirection
   created_at: string
