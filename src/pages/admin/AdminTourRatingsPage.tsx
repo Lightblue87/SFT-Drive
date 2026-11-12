@@ -165,11 +165,10 @@ export function AdminTourRatingsPage() {
     }
 
     const saved = data as DriverRating
-    setRows((prev) =>
-      prev.map((r) =>
-        r.user_id === row.user_id ? { ...r, saved, draft: draftFrom(saved), comment: saved.comment ?? '' } : r,
-      ),
-    )
+    // Nur den gespeicherten Stand aktualisieren. Entwurf und Kommentar bleiben
+    // unangetastet: hat der Admin während des Speicherns weitergetippt oder
+    // einen Wert geändert, bleibt das erhalten und die Zeile gilt als geändert.
+    setRows((prev) => prev.map((r) => (r.user_id === row.user_id ? { ...r, saved } : r)))
     setSaveStates((s) => ({ ...s, [row.user_id]: { saving: false, error: null, savedAt: Date.now() } }))
   }
 
