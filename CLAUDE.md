@@ -3286,6 +3286,7 @@ einer bestimmten Tour (bestätigte Teilnehmer) oder allen Nutzern (Broadcast).
     │   ├── /admin/tours/new
     │   ├── /admin/tours/:id/edit
     │   ├── /admin/tours/:id/registrations
+    │   ├── /admin/tours/:id/ratings               (Fahrerbewertung, §42)
     │   ├── /admin/tours/:id/stops
     │   │   └── /admin/tours/:id/stops/:stopId    (Restaurant-Stopps, §27.20)
     │   └── /admin/tours/:id/stages                (Tagesrouten, nur Mehrtagestouren, §34.4)
@@ -7698,3 +7699,106 @@ Deployment: Die Migration wurde am 11.11.2026 im Supabase SQL Editor
 eingespielt, vor dem Frontend-Deploy — das neue Frontend liest
 `user_phone_numbers`. Ein älteres Frontend ignoriert die zusätzliche Spalte
 von `list_my_friendships()`.
+
+---
+
+## 42. Entwicklungsphase 22 — Admin-Notizen und Fahrerbewertung
+
+Phase 22 ist im Repository umgesetzt (Migration
+`20261111010000_admin_notes_and_driver_ratings.sql`). Zwei rein interne
+Orga-Werkzeuge für Admins in der PWA; die Mac-App (§38–§40) zeigt sie bislang
+nicht an.
+
+Verbindliche Produktentscheidungen:
+
+- **Ausschließlich Admins** sehen und pflegen Notizen und Bewertungen. Der
+  betroffene User, andere Teilnehmer und Freunde erhalten keinen Zugriff —
+  auch nicht über die Teilnehmer-Fahrzeugliste, Freundesliste oder Exporte.
+- **Notizen** sind einzelne Einträge mit Datum, Verfasser und optionalem
+  Tourbezug (kein einzelnes fortgeschriebenes Freitextfeld). Jeder Admin kann
+  Einträge anlegen und löschen.
+- **Fahrerbewertung** erfolgt **pro Ausfahrt** mit drei Kriterien von 1
+  (unsicher) bis 5 (souverän): Fahrzeugbeherrschung, Kolonnendisziplin,
+  Regeln & Sicherheit, dazu ein optionaler Kommentar. Im Nutzerprofil stehen
+  der Durchschnitt über alle bewerteten Ausfahrten, der Schnitt je Kriterium
+  und der Verlauf.
+- Je Fahrer und Ausfahrt gibt es **eine gemeinsame Bewertung**, nicht eine je
+  Admin; `rated_by` hält den letzten Bearbeiter fest.
+- Bewertet werden kann nur, wer bei der Ausfahrt `confirmed` war, und erst ab
+  dem letzten Tourtag. Nicht jeder Fahrer muss bewertet werden.
+- Aufforderung zum Ausfüllen: Karte „Bewertung offen“ im Admin-Dashboard und
+  eine In-App-Mitteilung `DRIVER_RATING_DUE` an alle Admins, sobald eine
+  Ausfahrt automatisch auf `completed` wechselt. **Kein Web-Push** für diese
+  Mitteilung: der Statuswechsel läuft als reines SQL in `pg_cron`
+  (`apply_tour_lifecycle()`), Push bräuchte eine zusätzliche Edge Function.
+  Wird eine Tour von Hand auf `completed` gesetzt, entsteht keine Mitteilung;
+  die Dashboard-Karte erscheint trotzdem.
+- Die Dashboard-Karte berücksichtigt nur Ausfahrten, die höchstens 30 Tage
+  zurückliegen. So erscheinen weder alle Alt-Touren als „offen“ noch bleibt
+  eine bewusst unvollständig bewertete Tour dauerhaft stehen. Ältere
+  Bewertungen bleiben über den Verlauf im Nutzerprofil erreichbar.
+
+Datenmodell:
+
+```text
+admin_user_notes
+id UUID PRIMARY KEY
+user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+tour_id UUID NULL REFERENCES tours(id) ON DELETE SET NULL
+body TEXT NOT NULL                 -- 1–2000 Zeichen
+created_by UUID NULL               -- serverseitig auth.uid()
+created_at / updated_at TIMESTAMPTZ
+
+driver_ratings
+id UUID PRIMARY KEY
+tour_id UUID REFERENCES tours(id) ON DELETE CASCADE
+user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+vehicle_control / convoy_discipline / rules_safety SMALLINT   -- je 1–5
+comment TEXT NULL                  -- bis 1000 Zeichen
+rated_by UUID NULL                 -- serverseitig auth.uid()
+created_at / updated_at TIMESTAMPTZ
+UNIQUE(tour_id, user_id)
+```
+
+Sicherheitsregeln:
+
+- Eigene Tabellen mit reiner Admin-Policy (`is_admin()` für alle
+  Operationen), bewusst nicht in `profiles` oder `tour_registrations`: beide
+  sind für den User selbst lesbar (§8 "Sichtbarkeitsstufen physisch trennen").
+- Verfasser, Bearbeiter und Zeitstempel setzt ein Trigger serverseitig; ein
+  vom Client mitgegebener Wert wird überschrieben (§8.12).
+- Ein Trigger auf `driver_ratings` prüft die fachlichen Vorbedingungen
+  (`TOUR_NOT_FINISHED`, `NOT_A_CONFIRMED_PARTICIPANT`) und verhindert, dass
+  `tour_id`/`user_id` einer bestehenden Bewertung geändert werden.
+- `admin_list_pending_driver_ratings()` liefert die offenen Ausfahrten fürs
+  Dashboard gebündelt in einer Abfrage (§4), als `SECURITY INVOKER` mit
+  zusätzlicher `is_admin()`-Bedingung.
+- Bei Kontolöschung entfallen Notizen und Bewertungen über
+  `ON DELETE CASCADE` an `auth.users`.
+
+UI:
+
+- `/admin/tours/:id/ratings` (`AdminTourRatingsPage`): alle bestätigten Fahrer
+  der Ausfahrt, je Fahrer drei Kriterien, Kommentar und eigener
+  Speichern-Button.
+- `/admin/users/:id` (`AdminUserDetailPage`): Abschnitte „Fahrerbewertung“
+  (Durchschnitt, Kriterien, Verlauf mit Link zur jeweiligen Bewertungsseite)
+  und „Notizen“ (anlegen, löschen).
+- `/admin` (`AdminDashboardPage`): Karte „Bewertung offen“.
+
+Datenschutz: Die Datenschutzerklärung nennt interne Notizen und die
+Einschätzung des Fahrverhaltens als Datenkategorie samt Zweck. Betroffene
+haben ein Auskunftsrecht über zu ihnen gespeicherte Angaben — Notizen und
+Kommentare deshalb sachlich und auf die Organisation bezogen halten.
+
+Lokal gegen echte `authenticated`-Rollen getestet (Admin und normaler User):
+Admin legt Notiz und Bewertung an, ein zweiter Admin ändert dieselbe
+Bewertung; der betroffene User liest nichts und kann nichts schreiben;
+Bewertung einer noch nicht beendeten Tour, eines nicht bestätigten Fahrers,
+ein Wert außerhalb 1–5 und eine leere Notiz werden abgelehnt; der
+Lifecycle-Lauf erzeugt genau eine Mitteilung je Admin und Tour, ein zweiter
+Lauf keine weitere.
+
+Deployment: Migration im Supabase SQL Editor einspielen, **bevor** das
+Frontend deployed wird. Bis dahin ist dies Repository-Stand, nicht
+Produktivstand (§26).
